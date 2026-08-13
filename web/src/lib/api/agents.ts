@@ -29,6 +29,7 @@ export const agentSchema = z.object({
     .optional(),
   voiceId: z.string().optional(),
   language: z.string().optional(),
+  phoneNumber: z.string().optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });
@@ -95,6 +96,8 @@ export async function updateAgent(
     defaultProviders?: { stt?: string; llm?: string; tts?: string };
     voiceId?: string;
     language?: string;
+    /** Pass null to explicitly clear a previously set phone number. */
+    phoneNumber?: string | null;
   },
 ): Promise<Agent> {
   const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}`, {

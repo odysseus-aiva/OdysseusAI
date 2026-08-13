@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Ear, BrainCircuit, AudioLines, Wrench, MessageSquare, ArrowRight, Cpu, Waypoints } from 'lucide-react';
+import { Ear, BrainCircuit, AudioLines, Wrench, MessageSquare, ArrowRight, Cpu, Waypoints, Phone } from 'lucide-react';
 import { Field, Input, Textarea } from '@/components/ui/Field';
 import { Section, Panel } from '@/components/ui/Section';
 import type { Agent } from '@/lib/api/agents';
@@ -30,7 +30,7 @@ export function OverviewTab({
   draft: AgentDraft;
   setField: <K extends keyof AgentDraft>(key: K, value: AgentDraft[K]) => void;
   enabledCount: number;
-  onGoToTab: (tab: 'prompt' | 'voice' | 'tools') => void;
+  onGoToTab: (tab: 'prompt' | 'voice' | 'tools' | 'advanced') => void;
 }) {
   const hasPrompt = draft.systemPrompt.trim().length > 0;
 
@@ -134,6 +134,7 @@ export function OverviewTab({
               onClick={() => onGoToTab('tools')}
             />
           </div>
+          <PhoneNumberTile phoneNumber={draft.phoneNumber} onGoToAdvanced={() => onGoToTab('advanced')} />
         </div>
       </Section>
 
@@ -163,6 +164,59 @@ export function OverviewTab({
         </Panel>
       </Section>
     </div>
+  );
+}
+
+/** Read-only phone number pill shown in the Overview configuration grid. */
+function PhoneNumberTile({
+  phoneNumber,
+  onGoToAdvanced,
+}: {
+  phoneNumber: string;
+  onGoToAdvanced: () => void;
+}) {
+  const hasNumber = phoneNumber.trim().length > 0;
+  return (
+    <button
+      type="button"
+      onClick={onGoToAdvanced}
+      className="group flex cursor-pointer items-center gap-3 rounded-[10px] px-3.5 py-3 text-left transition-all duration-[160ms]"
+      style={{
+        background: 'var(--color-surface-raised)',
+        border: '1px solid var(--color-border)',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = 'var(--color-border-strong)';
+        e.currentTarget.style.background = 'var(--color-surface-elevated)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = 'var(--color-border)';
+        e.currentTarget.style.background = 'var(--color-surface-raised)';
+      }}
+    >
+      <Phone
+        size={13}
+        strokeWidth={1.8}
+        style={{ color: hasNumber ? 'var(--color-accent)' : 'var(--color-text-faint)', flexShrink: 0 }}
+      />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span
+          className="text-[10.5px] font-[600] uppercase tracking-[0.08em]"
+          style={{ color: 'var(--color-text-faint)' }}
+        >
+          Inbound number
+        </span>
+        {hasNumber ? (
+          <span className="font-mono text-[13px] font-[550]" style={{ color: 'var(--color-text)' }}>
+            {phoneNumber}
+          </span>
+        ) : (
+          <span className="text-[12.5px]" style={{ color: 'var(--color-text-faint)' }}>
+            No number assigned · click to configure
+          </span>
+        )}
+      </div>
+    </button>
   );
 }
 

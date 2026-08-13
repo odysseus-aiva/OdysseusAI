@@ -100,6 +100,10 @@ export class AgentsService {
     }
   }
 
+  async findByPhoneNumber(phoneNumber: string): Promise<AgentRecord | null> {
+    return this.agentRepository.findByPhoneNumber(phoneNumber);
+  }
+
   /** Assignments for the UI — custom-tool secret headers are masked. */
   async listTools(agentId: string): Promise<AgentToolAssignment[]> {
     await this.get(agentId);

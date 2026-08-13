@@ -5,11 +5,26 @@ export default () => ({
     apiKey: process.env.LIVEKIT_API_KEY ?? '',
     apiSecret: process.env.LIVEKIT_API_SECRET ?? '',
     webhookSecret: process.env.LIVEKIT_WEBHOOK_SECRET ?? '',
-    // SIP/telephony placeholders — wire to LiveKit SIP trunk when ready
+    // SIP / telephony — inbound calls from Twilio numbers
     sip: {
       enabled: process.env.LIVEKIT_SIP_ENABLED === 'true',
       trunkId: process.env.LIVEKIT_SIP_TRUNK_ID ?? '',
       dispatchRuleId: process.env.LIVEKIT_SIP_DISPATCH_RULE_ID ?? '',
+      /**
+       * JSON map of Twilio DID (E.164) → agentId.
+       * "default" key is the fallback when no number matches.
+       * Example: {"default":"assistant","+15551234567":"sales-agent"}
+       */
+      phoneNumberMap: ((): Record<string, string> => {
+        const raw = process.env.LIVEKIT_SIP_PHONE_NUMBER_MAP ?? '';
+        if (!raw.trim()) return {};
+        try {
+          return JSON.parse(raw) as Record<string, string>;
+        } catch {
+          console.error('LIVEKIT_SIP_PHONE_NUMBER_MAP is not valid JSON — ignoring');
+          return {};
+        }
+      })(),
     },
   },
   providers: {
@@ -61,6 +76,12 @@ export default () => ({
   },
   braveSearch: {
     apiKey: process.env.BRAVE_SEARCH_API_KEY ?? '',
+  },
+  twilio: {
+    accountSid: process.env.TWILIO_ACCOUNT_SID ?? '',
+    authToken: process.env.TWILIO_AUTH_TOKEN ?? '',
+    /** Elastic SIP Trunk SID (TKxxxx) — numbers are attached here after purchase. */
+    trunkSid: process.env.TWILIO_TRUNK_SID ?? '',
   },
   persistence: {
     /** `memory` (default) or `mongodb` */

@@ -36,6 +36,7 @@ export class MongoAgentRepository implements AgentRepository {
       defaultProviders: input.defaultProviders,
       voiceId: input.voiceId,
       language: input.language,
+      phoneNumber: input.phoneNumber,
       createdAt: now,
       updatedAt: now,
     });
@@ -44,6 +45,11 @@ export class MongoAgentRepository implements AgentRepository {
 
   async findByAgentId(agentId: string): Promise<AgentRecord | null> {
     const doc = await this.agentModel.findOne({ agentId }).lean().exec();
+    return doc ? this.toAgent(doc) : null;
+  }
+
+  async findByPhoneNumber(phoneNumber: string): Promise<AgentRecord | null> {
+    const doc = await this.agentModel.findOne({ phoneNumber }).lean().exec();
     return doc ? this.toAgent(doc) : null;
   }
 
@@ -60,12 +66,18 @@ export class MongoAgentRepository implements AgentRepository {
     agentId: string,
     patch: UpdateAgentInput,
   ): Promise<AgentRecord | null> {
+    // null phoneNumber means "clear" — use $unset so the sparse unique index is freed.
+    const { phoneNumber, ...rest } = patch;
+    const updateOp: Record<string, unknown> = {
+      $set: { ...rest, updatedAt: Date.now() },
+    };
+    if (phoneNumber === null) {
+      (updateOp as { $unset?: Record<string, 1> }).$unset = { phoneNumber: 1 };
+    } else if (phoneNumber !== undefined) {
+      (updateOp.$set as Record<string, unknown>).phoneNumber = phoneNumber;
+    }
     const updated = await this.agentModel
-      .findOneAndUpdate(
-        { agentId },
-        { $set: { ...patch, updatedAt: Date.now() } },
-        { new: true },
-      )
+      .findOneAndUpdate({ agentId }, updateOp, { new: true })
       .lean()
       .exec();
     return updated ? this.toAgent(updated) : null;
@@ -144,6 +156,7 @@ export class MongoAgentRepository implements AgentRepository {
     defaultProviders?: AgentRecord['defaultProviders'];
     voiceId?: string;
     language?: string;
+    phoneNumber?: string;
     createdAt: number;
     updatedAt: number;
   }): AgentRecord {
@@ -158,6 +171,7 @@ export class MongoAgentRepository implements AgentRepository {
       defaultProviders: doc.defaultProviders,
       voiceId: doc.voiceId,
       language: doc.language,
+      phoneNumber: doc.phoneNumber,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     };

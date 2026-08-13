@@ -5,8 +5,10 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -60,6 +62,13 @@ export class CreateAgentDto {
   @IsOptional()
   @IsString()
   language?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\+[1-9]\d{6,14}$/, {
+    message: 'phoneNumber must be E.164 format, e.g. +15551234567',
+  })
+  phoneNumber?: string;
 }
 
 export class UpdateAgentDto {
@@ -95,6 +104,18 @@ export class UpdateAgentDto {
   @IsOptional()
   @IsString()
   language?: string;
+
+  /**
+   * E.164 phone number to assign to this agent.
+   * Pass null to clear a previously assigned number.
+   */
+  @IsOptional()
+  @ValidateIf((o: UpdateAgentDto) => o.phoneNumber !== null)
+  @IsString()
+  @Matches(/^\+[1-9]\d{6,14}$/, {
+    message: 'phoneNumber must be E.164 format, e.g. +15551234567',
+  })
+  phoneNumber?: string | null;
 }
 
 export class UpsertAgentToolDto {

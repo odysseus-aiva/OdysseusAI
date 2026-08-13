@@ -3,10 +3,20 @@ import { ConfigService } from '@nestjs/config';
 import {
   AccessToken,
   RoomServiceClient,
+  WebhookEvent,
   WebhookReceiver,
 } from 'livekit-server-sdk';
+import { v4 as uuidv4 } from 'uuid';
 import { CallLogsService } from '../call-logs/call-logs.service';
 import { VoiceAgentService } from '../voice-agent/voice-agent.service';
+import { AgentsService } from '../agents/agents.service';
+
+/**
+ * SIP participants always carry the "sip.callID" attribute set by LiveKit SIP.
+ * Checking for this attribute is more robust than comparing the protobuf Kind enum
+ * numeric value, which would trigger ESLint's no-unsafe-enum-comparison rule.
+ */
+const SIP_CALL_ID_ATTR = 'sip.callID';
 
 export interface LiveKitRoomInfo {
   name: string;
@@ -25,6 +35,7 @@ export class LivekitService {
     private readonly configService: ConfigService,
     private readonly callLogsService: CallLogsService,
     private readonly voiceAgentService: VoiceAgentService,
+    private readonly agentsService: AgentsService,
   ) {}
 
   private getRoomClient(): RoomServiceClient {
@@ -146,15 +157,16 @@ export class LivekitService {
     };
   }
 
-  async handleWebhook(rawBody: string | Buffer, authHeader?: string) {
+  async handleWebhook(body: string, authHeader?: string) {
     const receiver = this.getWebhookReceiver();
-    const body = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
 
-    let event;
+    let event: WebhookEvent;
     try {
       event = await receiver.receive(body, authHeader);
     } catch (error) {
-      this.logger.error(`Webhook verification failed: ${(error as Error).message}`);
+      this.logger.error(
+        `Webhook verification failed: ${(error as Error).message}`,
+      );
       throw new BadRequestException('Invalid webhook signature');
     }
 
@@ -166,7 +178,7 @@ export class LivekitService {
     );
 
     // Route events to voice agent and call logs when applicable
-    await this.routeWebhookEvent(event.event, roomName, participantId, event);
+    await this.routeWebhookEvent(event, roomName, participantId);
 
     return {
       received: true,
@@ -176,45 +188,148 @@ export class LivekitService {
     };
   }
 
+  /**
+   * Returns the agentId to use for an inbound SIP call to the given Twilio DID.
+   * Resolution order: DB phone-number field → env phoneNumberMap → "assistant".
+   */
+  private async resolveAgentIdForDid(calledNumber: string): Promise<string> {
+    if (calledNumber) {
+      // LiveKit may omit the leading '+' from E.164 numbers — normalise before lookup.
+      const normalized = calledNumber.startsWith('+')
+        ? calledNumber
+        : `+${calledNumber}`;
+      this.logger.debug(
+        `resolveAgentIdForDid: raw="${calledNumber}" normalized="${normalized}"`,
+      );
+
+      const agent = await this.agentsService.findByPhoneNumber(normalized);
+
+      if (agent?.agentId) {
+        this.logger.debug(
+          `resolveAgentIdForDid: matched agent=${agent.agentId}`,
+        );
+
+        return agent.agentId;
+      }
+      // Also try the raw value in case the DB stored it without '+'.
+      if (normalized !== calledNumber) {
+        const agentRaw =
+          await this.agentsService.findByPhoneNumber(calledNumber);
+
+        if (agentRaw?.agentId) {
+          this.logger.debug(
+            `resolveAgentIdForDid: matched agent (raw)=${agentRaw.agentId}`,
+          );
+
+          return agentRaw.agentId;
+        }
+      }
+      this.logger.warn(
+        `resolveAgentIdForDid: no agent found for "${normalized}" — falling back to map/default`,
+      );
+    }
+    const map =
+      this.configService.get<Record<string, string>>(
+        'livekit.sip.phoneNumberMap',
+      ) ?? {};
+    return map[calledNumber] ?? map['default'] ?? 'assistant';
+  }
+
+  /**
+   * Start the voice agent for an inbound SIP call if no session exists yet.
+   * Fire-and-forget — mirrors the browser flow in SessionService.
+   */
+  private startSipAgentSession(
+    roomName: string,
+    callerNumber: string,
+    calledNumber: string,
+  ): void {
+    const callId = uuidv4();
+    void this.resolveAgentIdForDid(calledNumber)
+      .then((agentId) => {
+        this.logger.log(
+          `SIP inbound call: room=${roomName} from=${callerNumber} to=${calledNumber} → agent=${agentId}`,
+        );
+        return this.voiceAgentService.startSession(
+          roomName,
+          callId,
+          { agentId },
+          {
+            direction: 'inbound',
+            channel: 'pstn',
+            from: callerNumber,
+            to: calledNumber,
+          },
+        );
+      })
+      .catch((error: Error) => {
+        // ConflictException is expected when the webhook fires a duplicate
+        // participant_joined event — the session is already running, so ignore it.
+        if ((error as { status?: number }).status === 409) return;
+        this.logger.error(
+          `SIP agent bring-up failed for room "${roomName}": ${error.message}`,
+        );
+      });
+  }
+
   private async routeWebhookEvent(
-    eventType: string,
+    event: WebhookEvent,
     roomName: string,
     participantId: string | undefined,
-    rawEvent: unknown,
   ): Promise<void> {
+    const eventType = event.event;
     const callRecord = await this.callLogsService.getByRoomName(roomName);
 
     if (callRecord) {
       await this.callLogsService.appendLog(callRecord.callId, 'webhook', {
         roomName,
         participantId,
-        data: { eventType, rawEvent },
+        data: { eventType },
       });
     }
 
+    const participant = event.participant;
+
     switch (eventType) {
-      case 'participant_joined':
-        if (participantId && !participantId.startsWith('agent-')) {
+      case 'participant_joined': {
+        if (!participantId || participantId.startsWith('agent-')) break;
+
+        const isSip =
+          typeof participant?.attributes?.[SIP_CALL_ID_ATTR] === 'string';
+
+        if (isSip) {
+          // SIP inbound: room was created by the LiveKit dispatch rule, so
+          // there is no pre-started agent session. Bootstrap it now.
+          const attrs = participant?.attributes ?? {};
+          const callerNumber = attrs['sip.phoneNumber'] ?? '';
+          const calledNumber = attrs['sip.trunkPhoneNumber'] ?? '';
+          this.startSipAgentSession(roomName, callerNumber, calledNumber);
+        } else {
+          // Browser participant: session was pre-started by POST /session/start.
           await this.voiceAgentService.onParticipantJoined(
             roomName,
             participantId,
           );
         }
         break;
+      }
+
       case 'participant_left':
         if (participantId) {
-          await this.voiceAgentService.onParticipantLeft(roomName, participantId);
-          // Stop the agent session when the user leaves. Agent-identity
-          // participants are filtered so this only fires for real users.
+          await this.voiceAgentService.onParticipantLeft(
+            roomName,
+            participantId,
+          );
           if (!participantId.startsWith('agent-')) {
             await this.voiceAgentService.stopSession(roomName, 'participant');
           }
         }
         break;
+
       case 'room_finished':
         await this.voiceAgentService.stopSession(roomName, 'timeout');
         break;
-      // SIP-ready: handle track_published, egress, ingress events as needed
+
       default:
         break;
     }

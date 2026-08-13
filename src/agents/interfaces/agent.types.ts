@@ -24,6 +24,8 @@ export interface AgentRecord {
   defaultProviders?: AgentDefaultProviders;
   voiceId?: string;
   language?: string;
+  /** Twilio DID in E.164 format (e.g. +15551234567). Inbound calls to this number are routed to this agent. */
+  phoneNumber?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -46,6 +48,7 @@ export interface CreateAgentInput {
   defaultProviders?: AgentDefaultProviders;
   voiceId?: string;
   language?: string;
+  phoneNumber?: string;
 }
 
 export interface UpdateAgentInput {
@@ -56,6 +59,8 @@ export interface UpdateAgentInput {
   defaultProviders?: AgentDefaultProviders;
   voiceId?: string;
   language?: string;
+  /** Pass null to clear a previously assigned phone number. */
+  phoneNumber?: string | null;
 }
 
 export interface UpsertAgentToolInput {

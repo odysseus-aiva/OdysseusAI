@@ -40,6 +40,7 @@ export interface AgentDraft {
   ttsProvider: string;
   voiceId: string;
   language: string;
+  phoneNumber: string;
 }
 
 const EMPTY_DRAFT: AgentDraft = {
@@ -52,6 +53,7 @@ const EMPTY_DRAFT: AgentDraft = {
   ttsProvider: '',
   voiceId: '',
   language: '',
+  phoneNumber: '',
 };
 
 function draftFromAgent(agent: Agent): AgentDraft {
@@ -65,6 +67,7 @@ function draftFromAgent(agent: Agent): AgentDraft {
     ttsProvider: agent.defaultProviders?.tts ?? '',
     voiceId: agent.voiceId ?? '',
     language: agent.language ?? '',
+    phoneNumber: agent.phoneNumber ?? '',
   };
 }
 
@@ -211,6 +214,7 @@ export function useAgentConfig(agentId: string) {
         },
         voiceId: draft.voiceId || undefined,
         language: draft.language || undefined,
+        phoneNumber: draft.phoneNumber || undefined,
       });
       await saveAgentTools(agentId, [
         ...Object.entries(toolDrafts).map(([toolName, d]) => ({

@@ -121,3 +121,13 @@ export class TestAgentToolDto {
   @IsObject()
   args?: Record<string, unknown>;
 }
+
+/** Test a custom HTTP tool definition before assigning it to an agent. */
+export class TestCustomToolDto {
+  @IsObject()
+  definition!: Record<string, unknown>;
+
+  @IsOptional()
+  @IsObject()
+  args?: Record<string, unknown>;
+}

@@ -370,6 +370,7 @@ export class OrchestratorService {
         call.name,
         call.arguments ?? {},
         state.enabledTools,
+        state.toolConfigs,
       );
 
       if (validationError) {

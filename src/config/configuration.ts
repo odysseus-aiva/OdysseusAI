@@ -49,6 +49,13 @@ export default () => ({
   webSearch: {
     provider: process.env.WEB_SEARCH_PROVIDER ?? 'tavily',
   },
+  customTools: {
+    /**
+     * Optional comma-separated allowlist of hostnames custom HTTP tools may call.
+     * When empty, a private/reserved-address denylist is enforced instead.
+     */
+    allowedHosts: process.env.CUSTOM_TOOL_ALLOWED_HOSTS ?? '',
+  },
   tavily: {
     apiKey: process.env.TAVILY_API_KEY ?? '',
   },

@@ -2,14 +2,15 @@ import {
   Controller,
   DefaultValuePipe,
   Get,
-  Header,
   Inject,
   NotFoundException,
   Param,
   ParseIntPipe,
   Query,
-  StreamableFile,
+  Req,
+  Res,
 } from '@nestjs/common';
+import type { IncomingMessage, ServerResponse } from 'http';
 import { createReadStream, statSync } from 'fs';
 import { CONVERSATION_STATE_REPOSITORY } from '../orchestration/interfaces/conversation-state-repository.interface';
 import type { ConversationStateRepository } from '../orchestration/interfaces/conversation-state-repository.interface';
@@ -179,20 +180,46 @@ export class CallLogsController {
 
   /**
    * Stream the mixed WAV recording for a completed call.
+   * Supports range requests so the browser can seek without re-downloading.
    * GET /call-logs/:callId/recording
    */
   @Get(':callId/recording')
-  @Header('Accept-Ranges', 'none')
-  getRecording(@Param('callId') callId: string): StreamableFile {
+  getRecording(
+    @Param('callId') callId: string,
+    @Req() req: IncomingMessage,
+    @Res() res: ServerResponse,
+  ): void {
     const filePath = this.recordingService.getRecordingPath(callId);
     if (!filePath) {
-      throw new NotFoundException(`Recording not found for call: ${callId}`);
+      res.writeHead(404);
+      res.end();
+      return;
     }
+
     const { size } = statSync(filePath);
-    return new StreamableFile(createReadStream(filePath), {
-      type: 'audio/wav',
-      length: size,
-    });
+    const rangeHeader = req.headers['range'];
+
+    if (rangeHeader) {
+      const [startStr, endStr] = rangeHeader.replace('bytes=', '').split('-');
+      const start = parseInt(startStr ?? '0', 10);
+      const end = endStr ? parseInt(endStr, 10) : size - 1;
+      const chunkSize = end - start + 1;
+
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${size}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': String(chunkSize),
+        'Content-Type': 'audio/wav',
+      });
+      createReadStream(filePath, { start, end }).pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': String(size),
+        'Content-Type': 'audio/wav',
+        'Accept-Ranges': 'bytes',
+      });
+      createReadStream(filePath).pipe(res);
+    }
   }
 }
 

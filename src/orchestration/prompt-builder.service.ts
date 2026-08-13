@@ -14,7 +14,10 @@ export class PromptBuilderService {
     messages: LlmMessage[];
     tools: LlmToolDefinition[];
   } {
-    const tools = this.toolRegistry.listForPrompt(state.enabledTools);
+    const tools = this.toolRegistry.listForPrompt(
+      state.enabledTools,
+      state.toolConfigs,
+    );
     const systemPrompt = this.buildSystemPrompt(state, tools);
 
     const messages: LlmMessage[] = [{ role: 'system', content: systemPrompt }];

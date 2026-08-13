@@ -21,4 +21,6 @@ export interface AgentRepository {
     tools: UpsertAgentToolInput[],
   ): Promise<AgentToolAssignment[]>;
   findEnabledTools(agentId: string): Promise<AgentToolAssignment[]>;
+  /** Remove a single tool assignment. Returns true if one was deleted. */
+  deleteTool(agentId: string, toolName: string): Promise<boolean>;
 }

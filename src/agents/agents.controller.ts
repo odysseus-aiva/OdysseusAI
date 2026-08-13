@@ -12,11 +12,16 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AgentsService } from './agents.service';
-import { ToolRegistryService } from '../orchestration/tool-registry.service';
 import { ToolExecutionService } from '../orchestration/tool-execution.service';
+import { CustomHttpToolService } from '../orchestration/tools/custom/custom-http-tool.service';
+import {
+  CUSTOM_TOOL_KIND,
+  CustomHttpToolDefinition,
+} from '../orchestration/tools/custom/custom-tool.types';
 import {
   CreateAgentDto,
   TestAgentToolDto,
+  TestCustomToolDto,
   UpdateAgentDto,
   UpsertAgentToolsDto,
 } from './dto/agents.dto';
@@ -48,8 +53,8 @@ export class AgentsController {
 
   constructor(
     private readonly agentsService: AgentsService,
-    private readonly toolRegistry: ToolRegistryService,
     private readonly toolExecution: ToolExecutionService,
+    private readonly customHttpTool: CustomHttpToolService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -144,30 +149,31 @@ export class AgentsController {
     return this.agentsService.upsertTools(agentId, dto.tools);
   }
 
+  @Delete('agents/:agentId/tools/:toolName')
+  async deleteTool(
+    @Param('agentId') agentId: string,
+    @Param('toolName') toolName: string,
+  ) {
+    const ok = await this.agentsService.deleteTool(agentId, toolName);
+    return { ok };
+  }
+
   @Post('agents/:agentId/tools/:toolName/test')
   async testTool(
     @Param('agentId') agentId: string,
     @Param('toolName') toolName: string,
     @Body() dto: TestAgentToolDto,
   ) {
-    const assignments = await this.agentsService.listTools(agentId);
-    const assignment = assignments.find((t) => t.toolName === toolName);
-    if (!assignment?.enabled) {
+    // Works for built-in and custom tools alike — ToolExecutionService picks the
+    // executor from the resolved (unmasked) per-tool config.
+    const resolved = await this.agentsService.getEnabledToolConfig(
+      agentId,
+      toolName,
+    );
+    if (!resolved) {
       return {
         success: false,
         error: `Tool "${toolName}" is not enabled for agent "${agentId}"`,
-      };
-    }
-
-    const config = this.agentsService.mergeAndValidateConfig(
-      toolName,
-      assignment.config,
-    );
-
-    if (!this.toolRegistry.has(toolName)) {
-      return {
-        success: false,
-        error: `Tool "${toolName}" is not registered in the runtime catalogue`,
       };
     }
 
@@ -177,7 +183,37 @@ export class AgentsController {
       agentId,
       dynamicVariables: {},
       metadata: { test: true },
-      toolConfigs: { [toolName]: config },
+      toolConfigs: { [toolName]: resolved.config },
     });
+  }
+
+  /**
+   * Test a custom HTTP tool definition BEFORE assigning it to an agent. Runs the
+   * generic executor directly (no persistence, no call log). Returns a safe
+   * success/error envelope so the UI can preview the request.
+   */
+  @Post('agents/tools/custom/test')
+  async testCustomTool(@Body() dto: TestCustomToolDto) {
+    let def: CustomHttpToolDefinition;
+    try {
+      def = this.agentsService.normalizeCustomTool('preview_tool', {
+        ...dto.definition,
+        kind: CUSTOM_TOOL_KIND,
+      }) as unknown as CustomHttpToolDefinition;
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+
+    try {
+      const output = await this.customHttpTool.execute(def, dto.args ?? {}, {
+        callId: `custom-tool-preview-${Date.now()}`,
+        roomName: 'tool-test',
+        dynamicVariables: {},
+        metadata: { test: true },
+      });
+      return { success: true, output };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
   }
 }

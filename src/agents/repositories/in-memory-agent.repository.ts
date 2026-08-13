@@ -104,4 +104,8 @@ export class InMemoryAgentRepository implements AgentRepository {
   async findEnabledTools(agentId: string): Promise<AgentToolAssignment[]> {
     return (await this.listTools(agentId)).filter((t) => t.enabled);
   }
+
+  async deleteTool(agentId: string, toolName: string): Promise<boolean> {
+    return this.tools.delete(this.toolKey(agentId, toolName));
+  }
 }

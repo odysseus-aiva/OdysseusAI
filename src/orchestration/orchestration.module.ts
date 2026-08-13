@@ -17,6 +17,7 @@ import { GetWeatherTool } from './tools/get-weather.tool';
 import { WebSearchTool } from './tools/web-search/web-search.tool';
 import { TavilyWebSearchProvider } from './tools/web-search/tavily-web-search.provider';
 import { BraveWebSearchProvider } from './tools/web-search/brave-web-search.provider';
+import { CustomHttpToolService } from './tools/custom/custom-http-tool.service';
 
 @Module({
   imports: [LlmModule, CallLogsModule],
@@ -27,6 +28,7 @@ import { BraveWebSearchProvider } from './tools/web-search/brave-web-search.prov
     ConversationCleanupService,
     ToolRegistryService,
     ToolExecutionService,
+    CustomHttpToolService,
     ResponsePlannerService,
     GuardrailService,
     EventLoggerService,
@@ -43,6 +45,7 @@ import { BraveWebSearchProvider } from './tools/web-search/brave-web-search.prov
     ConversationStateService,
     ToolRegistryService,
     ToolExecutionService,
+    CustomHttpToolService,
   ],
 })
 export class OrchestrationModule implements OnModuleInit {

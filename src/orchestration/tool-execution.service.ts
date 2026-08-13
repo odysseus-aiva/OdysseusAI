@@ -4,6 +4,8 @@ import { ToolRegistryService } from './tool-registry.service';
 import { ToolExecutionContext } from './interfaces/tool-execution-context.interface';
 import { ToolExecutionResult } from './interfaces/orchestration.types';
 import { EventLoggerService } from './event-logger.service';
+import { CustomHttpToolService } from './tools/custom/custom-http-tool.service';
+import { isCustomHttpDefinition } from './tools/custom/custom-tool.types';
 
 @Injectable()
 export class ToolExecutionService {
@@ -13,6 +15,7 @@ export class ToolExecutionService {
     private readonly configService: ConfigService,
     private readonly toolRegistry: ToolRegistryService,
     private readonly eventLogger: EventLoggerService,
+    private readonly customHttpTool: CustomHttpToolService,
   ) {}
 
   async execute(
@@ -20,8 +23,14 @@ export class ToolExecutionService {
     args: Record<string, unknown>,
     context: ToolExecutionContext,
   ): Promise<ToolExecutionResult> {
-    const tool = this.toolRegistry.get(toolName);
-    if (!tool) {
+    // Dispatch is generic: a registered built-in AgentTool, otherwise a
+    // user-defined HTTP tool whose definition lives in the per-agent
+    // toolConfigs. No tool-specific branching beyond these two kinds.
+    const builtin = this.toolRegistry.get(toolName);
+    const customDef = builtin ? undefined : context.toolConfigs?.[toolName];
+    const isCustom = !builtin && isCustomHttpDefinition(customDef);
+
+    if (!builtin && !isCustom) {
       const error = `Unknown tool: ${toolName}`;
       await this.eventLogger.log(context.callId, 'tool_result', {
         roomName: context.roomName,
@@ -39,17 +48,21 @@ export class ToolExecutionService {
     });
 
     this.logger.log(
-      `[${context.callId}] Executing tool ${toolName} (timeout=${timeoutMs}ms)`,
+      `[${context.callId}] Executing tool ${toolName} (${isCustom ? 'custom-http' : 'built-in'})`,
     );
 
     const toolStart = Date.now();
 
     try {
-      const output = await this.withTimeout(
-        tool.execute(args, context),
-        timeoutMs,
-        toolName,
-      );
+      // Built-ins run under the shared tool timeout; custom HTTP tools enforce
+      // their own per-definition timeout internally (via AbortController).
+      const output = isCustom
+        ? await this.customHttpTool.execute(
+            customDef as Parameters<CustomHttpToolService['execute']>[0],
+            args,
+            context,
+          )
+        : await this.withTimeout(builtin!.execute(args, context), timeoutMs, toolName);
       const latencyMs = Date.now() - toolStart;
 
       await this.eventLogger.log(context.callId, 'tool_result', {

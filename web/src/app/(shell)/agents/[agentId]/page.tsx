@@ -62,6 +62,7 @@ export default function AgentDetailPage() {
     catalogue,
     draft,
     toolDrafts,
+    customTools,
     loading,
     saving,
     error,
@@ -74,6 +75,10 @@ export default function AgentDetailPage() {
     setToolEnabled,
     setToolConfigValue,
     resetToolConfig,
+    upsertCustomTool,
+    setCustomToolEnabled,
+    removeCustomTool,
+    testCustomDefinition,
     save,
     discard,
     testTool,
@@ -289,6 +294,13 @@ export default function AgentDetailPage() {
                 enabledCount={enabledCount}
                 onToggle={setToolEnabled}
                 onOpenConfig={setOpenToolName}
+                customTools={customTools}
+                onCustomSave={upsertCustomTool}
+                onCustomToggle={setCustomToolEnabled}
+                onCustomRemove={removeCustomTool}
+                onCustomTest={testCustomDefinition}
+                testing={testing}
+                testResults={testResults}
               />
             )}
             {tab === 'knowledge' && <KnowledgeTab />}

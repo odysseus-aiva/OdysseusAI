@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Settings2, X, Wrench } from 'lucide-react';
+import { Search, Settings2, X, Wrench, Plus, Globe, Pencil, Trash2 } from 'lucide-react';
 import { Switch } from '@/components/ui/Field';
+import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/Section';
-import type { CatalogueTool } from '@/lib/api/agents';
-import type { ToolDraft } from '../useAgentConfig';
+import type { CatalogueTool, CustomToolDefinition } from '@/lib/api/agents';
+import type { ToolDraft, CustomToolEntry } from '../useAgentConfig';
 import { categoryMeta } from '../tool-categories';
+import { CustomToolBuilder } from './CustomToolBuilder';
 
 type Filter = 'all' | 'enabled' | string;
 
@@ -21,16 +23,38 @@ export function ToolsTab({
   enabledCount,
   onToggle,
   onOpenConfig,
+  customTools,
+  onCustomSave,
+  onCustomToggle,
+  onCustomRemove,
+  onCustomTest,
+  testing,
+  testResults,
 }: {
   catalogue: CatalogueTool[];
   toolDrafts: Record<string, ToolDraft>;
   enabledCount: number;
   onToggle: (toolName: string, enabled: boolean) => void;
   onOpenConfig: (toolName: string) => void;
+  customTools: CustomToolEntry[];
+  onCustomSave: (entry: CustomToolEntry) => void;
+  onCustomToggle: (toolName: string, enabled: boolean) => void;
+  onCustomRemove: (toolName: string) => void | Promise<void>;
+  onCustomTest: (key: string, def: CustomToolDefinition, args: Record<string, unknown>) => void;
+  testing: string | null;
+  testResults: Record<string, string>;
 }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const searchRef = useRef<HTMLInputElement>(null);
+
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [editingTool, setEditingTool] = useState<CustomToolEntry | undefined>();
+
+  const reservedNames = useMemo(
+    () => [...catalogue.map((t) => t.name), ...customTools.map((c) => c.toolName)],
+    [catalogue, customTools],
+  );
 
   // "/" focuses search, Escape clears it — Raycast-style, no visible chrome.
   useEffect(() => {
@@ -92,7 +116,22 @@ export function ToolsTab({
   }, [visible]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
+      {/* ── Custom functions ── */}
+      <CustomFunctions
+        customTools={customTools}
+        onToggle={onCustomToggle}
+        onEdit={(entry) => {
+          setEditingTool(entry);
+          setBuilderOpen(true);
+        }}
+        onRemove={onCustomRemove}
+        onNew={() => {
+          setEditingTool(undefined);
+          setBuilderOpen(true);
+        }}
+      />
+
       {/* Filter bar — search + category chips in one row */}
       <div className="flex flex-col gap-3">
         <div className="relative">
@@ -243,6 +282,136 @@ export function ToolsTab({
             </div>
           ))}
         </div>
+      )}
+
+      <CustomToolBuilder
+        open={builderOpen}
+        initial={editingTool}
+        existingNames={reservedNames}
+        onClose={() => setBuilderOpen(false)}
+        onSave={onCustomSave}
+        onTest={onCustomTest}
+        testing={testing}
+        testResults={testResults}
+      />
+    </div>
+  );
+}
+
+/** Custom HTTP function tools — create, enable, edit, delete. */
+function CustomFunctions({
+  customTools,
+  onToggle,
+  onEdit,
+  onRemove,
+  onNew,
+}: {
+  customTools: CustomToolEntry[];
+  onToggle: (toolName: string, enabled: boolean) => void;
+  onEdit: (entry: CustomToolEntry) => void;
+  onRemove: (toolName: string) => void | Promise<void>;
+  onNew: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2 px-0.5">
+        <div className="flex items-center gap-2">
+          <Globe size={12} strokeWidth={2} style={{ color: 'var(--color-accent)' }} />
+          <h3
+            className="text-[11px] font-[600] uppercase tracking-[0.09em]"
+            style={{ color: 'var(--color-text-faint)' }}
+          >
+            Custom functions
+          </h3>
+          <span className="text-[11px] tabular-nums" style={{ color: 'var(--color-text-faint)' }}>
+            {customTools.length}
+          </span>
+        </div>
+        <Button variant="secondary" size="sm" onClick={onNew}>
+          <Plus size={13} strokeWidth={2.2} />
+          New function
+        </Button>
+      </div>
+
+      {customTools.length === 0 ? (
+        <p
+          className="rounded-[11px] px-3.5 py-4 text-[12px] leading-[1.5]"
+          style={{
+            border: '1px dashed var(--color-border)',
+            background: 'var(--color-surface)',
+            color: 'var(--color-text-faint)',
+          }}
+        >
+          Connect any HTTP API as a tool the agent can call during a conversation — no code required.
+        </p>
+      ) : (
+        <ul
+          className="overflow-hidden rounded-[11px]"
+          style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
+        >
+          {customTools.map((entry, i) => (
+            <li
+              key={entry.toolName}
+              className="group flex items-center gap-3 px-3.5 py-2.5"
+              style={{ borderTop: i === 0 ? undefined : '1px solid var(--color-border)' }}
+            >
+              <span
+                aria-hidden
+                className="flex-shrink-0 rounded-full"
+                style={{
+                  width: 2.5,
+                  height: 22,
+                  background: entry.enabled ? 'var(--color-accent)' : 'var(--color-border-strong)',
+                  boxShadow: entry.enabled ? '0 0 8px var(--color-accent-glow)' : 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => onEdit(entry)}
+                className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left"
+              >
+                <span
+                  className="font-mono text-[12.5px]"
+                  style={{ color: entry.enabled ? 'var(--color-text)' : 'var(--color-text-muted)' }}
+                >
+                  {entry.toolName}
+                </span>
+                <span
+                  className="line-clamp-1 text-[11px]"
+                  style={{ color: 'var(--color-text-faint)' }}
+                >
+                  <span style={{ color: 'var(--color-accent)' }}>{entry.def.method}</span> {entry.def.url}
+                </span>
+              </button>
+              <button
+                type="button"
+                aria-label={`Edit ${entry.toolName}`}
+                onClick={() => onEdit(entry)}
+                className="flex flex-shrink-0 items-center justify-center rounded-[7px] transition-opacity [@media(hover:hover)]:opacity-0 group-hover:opacity-100"
+                style={{ width: 28, height: 28, color: 'var(--color-text-muted)' }}
+              >
+                <Pencil size={12.5} strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                aria-label={`Delete ${entry.toolName}`}
+                onClick={() => void onRemove(entry.toolName)}
+                className="flex flex-shrink-0 items-center justify-center rounded-[7px] transition-opacity [@media(hover:hover)]:opacity-0 group-hover:opacity-100"
+                style={{ width: 28, height: 28, color: 'var(--color-text-faint)' }}
+              >
+                <Trash2 size={12.5} strokeWidth={2} />
+              </button>
+              <div className="flex-shrink-0">
+                <Switch
+                  checked={entry.enabled}
+                  onChange={(next) => onToggle(entry.toolName, next)}
+                  label={`${entry.enabled ? 'Disable' : 'Enable'} ${entry.toolName}`}
+                  size="sm"
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

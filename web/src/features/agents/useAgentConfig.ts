@@ -2,21 +2,32 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  deleteAgentTool,
   fetchAgent,
   fetchAgentTools,
   fetchCatalogue,
+  isCustomToolConfig,
   saveAgentTools,
   testAgentTool,
+  testCustomTool,
   updateAgent,
   type Agent,
   type AgentEngine,
   type AgentToolAssignment,
   type CatalogueTool,
+  type CustomToolDefinition,
 } from '@/lib/api/agents';
 
 export interface ToolDraft {
   enabled: boolean;
   config: Record<string, unknown>;
+}
+
+/** A user-configured HTTP tool assigned to this agent. */
+export interface CustomToolEntry {
+  toolName: string;
+  enabled: boolean;
+  def: CustomToolDefinition;
 }
 
 export interface AgentDraft {
@@ -67,6 +78,7 @@ export function useAgentConfig(agentId: string) {
   const [catalogue, setCatalogue] = useState<CatalogueTool[]>([]);
   const [draft, setDraft] = useState<AgentDraft>(EMPTY_DRAFT);
   const [toolDrafts, setToolDrafts] = useState<Record<string, ToolDraft>>({});
+  const [customTools, setCustomTools] = useState<CustomToolEntry[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -79,6 +91,7 @@ export function useAgentConfig(agentId: string) {
   // Baselines for dirty comparison — the last known server state.
   const baseline = useRef<AgentDraft>(EMPTY_DRAFT);
   const toolBaseline = useRef<Record<string, ToolDraft>>({});
+  const customBaseline = useRef<CustomToolEntry[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,6 +122,18 @@ export function useAgentConfig(agentId: string) {
       }
       setToolDrafts(nextTools);
       toolBaseline.current = structuredClone(nextTools);
+
+      // Custom HTTP tools have no catalogue entry — their config IS the
+      // definition. Secret header values arrive masked from the server.
+      const customEntries: CustomToolEntry[] = toolsData
+        .filter((t: AgentToolAssignment) => isCustomToolConfig(t.config))
+        .map((t: AgentToolAssignment) => ({
+          toolName: t.toolName,
+          enabled: t.enabled,
+          def: t.config as unknown as CustomToolDefinition,
+        }));
+      setCustomTools(customEntries);
+      customBaseline.current = structuredClone(customEntries);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load agent');
     } finally {
@@ -159,12 +184,15 @@ export function useAgentConfig(agentId: string) {
       (k) => draft[k] !== baseline.current[k],
     );
     if (agentChanged) return true;
-    return JSON.stringify(toolDrafts) !== JSON.stringify(toolBaseline.current);
-  }, [draft, toolDrafts]);
+    if (JSON.stringify(toolDrafts) !== JSON.stringify(toolBaseline.current)) return true;
+    return JSON.stringify(customTools) !== JSON.stringify(customBaseline.current);
+  }, [draft, toolDrafts, customTools]);
 
   const enabledCount = useMemo(
-    () => Object.values(toolDrafts).filter((d) => d.enabled).length,
-    [toolDrafts],
+    () =>
+      Object.values(toolDrafts).filter((d) => d.enabled).length +
+      customTools.filter((c) => c.enabled).length,
+    [toolDrafts, customTools],
   );
 
   const save = useCallback(async () => {
@@ -184,14 +212,18 @@ export function useAgentConfig(agentId: string) {
         voiceId: draft.voiceId || undefined,
         language: draft.language || undefined,
       });
-      await saveAgentTools(
-        agentId,
-        Object.entries(toolDrafts).map(([toolName, d]) => ({
+      await saveAgentTools(agentId, [
+        ...Object.entries(toolDrafts).map(([toolName, d]) => ({
           toolName,
           enabled: d.enabled,
           config: d.config,
         })),
-      );
+        ...customTools.map((c) => ({
+          toolName: c.toolName,
+          enabled: c.enabled,
+          config: c.def as unknown as Record<string, unknown>,
+        })),
+      ]);
       setSavedAt(Date.now());
       await load();
     } catch (err) {
@@ -199,7 +231,7 @@ export function useAgentConfig(agentId: string) {
     } finally {
       setSaving(false);
     }
-  }, [agentId, draft, toolDrafts, load]);
+  }, [agentId, draft, toolDrafts, customTools, load]);
 
   /**
    * Persist and invoke one tool. Enables it first — the backend only executes
@@ -234,9 +266,66 @@ export function useAgentConfig(agentId: string) {
     [agentId, toolDrafts],
   );
 
+  // ── Custom tools ────────────────────────────────────────────────────────────
+
+  /** Create or replace a custom tool by name (edit reuses the same name). */
+  const upsertCustomTool = useCallback((entry: CustomToolEntry) => {
+    setCustomTools((prev) => {
+      const idx = prev.findIndex((c) => c.toolName === entry.toolName);
+      if (idx === -1) return [...prev, entry];
+      const next = [...prev];
+      next[idx] = entry;
+      return next;
+    });
+  }, []);
+
+  const setCustomToolEnabled = useCallback((toolName: string, enabled: boolean) => {
+    setCustomTools((prev) =>
+      prev.map((c) => (c.toolName === toolName ? { ...c, enabled } : c)),
+    );
+  }, []);
+
+  /** Remove a custom tool. Persisted ones are deleted server-side immediately. */
+  const removeCustomTool = useCallback(
+    async (toolName: string) => {
+      const persisted = customBaseline.current.some((c) => c.toolName === toolName);
+      if (persisted) {
+        await deleteAgentTool(agentId, toolName);
+        await load();
+        return;
+      }
+      setCustomTools((prev) => prev.filter((c) => c.toolName !== toolName));
+    },
+    [agentId, load],
+  );
+
+  /** Test a custom definition without assigning it (pre-assign preview). */
+  const testCustomDefinition = useCallback(
+    async (key: string, def: CustomToolDefinition, args: Record<string, unknown>) => {
+      setTesting(key);
+      setTestResults((prev) => ({ ...prev, [key]: '' }));
+      try {
+        const result = await testCustomTool(def, args);
+        setTestResults((prev) => ({
+          ...prev,
+          [key]: JSON.stringify(result, null, 2),
+        }));
+      } catch (err) {
+        setTestResults((prev) => ({
+          ...prev,
+          [key]: err instanceof Error ? err.message : 'Test failed',
+        }));
+      } finally {
+        setTesting(null);
+      }
+    },
+    [],
+  );
+
   const discard = useCallback(() => {
     setDraft(baseline.current);
     setToolDrafts(structuredClone(toolBaseline.current));
+    setCustomTools(structuredClone(customBaseline.current));
   }, []);
 
   return {
@@ -244,6 +333,7 @@ export function useAgentConfig(agentId: string) {
     catalogue,
     draft,
     toolDrafts,
+    customTools,
     loading,
     saving,
     error,
@@ -256,6 +346,10 @@ export function useAgentConfig(agentId: string) {
     setToolEnabled,
     setToolConfigValue,
     resetToolConfig,
+    upsertCustomTool,
+    setCustomToolEnabled,
+    removeCustomTool,
+    testCustomDefinition,
     save,
     discard,
     testTool,

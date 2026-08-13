@@ -128,6 +128,13 @@ export class MongoAgentRepository implements AgentRepository {
     return docs.map((d) => this.toTool(d));
   }
 
+  async deleteTool(agentId: string, toolName: string): Promise<boolean> {
+    const res = await this.agentToolModel
+      .deleteOne({ agentId, toolName })
+      .exec();
+    return res.deletedCount > 0;
+  }
+
   private toAgent(doc: {
     agentId: string;
     name: string;

@@ -404,7 +404,10 @@ export class OmniEngineService {
   }
 
   private buildConfigureFrame(config: AgentConfig): Record<string, unknown> {
-    const tools = this.toolRegistry.listForOmni(config.enabledTools);
+    const tools = this.toolRegistry.listForOmni(
+      config.enabledTools,
+      config.toolConfigs,
+    );
     const frame: Record<string, unknown> = {
       event: 'configure',
       voice_id: config.voiceId || 'stock_sarah_style2',
@@ -592,6 +595,7 @@ export class OmniEngineService {
       toolName,
       args,
       config.enabledTools,
+      config.toolConfigs,
     );
     if (validationError) {
       // The reject path skips ToolExecutionService (which normally logs the

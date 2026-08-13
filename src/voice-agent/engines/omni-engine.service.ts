@@ -50,6 +50,8 @@ export interface OmniToolExecutedEvent {
   error?: string;
   success: boolean;
   timestamp: number;
+  /** Execution wall-time in ms (undefined when the call was rejected pre-run). */
+  latencyMs?: number;
 }
 
 export interface OmniCallbacks {
@@ -128,6 +130,9 @@ export class OmniEngineService {
     // flush as one final transcript entry.
     let pendingRole: 'user' | 'assistant' | null = null;
     let pendingText = '';
+    // Omni speaks the configured greeting (turn 0) but never sends its
+    // transcript, so we surface the greeting text (which we authored) once.
+    let greetingEmitted = false;
     const flushPending = () => {
       const text = pendingText.trim();
       const role = pendingRole;
@@ -137,15 +142,6 @@ export class OmniEngineService {
         this.emitTranscript(role, text, true, roomName, callId, callbacks);
       }
     };
-
-    // ── Raw-frame diagnostics ────────────────────────────────────────────────
-    // Persist a bounded sample of inbound frames to the call log so the exact
-    // PyAI wire protocol — especially how (or whether) the agent's own
-    // transcript arrives — can be inspected from Mongo after a live call.
-    const debugKinds = new Set<string>();
-    let debug02 = 0;
-    let agentAudioFrames = 0;
-    const DEBUG_02_MAX = 40;
 
     const wireHandlers = (socket: WebSocket) => {
       socket.on('message', (data: WebSocket.RawData) => {
@@ -161,8 +157,6 @@ export class OmniEngineService {
         }
         if (tag === CONTROL_TAG) {
           const rawControl = payload.toString('utf8');
-          // Diagnostics: persist the first occurrence of each control event kind
-          // (full raw) so an unhandled agent-transcript event becomes visible.
           let kind = 'control';
           try {
             const o = JSON.parse(rawControl) as { event?: string; type?: string };
@@ -170,15 +164,21 @@ export class OmniEngineService {
           } catch {
             /* not JSON */
           }
-          if (kind !== 'audio_position' && !debugKinds.has(kind)) {
-            debugKinds.add(kind);
-            void this.callLogsService.appendLog(callId, 'omni_frame', {
-              roomName,
-              data: { tag: '0x03', kind, raw: rawControl.slice(0, 500) },
-            });
-          }
           // A control frame marks a turn boundary — flush any buffered tokens.
           flushPending();
+          // Surface the greeting as the agent's first line once configure lands
+          // (the protocol emits no agent transcript). Dedupe handled downstream.
+          if (kind === 'configured' && !greetingEmitted && config.greeting?.trim()) {
+            greetingEmitted = true;
+            this.emitTranscript(
+              'assistant',
+              config.greeting.trim(),
+              true,
+              roomName,
+              callId,
+              callbacks,
+            );
+          }
           void this.handleControl(rawControl, roomName, callId, config, socket, callbacks);
         } else if (tag === TRANSCRIPT_TAG) {
           // 0x02 = transcript from the server. Two shapes seen in the wild:
@@ -187,41 +187,16 @@ export class OmniEngineService {
           this.logger.log(
             `[${callId}] Omni transcript frame (0x02) ${payload.length}B: ${text.slice(0, 120)}`,
           );
-          if (debug02 < DEBUG_02_MAX) {
-            debug02 += 1;
-            void this.callLogsService.appendLog(callId, 'omni_frame', {
-              roomName,
-              data: { tag: '0x02', raw: text.slice(0, 300) },
-            });
-          }
-          const structured = tryParseTranscriptJson(text);
-          if (structured) {
-            flushPending(); // don't mix a raw run into a structured frame
-            this.emitTranscript(
-              structured.role,
-              structured.text,
-              structured.isFinal,
-              roomName,
-              callId,
-              callbacks,
-            );
-          } else {
-            // PyAI: bare 0x02 tokens are caller ASR only. Agent words arrive on
-            // control frames — never attribute mic tokens to the assistant.
-            if (pendingRole && pendingRole !== 'user') flushPending();
-            pendingRole = 'user';
-            pendingText += text;
-            const live = pendingText.trim();
-            if (live) {
-              this.emitTranscript(
-                'user',
-                live,
-                false,
-                roomName,
-                callId,
-                callbacks,
-              );
-            }
+          // Per the Omni protocol, every 0x02 frame is a plain UTF-8 text delta
+          // for the CURRENT CALLER turn — no role, no finality, never JSON, never
+          // the agent. Accumulate the running caller utterance and publish it as
+          // a live (interim) caption; it is finalized on the next turn boundary
+          // (flush / agent audio / tool_call) by flushPending().
+          pendingRole = 'user';
+          pendingText += text;
+          const live = pendingText.trim();
+          if (live) {
+            this.emitTranscript('user', live, false, roomName, callId, callbacks);
           }
         } else if (tag === AGENT_AUDIO_TAG) {
           // 0x01 server→client = agent audio PCM16. But if Omni encounters an
@@ -243,13 +218,6 @@ export class OmniEngineService {
             // Agent audio started/continued. If the user was mid-utterance,
             // their turn just ended — flush it before assistant audio plays.
             if (pendingRole === 'user') flushPending();
-            agentAudioFrames += 1;
-            if (agentAudioFrames === 1) {
-              void this.callLogsService.appendLog(callId, 'omni_frame', {
-                roomName,
-                data: { tag: '0x01', note: 'agent audio started' },
-              });
-            }
             audioFramesIn += 1;
             audioBytesIn += payload.length;
             if (audioFramesIn <= 5) {
@@ -514,11 +482,18 @@ export class OmniEngineService {
         break;
       }
 
-      case 'barge_in':
       case 'flush':
+        // Caller VAD endpoint (reason "energy") — the user's turn just ended.
+        // Their buffered 0x02 text was finalized before this handler ran. This
+        // is NOT an interruption, so agent playback must not be stopped.
+        callbacks.onStatus('processing');
+        break;
+
+      case 'barge_in':
       case 'assistant_interrupted':
-        // assistant_interrupted carries the truncated reply text — capture what
-        // the agent had said before the caller cut in, so it is not lost.
+        // A real interruption. assistant_interrupted carries the truncated reply
+        // text — the agent's own words — which is the one native source of agent
+        // transcript, so capture it before clearing playback.
         if (typeof msg.reply === 'string' && msg.reply.trim()) {
           this.emitTranscript('assistant', msg.reply, true, roomName, callId, callbacks);
         }
@@ -650,41 +625,9 @@ export class OmniEngineService {
       error: result.success ? undefined : result.error,
       success: result.success,
       timestamp: executedAt,
+      latencyMs: Date.now() - executedAt,
     });
   }
-}
-
-/**
- * Parse a 0x02 transcript frame when it is structured JSON ({role/speaker,
- * text/transcript, final}). Returns null for bare token chunks so the caller
- * falls back to role-attributed accumulation.
- */
-function tryParseTranscriptJson(
-  raw: string,
-): { role: 'user' | 'assistant'; text: string; isFinal: boolean } | null {
-  const trimmed = raw.trimStart();
-  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null;
-  let obj: {
-    role?: string;
-    speaker?: string;
-    text?: string;
-    transcript?: string;
-    final?: boolean;
-    is_final?: boolean;
-    kind?: string;
-  };
-  try {
-    obj = JSON.parse(trimmed) as typeof obj;
-  } catch {
-    return null;
-  }
-  const text = obj.text ?? obj.transcript;
-  if (typeof text !== 'string') return null;
-  const role: 'user' | 'assistant' =
-    (obj.role ?? obj.speaker) === 'user' ? 'user' : 'assistant';
-  const isFinal =
-    obj.final ?? obj.is_final ?? (obj.kind === undefined ? true : obj.kind === 'final');
-  return { role, text, isFinal };
 }
 
 /**

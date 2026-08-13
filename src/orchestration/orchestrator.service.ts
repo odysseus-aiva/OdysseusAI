@@ -18,6 +18,16 @@ import {
 import { ToolExecutionContext } from './interfaces/tool-execution-context.interface';
 import { resolveExecutionFiller } from './tools/execution-filler';
 
+export interface ToolLiveEvent {
+  id: string;
+  name: string;
+  status: 'running' | 'ok' | 'error';
+  latencyMs?: number;
+  args?: unknown;
+  output?: unknown;
+  error?: string;
+}
+
 export interface OrchestrationTurnHooks {
   /**
    * Called once per tool round before tools execute.
@@ -27,6 +37,8 @@ export interface OrchestrationTurnHooks {
     toolNames: string[];
     fillerText: string | null;
   }) => Promise<void>;
+  /** Per-tool lifecycle (running → ok/error), for live surfacing in the UI. */
+  onToolEvent?: (event: ToolLiveEvent) => void;
 }
 
 /**
@@ -222,6 +234,7 @@ export class OrchestratorService {
           llmResponse.toolCalls,
           state,
           input,
+          hooks,
         );
         toolResults = [...toolResults, ...roundResults];
 
@@ -352,6 +365,7 @@ export class OrchestratorService {
     toolCalls: LlmToolCall[],
     state: ConversationState,
     input: OrchestrationTurnInput,
+    hooks?: OrchestrationTurnHooks,
   ): Promise<ToolExecutionResult[]> {
     const context: ToolExecutionContext = {
       callId: input.callId,
@@ -365,10 +379,14 @@ export class OrchestratorService {
 
     const results: ToolExecutionResult[] = [];
 
+    let toolIndex = 0;
     for (const call of toolCalls) {
+      const liveId = call.id ?? `${call.name}-${Date.now()}-${toolIndex++}`;
+      const args = call.arguments ?? {};
+
       const validationError = this.toolRegistry.validateToolCall(
         call.name,
-        call.arguments ?? {},
+        args,
         state.enabledTools,
         state.toolConfigs,
       );
@@ -377,6 +395,7 @@ export class OrchestratorService {
         this.logger.warn(
           `[${input.callId}] Tool validation failed for ${call.name}: ${validationError}`,
         );
+        hooks?.onToolEvent?.({ id: liveId, name: call.name, status: 'error', error: validationError });
         const failed: ToolExecutionResult = {
           success: false,
           toolName: call.name,
@@ -393,11 +412,19 @@ export class OrchestratorService {
         continue;
       }
 
-      const result = await this.toolExecution.execute(
-        call.name,
-        call.arguments ?? {},
-        context,
-      );
+      hooks?.onToolEvent?.({ id: liveId, name: call.name, status: 'running', args });
+      const startedAt = Date.now();
+      const result = await this.toolExecution.execute(call.name, args, context);
+      const latencyMs = Date.now() - startedAt;
+      hooks?.onToolEvent?.({
+        id: liveId,
+        name: call.name,
+        status: result.success ? 'ok' : 'error',
+        latencyMs,
+        args,
+        output: result.output,
+        error: result.error,
+      });
       results.push(result);
       state.toolCallHistory.push({
         name: call.name,

@@ -132,6 +132,31 @@ export class LivekitRtcService {
   }
 
   /**
+   * Publish a non-transcript live event (a tool execution or a session-state
+   * hint like `interrupted`) on the same data channel the transcript uses.
+   * Browsers branch on `kind`; transcript packets carry no `kind`.
+   */
+  async publishLiveEvent(
+    roomName: string,
+    packet: Record<string, unknown>,
+  ): Promise<void> {
+    const connection = this.connections.get(roomName);
+    const localParticipant = connection?.room.localParticipant;
+    if (!localParticipant) return;
+
+    try {
+      await localParticipant.publishData(
+        Buffer.from(JSON.stringify({ v: 1, ts: Date.now(), ...packet }), 'utf8'),
+        { reliable: true, topic: 'odysseus.transcript' },
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to publish live event for room "${roomName}": ${(error as Error).message}`,
+      );
+    }
+  }
+
+  /**
    * Omni often delivers the agent's full reply in one shot. Reveal it
    * word-by-word so the Agent line types while audio is playing.
    * Always commits the full text at the end — even if barge-in / replace

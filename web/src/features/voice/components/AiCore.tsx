@@ -31,6 +31,7 @@ const STATE_HEX: Record<VoiceState, string> = {
   listening: '#38e8ff',
   thinking: '#8b5cf6',
   speaking: '#38e8ff',
+  interrupted: '#fbbf24',
   disconnected: '#4a5568',
   error: '#fb7185',
 };
@@ -41,6 +42,7 @@ const coreAnimation: Record<VoiceState, { scale: number[]; duration: number }> =
   listening: { scale: [1, 1.04, 1], duration: 3.5 },
   thinking: { scale: [1, 1.07, 0.97, 1.04, 1], duration: 2.2 },
   speaking: { scale: [1, 1.07, 1.02, 1.06, 1], duration: 1.2 },
+  interrupted: { scale: [1, 1.08, 1], duration: 0.9 },
   disconnected: { scale: [1, 1, 1], duration: 8 },
   error: { scale: [1, 1.02, 1], duration: 4 },
 };
@@ -52,6 +54,7 @@ const NEBULA_SPEED: Record<VoiceState, number> = {
   listening: 16,
   thinking: 4,
   speaking: 8,
+  interrupted: 10,
   disconnected: 48,
   error: 10,
 };
@@ -65,6 +68,7 @@ const SPECULAR: Record<VoiceState, { x: number; y: number; scale: number; opacit
   listening: { x: -8, y: 12, scale: 0.88, opacity: 0.6 },
   thinking: { x: 38, y: 58, scale: 1.35, opacity: 0.42 }, // drifts inward — "looking in"
   speaking: { x: -8, y: -12, scale: 1.18, opacity: 1 },
+  interrupted: { x: -6, y: 10, scale: 0.92, opacity: 0.7 },
   disconnected: { x: 0, y: 22, scale: 0.75, opacity: 0.22 },
   error: { x: 22, y: 22, scale: 0.85, opacity: 0.48 },
 };

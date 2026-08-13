@@ -9,6 +9,7 @@ export type VoiceState =
   | 'listening'
   | 'thinking'
   | 'speaking'
+  | 'interrupted'
   | 'disconnected'
   | 'error';
 
@@ -31,6 +32,7 @@ export const VOICE_STATE_META: Record<VoiceState, VoiceStateMeta> = {
   listening: { label: 'Listening', colorVar: '--color-state-listening' },
   thinking: { label: 'Thinking', colorVar: '--color-state-thinking' },
   speaking: { label: 'Speaking', colorVar: '--color-state-speaking' },
+  interrupted: { label: 'Interrupted', colorVar: '--color-state-warning' },
   disconnected: { label: 'Ended', colorVar: '--color-text-muted' },
   error: { label: 'Connection error', colorVar: '--color-state-error' },
 };

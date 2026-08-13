@@ -130,6 +130,7 @@ const MOTION: Partial<
   listening:    { animate: { opacity: [1, 0.55, 1], scale: [1, 1.18, 1] },  duration: 1.5 },
   thinking:     { animate: { opacity: [0.5, 1, 0.5], scale: [0.9, 1.12, 0.9] }, duration: 0.7 },
   speaking:     { animate: { opacity: [1, 0.6, 1], scale: [1, 1.32, 1] },   duration: 0.5 },
+  interrupted:  { animate: { opacity: [1, 0.4, 1], scale: [1, 1.4, 1] },    duration: 0.42 },
   error:        { animate: { opacity: [1, 0.25, 1], scale: [1, 1.1, 1] },   duration: 1.1 },
   disconnected: { animate: { opacity: [0.45, 0.45, 0.45], scale: [1, 1, 1] }, duration: 4 },
 };

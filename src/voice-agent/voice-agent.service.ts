@@ -443,6 +443,10 @@ export class VoiceAgentService {
         },
         onBargeIn: () => {
           this.livekitRtcService.cancelAssistantCaption(roomName);
+          void this.livekitRtcService.publishLiveEvent(roomName, {
+            kind: 'state',
+            state: 'interrupted',
+          });
           if (this.isBargeInEnabled()) {
             this.livekitRtcService.stopPlayback(roomName);
           }
@@ -531,6 +535,16 @@ export class VoiceAgentService {
         },
         onToolExecuted: (event: OmniToolExecutedEvent) => {
           pendingToolNames.push(event.toolName);
+          void this.livekitRtcService.publishLiveEvent(roomName, {
+            kind: 'tool',
+            id: `${event.toolName}-${event.timestamp}`,
+            name: event.toolName,
+            status: event.success ? 'ok' : 'error',
+            latencyMs: event.latencyMs,
+            args: event.args,
+            output: event.output,
+            error: event.error,
+          });
           void (async () => {
             try {
               convState.toolCallHistory.push({
@@ -1094,6 +1108,18 @@ export class VoiceAgentService {
             toolNames,
             generationId,
           );
+        },
+        onToolEvent: (event) => {
+          void this.livekitRtcService.publishLiveEvent(roomName, {
+            kind: 'tool',
+            id: event.id,
+            name: event.name,
+            status: event.status,
+            latencyMs: event.latencyMs,
+            args: event.args,
+            output: event.output,
+            error: event.error,
+          });
         },
       },
     );

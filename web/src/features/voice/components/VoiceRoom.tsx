@@ -58,9 +58,11 @@ export function VoiceRoom({ agent, callId, onDisconnect, onReconnect }: VoiceRoo
   const agentTrack = audioTrack?.publication?.track as RemoteAudioTrack | undefined;
   const micTrack = microphoneTrack?.track as LocalAudioTrack | undefined;
 
-  const { level: agentLevel } = useAudioLevel(agentTrack, isSpeaking);
-  const { level: micLevel } = useAudioLevel(micTrack, !isSpeaking);
+  const { level: agentLevel, dataRef: agentData } = useAudioLevel(agentTrack, isSpeaking);
+  const { level: micLevel, dataRef: micData } = useAudioLevel(micTrack, !isSpeaking);
   const audioLevel = isSpeaking ? agentLevel : micLevel;
+  // Feed the orb the per-frame spectral data for whichever side is active.
+  const audioData = isSpeaking ? agentData : micData;
 
   const details: StatusDetail[] = useMemo(() => {
     const rail: StatusDetail[] = [
@@ -80,7 +82,7 @@ export function VoiceRoom({ agent, callId, onDisconnect, onReconnect }: VoiceRoo
         {/* Orb column */}
         <div className="flex w-full max-w-[360px] flex-col items-center gap-10">
           <div className="flex w-full max-w-[320px] justify-center">
-            <ParticleOrb size={320} state={voiceState} audioLevel={audioLevel} />
+            <ParticleOrb size={320} state={voiceState} audioLevel={audioLevel} audioData={audioData} />
           </div>
 
           <div className="flex flex-col items-center gap-4">

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
 import * as THREE from 'three';
 import type { VoiceState } from '../types';
+import type { AudioFrame } from '../hooks/useAudioLevel';
 import {
   ORB_STATES,
   ORB_NUMERIC_KEYS,
@@ -20,6 +21,7 @@ const VERT = /* glsl */ `
   uniform float uTime, uLoopDuration, uNoiseAmp, uSize, uPixelRatio;
   uniform float uRotSpeed, uBreathAmp, uBreathSpeed, uAmpPulse;
   uniform float uConverge, uRipple, uAudio, uRotPhase;
+  uniform float uBass, uMid, uTreble;
   attribute float aLayer, aTint, aSize;
   varying float vDepth, vDensity, vTint, vSize;
 
@@ -64,27 +66,48 @@ const VERT = /* glsl */ `
     vec3 noiseIn=position*.6;
     float pulse=sin(uTime)*0.65+sin(uTime*1.7+1.3)*0.35;
     float amp=uNoiseAmp*(1.+uAmpPulse*pulse);
+    // Base surface texture (idle/thinking turbulence — NOT audio-scaled).
     vec3 disp=curlNoise(noiseIn)*amp;
-    vec3 p=position+disp;
 
-    // Radial converge/expand — particles pull toward (or push off) the shell.
+    vec3 nrm=normalize(position);
+
+    // ── Audio → localized surface energy only ──────────────────────────────
+    // Every term is a small displacement of individual particles; none scales
+    // the whole radius. The sum is hard-clamped to a few % of the base radius
+    // so loud input ripples the surface but never inflates the silhouette.
+    vec3 aud=vec3(0.0);
+    // Fine curl detail: mid formants + treble sibilance rippling the shell.
+    float surf=uMid*0.6+uTreble*0.4;
+    aud+=curlNoise(noiseIn*1.8+uTime*0.55)*surf*0.42;
+    // Travelling latitude wave along the normal, from level + mids.
+    float wave=sin(nrm.y*7.0-uTime*4.2)*0.5+sin(nrm.y*11.0-uTime*2.7)*0.5;
+    aud+=nrm*wave*(uAudio*0.40+uMid*0.45);
+    // Slow bass swell — a gentle pulse through the surface (still local).
+    aud+=nrm*uBass*0.22*sin(uTime*2.0);
+    // High-frequency shimmer.
+    aud+=nrm*sin(nrm.x*38.0+uTime*8.5)*uTreble*0.12;
+    // Hard clamp: audio can move a particle at most 14% of the base radius —
+    // clearly visible surface energy, but the silhouette still holds.
+    float baseLen=length(position);
+    float al=length(aud);
+    float maxAud=baseLen*0.14;
+    if(al>maxAud) aud*=maxAud/al;
+
+    vec3 p=position+disp+aud;
+
+    // Radial converge/expand — state-driven only (connecting), never audio.
     p*=1.-uConverge;
 
-    // Surface ripple: concentric wave along the normal, driven by live audio.
-    // Latitude-banded so it reads as a wave crossing the sphere, not uniform scale.
-    vec3 nrm=normalize(position);
-    float wave=sin(nrm.y*7.0-uTime*4.2)*0.5+sin(nrm.y*11.0-uTime*2.7)*0.5;
-    p+=nrm*wave*uRipple*uAudio;
-
-    // Breath, amplified by live audio level.
-    float breath=uBreathAmp*(1.+uAudio*0.55)*sin(uTime*uBreathSpeed);
+    // Breath: base breathing is part of the resting identity; audio nudges it a
+    // little so a speaking orb visibly pulses without inflating.
+    float breath=uBreathAmp*(1.+uAudio*0.18)*sin(uTime*uBreathSpeed);
     p*=1.+breath;
 
     p=rotY(uRotPhase)*p;
     vec4 mv=modelViewMatrix*vec4(p,1.);
     gl_Position=projectionMatrix*mv;
     gl_PointSize=uSize*uPixelRatio*aSize*(1./-mv.z);
-    vDepth=-mv.z; vDensity=length(disp); vTint=aTint; vSize=aSize;
+    vDepth=-mv.z; vDensity=length(disp+aud); vTint=aTint; vSize=aSize;
   }
 `;
 
@@ -164,20 +187,28 @@ interface ParticleOrbProps {
   state?: VoiceState;
   /** Live audio level 0..1. Only consumed by audio-reactive states. */
   audioLevel?: number;
+  /**
+   * Per-frame spectral audio data (level + bass/mid/treble). Read imperatively
+   * every frame so speaking/listening motion follows the real voice. Takes
+   * precedence over `audioLevel` when present.
+   */
+  audioData?: React.RefObject<AudioFrame | null>;
   className?: string;
 }
 
 export const ParticleOrb = forwardRef<ParticleOrbHandle, ParticleOrbProps>(
-function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, className = '' }, ref) {
+function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, className = '' }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const ringRef      = useRef<HTMLDivElement>(null);
   const stateRef     = useRef<VoiceState>(state);
   const audioRef     = useRef(audioLevel);
+  const audioDataRef = useRef<React.RefObject<AudioFrame | null> | undefined>(audioData);
   const rafRef       = useRef<number>(0);
 
   // Keep props in sync with the imperative refs the render loop reads.
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { audioRef.current = audioLevel; }, [audioLevel]);
+  useEffect(() => { audioDataRef.current = audioData; }, [audioData]);
 
   const setState = useCallback((v: VoiceState) => { stateRef.current = v; }, []);
   const setAudioLevel = useCallback((v: number) => { audioRef.current = v; }, []);
@@ -247,6 +278,9 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, className = '
       uConverge:     { value: initial.converge },
       uRipple:       { value: initial.ripple },
       uAudio:        { value: 0 },
+      uBass:         { value: 0 },
+      uMid:          { value: 0 },
+      uTreble:       { value: 0 },
       uColorBase:    { value: new THREE.Color(initial.colorBase) },
       uColorAccent:  { value: new THREE.Color(initial.colorAccent) },
       uOpacity:      { value: 0 },  // fades in from 0
@@ -304,7 +338,17 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, className = '
     const tgtAccent = new THREE.Color();
 
     let smoothedAudio = 0;
+    let sBass = 0, sMid = 0, sTreble = 0;
     let ringPainted = -1;
+
+    // Heavy smoothing so reactions read as fluid surface energy, not twitch:
+    // gentle attack, slow release.
+    const band = (cur: number, raw: number) =>
+      cur + (raw - cur) * (raw > cur ? 0.28 : 0.08);
+
+    // Soft-knee compression: keeps normal speech clearly visible while loud
+    // input saturates, so a shout only pushes a bit past a normal voice.
+    const compress = (x: number) => x / (1 + x * 0.8);
 
     // ── Render loop ───────────────────────────────────────────────────────
     const FADE_DURATION = 1000;
@@ -331,17 +375,28 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, className = '
       colBase.lerp(tgtBase, rate);
       colAccent.lerp(tgtAccent, rate);
 
-      // Smooth the incoming audio level, then gate it by the state's reactivity.
-      const rawAudio = Math.min(Math.max(audioRef.current, 0), 1);
-      smoothedAudio += (rawAudio - smoothedAudio) * (rawAudio > smoothedAudio ? 0.35 : 0.12);
+      // Live audio: prefer the per-frame spectral ref, fall back to the scalar
+      // prop. Smooth level + each band, then gate everything by the state's
+      // reactivity (thinking/idle/etc. read as 0 → purely autonomous motion).
+      const frame = audioDataRef.current?.current;
+      const rawAudio = Math.min(Math.max(frame ? frame.level : audioRef.current, 0), 1);
+      smoothedAudio += (rawAudio - smoothedAudio) * (rawAudio > smoothedAudio ? 0.28 : 0.08);
+      sBass   = band(sBass,   frame ? frame.bass   : 0);
+      sMid    = band(sMid,    frame ? frame.mid    : 0);
+      sTreble = band(sTreble, frame ? frame.treble : 0);
 
+      // Compress after smoothing, then gate by the state's reactivity.
+      const react = current.audioReactive;
       uniforms.uNoiseAmp.value    = current.noiseAmp;
       uniforms.uBreathAmp.value   = current.breathAmp;
       uniforms.uBreathSpeed.value = current.breathSpeed;
       uniforms.uAmpPulse.value    = current.ampPulse;
       uniforms.uConverge.value    = current.converge;
       uniforms.uRipple.value      = current.ripple;
-      uniforms.uAudio.value       = smoothedAudio * current.audioReactive;
+      uniforms.uAudio.value       = compress(smoothedAudio) * react;
+      uniforms.uBass.value        = compress(sBass) * react;
+      uniforms.uMid.value         = compress(sMid) * react;
+      uniforms.uTreble.value      = compress(sTreble) * react;
       uniforms.uColorBase.value   = colBase;
       uniforms.uColorAccent.value = colAccent;
 
@@ -356,7 +411,7 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, className = '
       uniforms.uTime.value += reduceMotion ? dt * 0.35 : dt;
 
       // Outer energy ring — a DOM layer, repainted only when it visibly moves.
-      const ringIntensity = current.ring * (1 + smoothedAudio * current.audioReactive * 0.7);
+      const ringIntensity = current.ring * (1 + compress(smoothedAudio) * current.audioReactive * 0.4);
       if (ringRef.current && Math.abs(ringIntensity - ringPainted) > 0.004) {
         ringPainted = ringIntensity;
         ringRef.current.style.opacity = String(Math.min(ringIntensity, 1));

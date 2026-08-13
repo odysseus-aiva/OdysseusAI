@@ -131,6 +131,27 @@ export const ORB_STATES: Record<VoiceState, OrbVisualState> = {
     ring: 0.75,
   },
 
+  /**
+   * Brief acknowledgement that the caller cut in: a quick warm ripple that
+   * settles straight back toward listening. Shape/size held — only hue + a
+   * short pulse change, so it reads as a flash, not a transformation.
+   */
+  interrupted: {
+    noiseAmp: 0.092,
+    rotSpeed: 0.03,
+    breathAmp: 0.09,
+    breathSpeed: 1.6,
+    ampPulse: 0.35,
+    converge: 0,
+    ripple: 0.16,
+    audioReactive: 0.7,
+    colorBase: AMBER,
+    colorAccent: CYAN,
+    opacity: 0.95,
+    ring: 0.5,
+    enterRate: 0.2,
+  },
+
   /** Dimmed and slowed — present but inert. */
   disconnected: {
     noiseAmp: 0.06,

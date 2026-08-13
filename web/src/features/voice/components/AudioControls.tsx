@@ -8,15 +8,20 @@ import { motion } from 'motion/react';
 interface AudioControlsProps {
   onDisconnect: () => void;
   onReconnect: () => void;
+  /** Live mic loudness 0..1 — drives the ring around the mute button. */
+  micLevel?: number;
 }
 
 /**
- * Phase 1 audio controls: mute mic, disconnect, reconnect. Nothing else.
- * Mic state is read/toggled through LiveKit hooks — no local mirror state.
+ * In-call control dock: mute (with a live mic-level ring), reconnect (quiet
+ * secondary), and a clearly separated, labeled End button so the destructive
+ * action is never confused with mute. Mic state is read/toggled through LiveKit
+ * hooks — no local mirror state.
  */
 export function AudioControls({
   onDisconnect,
   onReconnect,
+  micLevel = 0,
 }: AudioControlsProps) {
   const { isMicrophoneEnabled } = useLocalParticipant();
   const { toggle } = useTrackToggle({ source: Track.Source.Microphone });
@@ -26,44 +31,78 @@ export function AudioControls({
   }, [toggle]);
 
   return (
-    <div className="flex items-center gap-3">
-      <ControlButton
-        active={!isMicrophoneEnabled}
-        label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
-        onClick={toggleMic}
-      >
-        {isMicrophoneEnabled ? <MicIcon /> : <MicOffIcon />}
-      </ControlButton>
+    <div className="flex items-center gap-2.5">
+      {/* Mute — the ring pulses with real mic input while live */}
+      <div className="relative flex items-center justify-center">
+        {isMicrophoneEnabled && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute rounded-full"
+            style={{
+              inset: -4,
+              border: '1.5px solid var(--color-accent)',
+              opacity: 0.18 + Math.min(micLevel, 1) * 0.6,
+              transform: `scale(${1 + Math.min(micLevel, 1) * 0.28})`,
+              transition: 'transform 90ms var(--ease-fluid), opacity 140ms var(--ease-fluid)',
+            }}
+          />
+        )}
+        <CircleButton
+          active={!isMicrophoneEnabled}
+          label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
+          onClick={toggleMic}
+        >
+          {isMicrophoneEnabled ? <MicIcon /> : <MicOffIcon />}
+        </CircleButton>
+      </div>
 
-      <ControlButton label="Reconnect" onClick={onReconnect}>
+      {/* Reconnect — quiet secondary */}
+      <CircleButton label="Reconnect" size={44} quiet onClick={onReconnect}>
         <ReconnectIcon />
-      </ControlButton>
+      </CircleButton>
 
-      <ControlButton label="End conversation" danger onClick={onDisconnect}>
+      {/* Spacer keeps the destructive action visually apart from mute */}
+      <span aria-hidden style={{ width: 6 }} />
+
+      {/* End — labeled danger pill, unmistakable */}
+      <motion.button
+        onClick={onDisconnect}
+        aria-label="End conversation"
+        title="End conversation"
+        whileHover={{ scale: 1.04 }}
+        whileTap={{ scale: 0.96 }}
+        transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+        className="flex h-[52px] cursor-pointer items-center gap-2 rounded-full px-5 text-[13px] font-[600]"
+        style={{
+          color: '#fff',
+          background: 'var(--color-state-error)',
+          boxShadow: '0 6px 20px rgb(251 113 133 / 0.28)',
+        }}
+      >
         <EndIcon />
-      </ControlButton>
+        End
+      </motion.button>
     </div>
   );
 }
 
-function ControlButton({
+function CircleButton({
   children,
   label,
   onClick,
   active = false,
-  danger = false,
+  quiet = false,
+  size = 52,
 }: {
   children: React.ReactNode;
   label: string;
   onClick: () => void;
   active?: boolean;
-  danger?: boolean;
+  quiet?: boolean;
+  size?: number;
 }) {
-  const isDanger = danger || active;
-  const accent = isDanger ? 'var(--color-state-error)' : 'var(--color-text)';
-  const hoverBorder = isDanger
-    ? 'rgb(251 113 133 / 0.5)'
-    : 'var(--color-accent-border)';
+  const accent = active ? 'var(--color-state-error)' : 'var(--color-text)';
+  const hoverBorder = active ? 'rgb(251 113 133 / 0.5)' : 'var(--color-accent-border)';
 
   return (
     <motion.button
@@ -74,21 +113,26 @@ function ControlButton({
       whileHover={{ scale: 1.08 }}
       whileTap={{ scale: 0.92 }}
       transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-      className="flex h-12 w-12 cursor-pointer items-center justify-center rounded-full border backdrop-blur-xl"
+      className="relative flex cursor-pointer items-center justify-center rounded-full border backdrop-blur-xl"
       style={{
-        color: accent,
-        background: 'var(--color-glass)',
-        borderColor: 'var(--color-glass-border)',
-        transition:
-          'border-color 180ms var(--ease-fluid), background 180ms var(--ease-fluid)',
+        width: size,
+        height: size,
+        color: quiet ? 'var(--color-text-muted)' : accent,
+        background: active ? 'rgb(251 113 133 / 0.08)' : 'var(--color-glass)',
+        borderColor: active ? 'rgb(251 113 133 / 0.35)' : 'var(--color-glass-border)',
+        transition: 'border-color 180ms var(--ease-fluid), background 180ms var(--ease-fluid)',
       }}
       onPointerEnter={(e) => {
         e.currentTarget.style.borderColor = hoverBorder;
         e.currentTarget.style.background = 'var(--color-glass-hover)';
       }}
       onPointerLeave={(e) => {
-        e.currentTarget.style.borderColor = 'var(--color-glass-border)';
-        e.currentTarget.style.background = 'var(--color-glass)';
+        e.currentTarget.style.borderColor = active
+          ? 'rgb(251 113 133 / 0.35)'
+          : 'var(--color-glass-border)';
+        e.currentTarget.style.background = active
+          ? 'rgb(251 113 133 / 0.08)'
+          : 'var(--color-glass)';
       }}
     >
       {children}
@@ -122,7 +166,7 @@ function MicOffIcon() {
 
 function ReconnectIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M21 2v6h-6" />
       <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
       <path d="M3 22v-6h6" />
@@ -133,7 +177,7 @@ function ReconnectIcon() {
 
 function EndIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67" />
       <line x1="22" y1="2" x2="2" y2="22" />
     </svg>

@@ -17,6 +17,18 @@ export interface LiveLine {
   isFinal: boolean;
 }
 
+/** An inline tool execution surfaced live between conversation turns. */
+export interface LiveToolEvent {
+  id: string;
+  name: string;
+  status: 'running' | 'ok' | 'error';
+  latencyMs?: number;
+  args?: unknown;
+  output?: unknown;
+  error?: string;
+  timestamp: number;
+}
+
 interface LiveTranscriptPacket {
   v: 1;
   role: 'user' | 'assistant';
@@ -49,6 +61,13 @@ type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 
 function collapseWhitespace(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+/** Coerce only primitive string/number packet fields — never object soup. */
+function safeStr(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number') return String(v);
+  return '';
 }
 
 function mergeText(a: string, b: string): string {
@@ -249,8 +268,11 @@ function useLocalCustomerCaptions(
 export function useLiveTranscript(callId?: string) {
   const room = useRoomContext();
   const [lines, setLines] = useState<LiveLine[]>([]);
+  const [toolEvents, setToolEvents] = useState<LiveToolEvent[]>([]);
+  const [interrupted, setInterrupted] = useState(false);
   // When server user packets arrive, briefly prefer them over local SR.
   const serverUserUntil = useRef(0);
+  const interruptTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const apply = useCallback((packet: LiveTranscriptPacket) => {
     setLines((prev) => applyLivePacket(prev, packet));
@@ -258,6 +280,8 @@ export function useLiveTranscript(callId?: string) {
 
   useEffect(() => {
     setLines([]);
+    setToolEvents([]);
+    setInterrupted(false);
     serverUserUntil.current = 0;
   }, [callId]);
 
@@ -271,6 +295,54 @@ export function useLiveTranscript(callId?: string) {
       topic?: string,
     ) => {
       if (topic && topic !== TOPIC) return;
+
+      // One decode, then branch on `kind` (transcript packets carry no kind).
+      let raw: Record<string, unknown> | null = null;
+      try {
+        raw = JSON.parse(new TextDecoder().decode(payload)) as Record<string, unknown>;
+      } catch {
+        return;
+      }
+      if (!raw || raw.v !== 1) return;
+
+      if (raw.kind === 'tool') {
+        const ts = typeof raw.ts === 'number' ? raw.ts : Date.now();
+        const name = safeStr(raw.name) || 'tool';
+        const id = safeStr(raw.id) || `${name}-${ts}`;
+        let status: LiveToolEvent['status'] = 'running';
+        if (raw.status === 'error') status = 'error';
+        else if (raw.status === 'ok') status = 'ok';
+        const evt: LiveToolEvent = {
+          id,
+          name,
+          status,
+          latencyMs: typeof raw.latencyMs === 'number' ? raw.latencyMs : undefined,
+          args: raw.args,
+          output: raw.output,
+          error: typeof raw.error === 'string' ? raw.error : undefined,
+          timestamp: ts,
+        };
+        setToolEvents((prev) => {
+          const idx = prev.findIndex((t) => t.id === id);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = { ...prev[idx], ...evt };
+            return next;
+          }
+          return [...prev, evt];
+        });
+        return;
+      }
+
+      if (raw.kind === 'state') {
+        if (raw.state === 'interrupted') {
+          setInterrupted(true);
+          if (interruptTimer.current) clearTimeout(interruptTimer.current);
+          interruptTimer.current = setTimeout(() => setInterrupted(false), 1200);
+        }
+        return;
+      }
+
       const packet = parsePacket(payload);
       if (!packet) return;
       if (packet.role === 'user') {
@@ -282,6 +354,7 @@ export function useLiveTranscript(callId?: string) {
     room.on(RoomEvent.DataReceived, onData);
     return () => {
       room.off(RoomEvent.DataReceived, onData);
+      if (interruptTimer.current) clearTimeout(interruptTimer.current);
     };
   }, [room, apply]);
 
@@ -303,5 +376,5 @@ export function useLiveTranscript(callId?: string) {
     Boolean(room),
   );
 
-  return { lines, ready: true };
+  return { lines, ready: true, toolEvents, interrupted };
 }

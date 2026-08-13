@@ -8,8 +8,6 @@ import {
   LayoutDashboard,
   Bot,
   PhoneCall,
-  Radio,
-  Wrench,
   BarChart3,
   Settings,
   ChevronRight,
@@ -26,8 +24,6 @@ const NAV_SECTIONS = [
   { href: '/agents', icon: Bot, label: 'Agents' },
   { href: '/phone-numbers', icon: Phone, label: 'Phone Numbers' },
   { href: '/calls', icon: PhoneCall, label: 'Call History' },
-  { href: '/live', icon: Radio, label: 'Live Calls' },
-  { href: '/tools', icon: Wrench, label: 'Tools' },
   { href: '/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/settings', icon: Settings, label: 'Settings' },
 ] as const;

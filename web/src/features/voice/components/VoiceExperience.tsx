@@ -4,11 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { LiveKitRoom } from '@livekit/components-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useTheme } from '@/components/ThemeProvider';
 import { fetchAgents, type Agent } from '@/lib/api/agents';
 import { voiceRoomOptions } from '@/lib/livekit/config';
 import { useVoiceSession } from '../hooks/useVoiceSession';
 import { resolveHero } from '../hero-content';
-import { ORB_STATES } from '../orb-states';
+import { resolveOrbState } from '../orb-states';
 import type { VoiceState } from '../types';
 import { ParticleOrb } from './ParticleOrb';
 import { ScrambleText } from './ScrambleText';
@@ -20,6 +21,7 @@ const ENTER = { duration: 0.72, ease: [0.22, 1, 0.36, 1] as const };
 
 export function VoiceExperience() {
   const searchParams = useSearchParams();
+  const { theme } = useTheme();
   const { phase, connection, error, start, stop, signalAgentError } = useVoiceSession();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [agentsLoaded, setAgentsLoaded] = useState(false);
@@ -104,7 +106,7 @@ export function VoiceExperience() {
     return hero.providers.map((p) => ({ label: p.label, value: p.value }));
   }, [hero.providers]);
 
-  const ambientColor = ORB_STATES[landingState].colorBase;
+  const ambientColor = resolveOrbState(landingState, theme).colorBase;
 
   return (
     <div className="relative h-full w-full overflow-hidden">

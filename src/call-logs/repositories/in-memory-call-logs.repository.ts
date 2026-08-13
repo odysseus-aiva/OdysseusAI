@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { LatencyMetrics } from '../../common/types/performance.types';
 import {
+  AgentSnapshot,
   CallAnalysis,
   CallEndedBy,
   CallLogEntry,
@@ -85,6 +86,7 @@ export class InMemoryCallLogsRepository implements CallLogsRepository {
       turnCount: number;
       finalLatencyMetrics?: import('../../common/types/performance.types').LatencyMetrics;
       finalCost?: import('../../common/types/cost.types').CallCost;
+      agentSnapshot?: AgentSnapshot;
     },
   ): Promise<void> {
     const record = this.byCallId.get(callId);
@@ -100,7 +102,30 @@ export class InMemoryCallLogsRepository implements CallLogsRepository {
     if (outcome.finalCost) {
       record.cost = outcome.finalCost;
     }
+    if (outcome.agentSnapshot) {
+      record.agentSnapshot = { ...outcome.agentSnapshot };
+    }
     record.updatedAt = Date.now();
+  }
+
+  async listEventsForCalls(
+    callIds: string[],
+    steps: string[],
+    limit: number,
+  ): Promise<CallLogEntry[]> {
+    const wanted = new Set(callIds);
+    const stepSet = new Set(steps);
+    const out: CallLogEntry[] = [];
+
+    for (const record of this.byCallId.values()) {
+      if (!wanted.has(record.callId)) continue;
+      for (const entry of record.logs) {
+        if (stepSet.size && !stepSet.has(entry.step)) continue;
+        out.push({ ...entry });
+        if (out.length >= limit) return out;
+      }
+    }
+    return out;
   }
 
   async listSummaries(opts: {

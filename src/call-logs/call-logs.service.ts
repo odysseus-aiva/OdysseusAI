@@ -118,6 +118,15 @@ export class CallLogsService {
     const durationMs = record ? endedAt - record.createdAt : 0;
     const status = hasErrors ? 'error' : 'completed';
 
+    // The runtime model id is only known once the provider has echoed it back
+    // through usage accounting, so the snapshot is completed here rather than
+    // at call start.
+    const runtimeModel = opts?.finalCost?.breakdown.llm.model;
+    const agentSnapshot =
+      runtimeModel && record?.agentSnapshot && !record.agentSnapshot.llmModel
+        ? { ...record.agentSnapshot, llmModel: runtimeModel }
+        : undefined;
+
     await this.repository.finalizeCall(callId, {
       status,
       endedBy,
@@ -126,6 +135,7 @@ export class CallLogsService {
       turnCount: opts?.turnCount ?? 0,
       finalLatencyMetrics: opts?.finalLatencyMetrics,
       finalCost: opts?.finalCost,
+      agentSnapshot,
     });
 
     this.logger.log(
@@ -159,118 +169,6 @@ export class CallLogsService {
       this.repository.countAll(filters),
     ]);
     return { total, calls };
-  }
-
-  /**
-   * Aggregated platform stats for the analytics/dashboard surfaces.
-   * period: number of days to look back (default 7).
-   */
-  async getStats(opts: {
-    period?: number;
-    agentId?: string;
-  }): Promise<{
-    totalCalls: number;
-    completedCalls: number;
-    errorCalls: number;
-    inProgressCalls: number;
-    avgDurationMs: number | null;
-    avgLatencyMs: number | null;
-    p50LatencyMs: number | null;
-    p95LatencyMs: number | null;
-    errorRate: number;
-    totalCostUsd: number;
-    avgCostUsd: number | null;
-    callsPerDay: { date: string; count: number }[];
-    topTools: { name: string; count: number }[];
-  }> {
-    const period = opts.period ?? 7;
-    const startAfter = Date.now() - period * 24 * 60 * 60 * 1000;
-
-    const [allInWindow, total] = await Promise.all([
-      this.repository.listSummaries({
-        limit: 2000,
-        offset: 0,
-        agentId: opts.agentId || undefined,
-        startAfter,
-        order: 'asc',
-        sortBy: 'createdAt',
-      }),
-      this.repository.countAll({
-        agentId: opts.agentId || undefined,
-        startAfter,
-      }),
-    ]);
-
-    const completed   = allInWindow.filter((c) => c.status === 'completed');
-    const errors      = allInWindow.filter((c) => c.status === 'error');
-    const inProgress  = allInWindow.filter((c) => c.status === 'in_progress');
-
-    const durations   = completed.filter((c) => c.durationMs != null).map((c) => c.durationMs!);
-    const latencies   = completed
-      .filter((c) => c.latencyMetrics?.p50ResponseLatencyMs != null)
-      .map((c) => c.latencyMetrics.p50ResponseLatencyMs!);
-
-    const avgDurationMs = durations.length
-      ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
-      : null;
-    const avgLatencyMs = latencies.length
-      ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)
-      : null;
-
-    const sortedLat = [...latencies].sort((a, b) => a - b);
-    const p50LatencyMs = sortedLat.length
-      ? sortedLat[Math.floor(sortedLat.length * 0.5)] ?? null
-      : null;
-    const p95LatencyMs = sortedLat.length
-      ? sortedLat[Math.floor(sortedLat.length * 0.95)] ?? null
-      : null;
-
-    // calls per day
-    const byDay = new Map<string, number>();
-    for (let d = 0; d < period; d++) {
-      const dt = new Date(startAfter + d * 86400000);
-      byDay.set(dt.toISOString().slice(0, 10), 0);
-    }
-    for (const call of allInWindow) {
-      const day = new Date(call.createdAt).toISOString().slice(0, 10);
-      byDay.set(day, (byDay.get(day) ?? 0) + 1);
-    }
-    const callsPerDay = Array.from(byDay.entries()).map(([date, count]) => ({ date, count }));
-
-    // top tools from agentSnapshot enabledTools (rough proxy)
-    const toolCount = new Map<string, number>();
-    for (const call of allInWindow) {
-      for (const t of call.agentSnapshot?.enabledTools ?? []) {
-        toolCount.set(t, (toolCount.get(t) ?? 0) + 1);
-      }
-    }
-    const topTools = Array.from(toolCount.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8)
-      .map(([name, count]) => ({ name, count }));
-
-    // Cost aggregates — only priced calls contribute to the average.
-    const costed = allInWindow.filter((c) => c.cost?.totalUsd != null);
-    const totalCostUsd = costed.reduce((sum, c) => sum + (c.cost!.totalUsd || 0), 0);
-    const avgCostUsd = costed.length
-      ? Math.round((totalCostUsd / costed.length) * 1e6) / 1e6
-      : null;
-
-    return {
-      totalCalls: total,
-      completedCalls: completed.length,
-      errorCalls: errors.length,
-      inProgressCalls: inProgress.length,
-      avgDurationMs,
-      avgLatencyMs,
-      p50LatencyMs,
-      p95LatencyMs,
-      errorRate: total > 0 ? errors.length / total : 0,
-      totalCostUsd: Math.round(totalCostUsd * 1e6) / 1e6,
-      avgCostUsd,
-      callsPerDay,
-      topTools,
-    };
   }
 
   /**

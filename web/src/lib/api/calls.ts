@@ -171,7 +171,28 @@ export async function fetchCallDetail(callId: string): Promise<CallSummary & { l
   return res.json() as Promise<CallSummary & { logs: CallEvent[]; errors: string[] }>;
 }
 
+/** Conversation quality, distinct from whether the pipeline threw. */
+export type CallOutcome = 'engaged' | 'no_interaction' | 'failed' | 'in_progress';
+
+/** Change versus the equally-sized window immediately before the current one. */
+export interface StatDelta {
+  current: number;
+  previous: number;
+  absolute: number;
+  /** Null when the previous window was zero, since percent change is undefined. */
+  pct: number | null;
+}
+
+export interface MixEntry {
+  key: string;
+  count: number;
+}
+
 export interface CallStats {
+  period: number;
+  from: number;
+  to: number;
+
   totalCalls: number;
   completedCalls: number;
   errorCalls: number;
@@ -185,14 +206,161 @@ export interface CallStats {
   avgCostUsd: number | null;
   callsPerDay: { date: string; count: number }[];
   topTools: { name: string; count: number }[];
+
+  outcomeMix: { outcome: CallOutcome; count: number }[];
+  engagementRate: number;
+  avgTurnCount: number | null;
+  turnHistogram: { label: string; count: number }[];
+
+  endedByMix: MixEntry[];
+  sentimentMix: MixEntry[];
+
+  costBreakdown: {
+    llmUsd: number;
+    ttsUsd: number;
+    sttUsd: number;
+    estimatedCalls: number;
+    estimatedShare: number | null;
+  };
+  unitEconomics: {
+    perCallUsd: number | null;
+    perMinuteUsd: number | null;
+    perTurnUsd: number | null;
+  };
+
+  topAgents: {
+    agentId: string;
+    name?: string;
+    llmModel?: string;
+    calls: number;
+    engagementRate: number;
+    avgCostUsd: number | null;
+    avgDurationMs: number | null;
+  }[];
+
+  samples: {
+    calls: number;
+    latencyTurns: number;
+    costedCalls: number;
+    analyzedCalls: number;
+    latencyReliable: boolean;
+    minLatencySample: number;
+  };
+
+  deltas: {
+    totalCalls: StatDelta | null;
+    engagementRate: StatDelta | null;
+    errorRate: StatDelta | null;
+    p50LatencyMs: StatDelta | null;
+    avgCostUsd: StatDelta | null;
+    avgDurationMs: StatDelta | null;
+  };
+
+  series: {
+    bucket: 'day' | 'week';
+    points: {
+      date: string;
+      total: number;
+      engaged: number;
+      noInteraction: number;
+      failed: number;
+      costUsd: number;
+    }[];
+  };
 }
 
-export async function fetchStats(opts?: { period?: number; agentId?: string }): Promise<CallStats> {
+export interface StageStats {
+  avg: number | null;
+  p50: number | null;
+  p95: number | null;
+  samples: number;
+}
+
+export interface LatencyAnalytics {
+  period: number;
+  from: number;
+  to: number;
+  samples: { turns: number; calls: number; reliable: boolean; minSample: number };
+  percentiles: {
+    avg: number;
+    p50: number;
+    p75: number;
+    p90: number;
+    p95: number;
+    p99: number;
+    min: number;
+    max: number;
+  } | null;
+  stages: {
+    stt: StageStats;
+    llm: StageStats;
+    tts: StageStats;
+    /** End-to-end time not attributable to STT, LLM or TTS. */
+    unaccounted: { avg: number | null; samples: number; sharePct: number | null };
+  };
+  histogram: { label: string; fromMs: number; toMs: number | null; count: number }[];
+  byTurnIndex: { turnIndex: number; p50: number; avg: number | null; samples: number }[];
+  overTime: { date: string; p50: number; p95: number; samples: number }[];
+  budget: {
+    thresholdMs: number;
+    withinCount: number;
+    breachedCount: number;
+    withinPct: number | null;
+  };
+  interruptions: { count: number; callsAffected: number; perCall: number | null };
+}
+
+export interface ToolAnalytics {
+  period: number;
+  from: number;
+  to: number;
+  samples: { calls: number; invocations: number };
+  totals: {
+    invocations: number;
+    failures: number;
+    successRate: number | null;
+    callsWithTools: number;
+    adoptionRate: number | null;
+    invocationsPerCall: number | null;
+  };
+  tools: {
+    name: string;
+    invocations: number;
+    successes: number;
+    failures: number;
+    successRate: number | null;
+    avgLatencyMs: number | null;
+    p95LatencyMs: number | null;
+  }[];
+}
+
+interface WindowOpts {
+  period?: number;
+  agentId?: string;
+}
+
+function windowQuery(opts?: WindowOpts): string {
   const params = new URLSearchParams();
-  if (opts?.period  != null) params.set('period',  String(opts.period));
-  if (opts?.agentId)         params.set('agentId', opts.agentId);
+  if (opts?.period != null) params.set('period', String(opts.period));
+  if (opts?.agentId) params.set('agentId', opts.agentId);
   const qs = params.toString();
-  const res = await fetch(`/api/calls/stats${qs ? `?${qs}` : ''}`, { cache: 'no-store' });
+  return qs ? `?${qs}` : '';
+}
+
+export async function fetchStats(opts?: WindowOpts): Promise<CallStats> {
+  const res = await fetch(`/api/calls/stats${windowQuery(opts)}`, { cache: 'no-store' });
   if (!res.ok) throw new Error(`Failed to load stats (${res.status})`);
   return res.json() as Promise<CallStats>;
+}
+
+export async function fetchLatencyAnalytics(opts?: WindowOpts): Promise<LatencyAnalytics> {
+  const res = await fetch(`/api/calls/latency${windowQuery(opts)}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Failed to load latency analytics (${res.status})`);
+  return res.json() as Promise<LatencyAnalytics>;
+}
+
+export async function fetchToolAnalytics(opts?: WindowOpts): Promise<ToolAnalytics> {
+  const res = await fetch(`/api/calls/tools${windowQuery(opts)}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Failed to load tool analytics (${res.status})`);
+  return res.json() as Promise<ToolAnalytics>;
 }

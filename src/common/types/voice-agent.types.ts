@@ -24,6 +24,8 @@ export interface AgentConfig {
   /** Silence duration (ms) before declaring user turn complete */
   turnSilenceMs?: number;
   agentId?: string;
+  /** Display name of the resolved agent profile. Snapshotted onto the call record. */
+  agentName?: string;
   dynamicVariables?: Record<string, string>;
   /**
    * Tool names enabled for this session.

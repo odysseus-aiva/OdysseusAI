@@ -1,11 +1,43 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { RefreshCw, TrendingUp, Clock, CheckCircle2, AlertCircle, DollarSign } from 'lucide-react';
+import {
+  AlertCircle,
+  Clock,
+  DollarSign,
+  MessageSquare,
+  RefreshCw,
+  TrendingUp,
+} from 'lucide-react';
 import { PageHeader } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
-import { fetchStats, type CallStats } from '@/lib/api/calls';
+import { BarChart } from '@/components/charts/BarChart';
+import { ChartCard, EmptyChart, SampleBadge } from '@/components/charts/ChartCard';
+import { Donut } from '@/components/charts/Donut';
+import { CompositionBar, HBarList } from '@/components/charts/HBarList';
+import { LineChart } from '@/components/charts/LineChart';
+import { StatTile } from '@/components/charts/StatTile';
+import {
+  formatCount,
+  formatMs,
+  formatPct,
+  formatUsd,
+  latencyColor,
+  OUTCOME_COLORS,
+  OUTCOME_LABELS,
+  SENTIMENT_COLORS,
+  STAGE_COLORS,
+} from '@/components/charts/format';
+import { fetchAgents, type Agent } from '@/lib/api/agents';
+import {
+  fetchLatencyAnalytics,
+  fetchStats,
+  fetchToolAnalytics,
+  type CallStats,
+  type LatencyAnalytics,
+  type ToolAnalytics,
+} from '@/lib/api/calls';
 
 const PERIODS = [
   { label: '7d', value: 7 },
@@ -13,17 +45,39 @@ const PERIODS = [
   { label: '90d', value: 90 },
 ] as const;
 
+const ENDED_BY_LABELS: Record<string, string> = {
+  participant: 'User hung up',
+  agent: 'Agent ended',
+  timeout: 'Timed out',
+  error: 'Error',
+  unknown: 'Unknown',
+};
+
+interface AnalyticsData {
+  stats: CallStats;
+  latency: LatencyAnalytics;
+  tools: ToolAnalytics;
+}
+
 export default function AnalyticsPage() {
   const [period, setPeriod] = useState<7 | 30 | 90>(7);
-  const [stats, setStats] = useState<CallStats | null>(null);
+  const [agentId, setAgentId] = useState<string>('');
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (p: number) => {
+  const load = useCallback(async (p: number, agent: string) => {
     setLoading(true);
     setError(null);
     try {
-      setStats(await fetchStats({ period: p }));
+      const opts = { period: p, agentId: agent || undefined };
+      const [stats, latency, tools] = await Promise.all([
+        fetchStats(opts),
+        fetchLatencyAnalytics(opts),
+        fetchToolAnalytics(opts),
+      ]);
+      setData({ stats, latency, tools });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load analytics');
     } finally {
@@ -31,22 +85,34 @@ export default function AnalyticsPage() {
     }
   }, []);
 
-  useEffect(() => { void load(period); }, [load, period]);
+  useEffect(() => {
+    void load(period, agentId);
+  }, [load, period, agentId]);
 
-  const handlePeriod = (p: 7 | 30 | 90) => {
-    setPeriod(p);
-    void load(p);
-  };
+  // The agent filter is a nicety — a failure here must not blank the page.
+  useEffect(() => {
+    void fetchAgents()
+      .then(setAgents)
+      .catch(() => setAgents([]));
+  }, []);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       <PageHeader
         title="Analytics"
-        description="Call trends, latency distribution, and tool usage."
+        description="Conversation outcomes, latency decomposition, cost and tool usage."
         actions={
           <div className="flex items-center gap-2">
-            <PeriodSelector value={period} onChange={handlePeriod} />
-            <Button variant="ghost" size="sm" onClick={() => void load(period)} disabled={loading}>
+            {agents.length > 0 && (
+              <AgentFilter agents={agents} value={agentId} onChange={setAgentId} />
+            )}
+            <PeriodSelector value={period} onChange={setPeriod} />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void load(period, agentId)}
+              disabled={loading}
+            >
               <RefreshCw size={13} strokeWidth={2} className={loading ? 'animate-spin' : ''} />
             </Button>
           </div>
@@ -54,13 +120,13 @@ export default function AnalyticsPage() {
       />
 
       <div className="flex-1 overflow-y-auto px-8 py-6">
-        <div className="max-w-5xl flex flex-col gap-5">
+        <div className="flex max-w-5xl flex-col gap-5">
           {loading ? (
             <AnalyticsSkeleton />
           ) : error ? (
-            <ErrorPanel message={error} onRetry={() => void load(period)} />
-          ) : stats ? (
-            <AnalyticsContent stats={stats} period={period} />
+            <ErrorPanel message={error} onRetry={() => void load(period, agentId)} />
+          ) : data ? (
+            <AnalyticsContent data={data} period={period} />
           ) : null}
         </div>
       </div>
@@ -68,9 +134,534 @@ export default function AnalyticsPage() {
   );
 }
 
-// ─── Period selector ──────────────────────────────────────────────────────────
+function AnalyticsContent({ data, period }: { data: AnalyticsData; period: number }) {
+  const { stats, latency, tools } = data;
+  const window = `last ${period} days`;
 
-function PeriodSelector({ value, onChange }: { value: number; onChange: (p: 7 | 30 | 90) => void }) {
+  return (
+    <motion.div
+      className="flex flex-col gap-5"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
+    >
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <StatTile
+          label="Total calls"
+          value={stats.totalCalls}
+          icon={TrendingUp}
+          iconColor="var(--color-accent)"
+          delta={stats.deltas.totalCalls}
+          formatDelta={(d) => `${d > 0 ? '+' : ''}${d}`}
+        />
+        <StatTile
+          label="Engaged"
+          value={formatPct(stats.engagementRate)}
+          sub={`${countOutcome(stats, 'engaged')} of ${stats.samples.calls} conversed`}
+          icon={MessageSquare}
+          iconColor="var(--color-state-speaking)"
+          delta={stats.deltas.engagementRate}
+          formatDelta={(d) => `${d > 0 ? '+' : ''}${(d * 100).toFixed(1)}pp`}
+        />
+        <StatTile
+          label="Error rate"
+          value={formatPct(stats.errorRate)}
+          sub={`${stats.errorCalls} failed`}
+          icon={AlertCircle}
+          iconColor={stats.errorCalls > 0 ? 'var(--color-state-error)' : 'var(--color-text-faint)'}
+          delta={stats.deltas.errorRate}
+          lowerIsBetter
+          formatDelta={(d) => `${d > 0 ? '+' : ''}${(d * 100).toFixed(1)}pp`}
+        />
+        <StatTile
+          label="p50 latency"
+          value={formatMs(stats.p50LatencyMs)}
+          sub={stats.p95LatencyMs != null ? `p95 ${formatMs(stats.p95LatencyMs)}` : undefined}
+          icon={Clock}
+          iconColor={latencyColor(stats.p50LatencyMs)}
+          delta={stats.deltas.p50LatencyMs}
+          lowerIsBetter
+          formatDelta={(d) => `${d > 0 ? '+' : ''}${Math.round(d)}ms`}
+        />
+        <StatTile
+          label="Cost / call"
+          value={formatUsd(stats.avgCostUsd)}
+          sub={`${formatUsd(stats.totalCostUsd)} total`}
+          icon={DollarSign}
+          iconColor="var(--color-state-speaking)"
+          delta={stats.deltas.avgCostUsd}
+          lowerIsBetter
+          formatDelta={(d) => `${d > 0 ? '+' : ''}${(d * 1000).toFixed(2)}m$`}
+        />
+      </div>
+
+      {!stats.samples.latencyReliable && stats.samples.latencyTurns > 0 && (
+        <Notice tone="warning">
+          Latency percentiles are computed from{' '}
+          <strong>
+            {stats.samples.latencyTurns} turn{stats.samples.latencyTurns === 1 ? '' : 's'}
+          </strong>
+          , below the {stats.samples.minLatencySample}-turn threshold for a stable
+          distribution. Treat p50 and p95 as indicative, not as a measured SLO.
+        </Notice>
+      )}
+
+      <ChartCard
+        title="Call volume by outcome"
+        sub={`Calls per ${stats.series.bucket} — ${window}`}
+        footnote={`X: ${stats.series.bucket === 'week' ? 'week beginning' : 'date'}. Y: number of calls, stacked by outcome. Engaged = at least one agent response turn.`}
+      >
+        <BarChart
+          points={stats.series.points.map((p) => ({
+            date: p.date,
+            values: { engaged: p.engaged, noInteraction: p.noInteraction, failed: p.failed },
+          }))}
+          series={[
+            { key: 'engaged', label: 'Engaged', color: OUTCOME_COLORS.engaged },
+            { key: 'noInteraction', label: 'No interaction', color: OUTCOME_COLORS.no_interaction },
+            { key: 'failed', label: 'Failed', color: OUTCOME_COLORS.failed },
+          ]}
+        />
+      </ChartCard>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ChartCard
+          title="Conversation outcomes"
+          sub="Quality, not just pipeline status"
+          footnote="A call that connects and ends cleanly without the user ever speaking is counted as no interaction, not as a success."
+        >
+          <Donut
+            centerLabel="calls"
+            segments={stats.outcomeMix.map((o) => ({
+              label: OUTCOME_LABELS[o.outcome] ?? o.outcome,
+              count: o.count,
+              color: OUTCOME_COLORS[o.outcome] ?? 'var(--color-text-muted)',
+            }))}
+          />
+        </ChartCard>
+
+        <ChartCard
+          title="Response latency decomposition"
+          sub="Where the time goes on an average turn"
+          trailing={
+            <SampleBadge n={latency.samples.turns} reliable={latency.samples.reliable} />
+          }
+          footnote={
+            latency.stages.unaccounted.sharePct != null
+              ? `Unaccounted = end-to-end minus STT + LLM + TTS, currently ${latency.stages.unaccounted.sharePct}% of the budget. Averages in ms.`
+              : 'Stage averages in ms across all instrumented turns.'
+          }
+        >
+          <LatencyWaterfall latency={latency} />
+        </ChartCard>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ChartCard
+          title="Response latency distribution"
+          sub={`Turns per bucket — ${window}`}
+          trailing={
+            latency.budget.withinPct != null ? (
+              <span
+                className="font-mono text-[11px] font-[600]"
+                style={{
+                  color:
+                    latency.budget.withinPct >= 80
+                      ? 'var(--color-state-speaking)'
+                      : 'var(--color-state-error)',
+                }}
+              >
+                {latency.budget.withinPct}% under {formatMs(latency.budget.thresholdMs)}
+              </span>
+            ) : undefined
+          }
+          footnote={`X: number of turns. Y: end-to-end response latency bucket. Budget threshold ${formatMs(latency.budget.thresholdMs)}.`}
+        >
+          <HBarList
+            labelWidth={90}
+            emptyLabel="No instrumented turns yet"
+            rows={latency.histogram
+              .filter((b) => b.count > 0)
+              .map((b) => ({
+                label: b.label,
+                value: b.count,
+                display: String(b.count),
+                color:
+                  b.fromMs >= latency.budget.thresholdMs
+                    ? 'var(--color-state-error)'
+                    : 'var(--color-state-speaking)',
+              }))}
+          />
+        </ChartCard>
+
+        <ChartCard
+          title="Latency trend"
+          sub={`p50 and p95 per ${stats.series.bucket} — ${window}`}
+          footnote={`X: date. Y: end-to-end response latency (ms). Dashed line marks the ${formatMs(latency.budget.thresholdMs)} conversational budget.`}
+        >
+          <LineChart
+            points={latency.overTime.map((p) => ({
+              date: p.date,
+              values: { p50: p.p50, p95: p.p95 },
+            }))}
+            series={[
+              { key: 'p50', label: 'p50', color: 'var(--color-accent)' },
+              { key: 'p95', label: 'p95', color: 'var(--color-state-warning)' },
+            ]}
+            threshold={{ value: latency.budget.thresholdMs, label: 'budget' }}
+          />
+        </ChartCard>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ChartCard
+          title="Cost composition"
+          sub={`${formatUsd(stats.totalCostUsd)} across ${stats.samples.costedCalls} priced calls`}
+          footnote={
+            stats.costBreakdown.estimatedShare
+              ? `${formatPct(stats.costBreakdown.estimatedShare)} of priced calls fell back to default rates for an unrecognised model, so totals are approximate.`
+              : 'All calls priced against known provider rates.'
+          }
+        >
+          <CompositionBar
+            segments={[
+              {
+                label: 'STT',
+                value: stats.costBreakdown.sttUsd,
+                color: STAGE_COLORS.stt,
+                display: formatUsd(stats.costBreakdown.sttUsd),
+              },
+              {
+                label: 'LLM',
+                value: stats.costBreakdown.llmUsd,
+                color: STAGE_COLORS.llm,
+                display: formatUsd(stats.costBreakdown.llmUsd),
+              },
+              {
+                label: 'TTS',
+                value: stats.costBreakdown.ttsUsd,
+                color: STAGE_COLORS.tts,
+                display: formatUsd(stats.costBreakdown.ttsUsd),
+              },
+            ]}
+          />
+        </ChartCard>
+
+        <ChartCard
+          title="Unit economics"
+          sub="The figures that scale with volume"
+          footnote="Per-minute uses total call wall-clock; per-turn counts completed agent responses only."
+        >
+          <div className="grid grid-cols-3 gap-3">
+            <MetricBlock label="Per call" value={formatUsd(stats.unitEconomics.perCallUsd)} />
+            <MetricBlock label="Per minute" value={formatUsd(stats.unitEconomics.perMinuteUsd)} />
+            <MetricBlock label="Per turn" value={formatUsd(stats.unitEconomics.perTurnUsd)} />
+            <MetricBlock label="Avg duration" value={formatMs(stats.avgDurationMs)} />
+            <MetricBlock
+              label="Avg turns"
+              value={stats.avgTurnCount != null ? stats.avgTurnCount.toFixed(2) : '—'}
+            />
+            <MetricBlock
+              label="Interruptions"
+              value={latency.interruptions.perCall != null ? `${latency.interruptions.perCall}/call` : '—'}
+            />
+          </div>
+        </ChartCard>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ChartCard
+          title="How calls ended"
+          sub="Disconnect reason"
+          footnote="Sourced from the endedBy stamp written when the session is finalized."
+        >
+          <Donut
+            centerLabel="calls"
+            segments={stats.endedByMix.map((m, i) => ({
+              label: ENDED_BY_LABELS[m.key] ?? m.key,
+              count: m.count,
+              color: DISCONNECT_COLORS[i % DISCONNECT_COLORS.length],
+            }))}
+          />
+        </ChartCard>
+
+        <ChartCard
+          title="Sentiment"
+          sub={`${stats.samples.analyzedCalls} of ${stats.samples.calls} calls analyzed`}
+          footnote="Assigned by post-call LLM analysis, which only runs on calls that produced a transcript."
+        >
+          {stats.sentimentMix.length > 0 ? (
+            <Donut
+              centerLabel="analyzed"
+              segments={stats.sentimentMix.map((m) => ({
+                label: m.key.charAt(0).toUpperCase() + m.key.slice(1),
+                count: m.count,
+                color: SENTIMENT_COLORS[m.key] ?? 'var(--color-text-muted)',
+              }))}
+            />
+          ) : (
+            <EmptyChart height={120} label="No calls have been scored yet" />
+          )}
+        </ChartCard>
+      </div>
+
+      <ChartCard
+        title="Conversation depth"
+        sub={`Calls by number of agent response turns — ${window}`}
+        footnote="X: number of calls. Y: turns completed. A tall zero bar means users are dropping before the conversation starts."
+      >
+        <HBarList
+          labelWidth={60}
+          rows={stats.turnHistogram
+            .filter((b) => b.count > 0)
+            .map((b) => ({
+              label: `${b.label} turn${b.label === '1' ? '' : 's'}`,
+              value: b.count,
+              display: String(b.count),
+              color: b.label === '0' ? 'var(--color-state-warning)' : 'var(--color-state-speaking)',
+            }))}
+        />
+      </ChartCard>
+
+      <ChartCard
+        title="Tool usage"
+        sub={
+          tools.totals.invocations > 0
+            ? `${formatCount(tools.totals.invocations)} invocations across ${tools.totals.callsWithTools} calls`
+            : 'Actual executions, not enabled configuration'
+        }
+        trailing={
+          tools.totals.adoptionRate != null && tools.totals.invocations > 0 ? (
+            <span className="font-mono text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
+              {formatPct(tools.totals.adoptionRate)} of calls used a tool
+            </span>
+          ) : undefined
+        }
+        footnote="Counts come from tool_call and tool_result events. Tool arguments and outputs are never aggregated here."
+      >
+        {tools.tools.length > 0 ? (
+          <ToolTable tools={tools} />
+        ) : (
+          <EmptyChart height={80} label="No tools were invoked in this period" />
+        )}
+      </ChartCard>
+
+      {stats.topAgents.length > 0 && (
+        <ChartCard
+          title="Agent comparison"
+          sub={`Per-agent performance — ${window}`}
+          footnote="Agents are identified from the snapshot taken at call start."
+        >
+          <AgentTable agents={stats.topAgents} />
+        </ChartCard>
+      )}
+    </motion.div>
+  );
+}
+
+const DISCONNECT_COLORS = [
+  'var(--color-accent)',
+  'var(--color-state-speaking)',
+  'var(--color-state-warning)',
+  'var(--color-state-error)',
+  'var(--color-accent-2)',
+];
+
+function LatencyWaterfall({ latency }: { latency: LatencyAnalytics }) {
+  const { stages } = latency;
+  const segments = [
+    { label: 'STT', value: stages.stt.avg ?? 0, color: STAGE_COLORS.stt },
+    { label: 'LLM', value: stages.llm.avg ?? 0, color: STAGE_COLORS.llm },
+    { label: 'TTS', value: stages.tts.avg ?? 0, color: STAGE_COLORS.tts },
+    {
+      label: 'Unaccounted',
+      value: Math.max(stages.unaccounted.avg ?? 0, 0),
+      color: STAGE_COLORS.unaccounted,
+    },
+  ].map((s) => ({ ...s, display: formatMs(s.value) }));
+
+  if (segments.every((s) => s.value <= 0)) {
+    return <EmptyChart height={120} label="No instrumented turns in this period" />;
+  }
+
+  return <CompositionBar segments={segments} />;
+}
+
+function ToolTable({ tools }: { tools: ToolAnalytics }) {
+  return (
+    <div className="flex flex-col">
+      <div
+        className="grid grid-cols-[1fr_70px_80px_80px] gap-2 border-b pb-2 text-[10.5px] font-[500] uppercase tracking-[0.07em]"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-faint)' }}
+      >
+        <span>Tool</span>
+        <span className="text-right">Calls</span>
+        <span className="text-right">Success</span>
+        <span className="text-right">p95</span>
+      </div>
+      {tools.tools.map((tool) => (
+        <div
+          key={tool.name}
+          className="grid grid-cols-[1fr_70px_80px_80px] items-center gap-2 border-b py-2.5 text-[12.5px] last:border-b-0"
+          style={{ borderColor: 'var(--color-border)' }}
+        >
+          <span className="truncate font-mono" style={{ color: 'var(--color-text)' }}>
+            {tool.name}
+          </span>
+          <span className="text-right font-mono" style={{ color: 'var(--color-text-muted)' }}>
+            {tool.invocations}
+          </span>
+          <span
+            className="text-right font-mono font-[600]"
+            style={{
+              color:
+                tool.successRate == null
+                  ? 'var(--color-text-faint)'
+                  : tool.successRate >= 0.95
+                    ? 'var(--color-state-speaking)'
+                    : tool.successRate >= 0.8
+                      ? 'var(--color-state-warning)'
+                      : 'var(--color-state-error)',
+            }}
+          >
+            {formatPct(tool.successRate)}
+          </span>
+          <span
+            className="text-right font-mono"
+            style={{ color: latencyColor(tool.p95LatencyMs) }}
+          >
+            {formatMs(tool.p95LatencyMs)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AgentTable({ agents }: { agents: CallStats['topAgents'] }) {
+  return (
+    <div className="flex flex-col">
+      <div
+        className="grid grid-cols-[1fr_60px_80px_80px_80px] gap-2 border-b pb-2 text-[10.5px] font-[500] uppercase tracking-[0.07em]"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-faint)' }}
+      >
+        <span>Agent</span>
+        <span className="text-right">Calls</span>
+        <span className="text-right">Engaged</span>
+        <span className="text-right">Avg cost</span>
+        <span className="text-right">Avg dur.</span>
+      </div>
+      {agents.map((agent) => (
+        <div
+          key={agent.agentId}
+          className="grid grid-cols-[1fr_60px_80px_80px_80px] items-center gap-2 border-b py-2.5 text-[12.5px] last:border-b-0"
+          style={{ borderColor: 'var(--color-border)' }}
+        >
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate" style={{ color: 'var(--color-text)' }}>
+              {agent.name ?? agent.agentId}
+            </span>
+            {agent.llmModel && (
+              <span className="truncate font-mono text-[10.5px]" style={{ color: 'var(--color-text-faint)' }}>
+                {agent.llmModel}
+              </span>
+            )}
+          </span>
+          <span className="text-right font-mono" style={{ color: 'var(--color-text-muted)' }}>
+            {agent.calls}
+          </span>
+          <span
+            className="text-right font-mono font-[600]"
+            style={{
+              color:
+                agent.engagementRate >= 0.5
+                  ? 'var(--color-state-speaking)'
+                  : 'var(--color-state-warning)',
+            }}
+          >
+            {formatPct(agent.engagementRate)}
+          </span>
+          <span className="text-right font-mono" style={{ color: 'var(--color-text-muted)' }}>
+            {formatUsd(agent.avgCostUsd)}
+          </span>
+          <span className="text-right font-mono" style={{ color: 'var(--color-text-muted)' }}>
+            {formatMs(agent.avgDurationMs)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MetricBlock({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span
+        className="text-[10.5px] font-[500] uppercase tracking-[0.06em]"
+        style={{ color: 'var(--color-text-faint)' }}
+      >
+        {label}
+      </span>
+      <span className="font-mono text-[15px] font-[600]" style={{ color: 'var(--color-text)' }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function Notice({ tone, children }: { tone: 'warning'; children: React.ReactNode }) {
+  const color = tone === 'warning' ? 'var(--color-state-warning)' : 'var(--color-accent)';
+  return (
+    <div
+      className="flex items-start gap-2.5 rounded-[10px] px-4 py-3"
+      style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}
+    >
+      <AlertCircle size={14} strokeWidth={2} style={{ color, flexShrink: 0, marginTop: 1 }} />
+      <p className="text-[12.5px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+        {children}
+      </p>
+    </div>
+  );
+}
+
+function AgentFilter({
+  agents,
+  value,
+  onChange,
+}: {
+  agents: Agent[];
+  value: string;
+  onChange: (agentId: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label="Filter analytics by agent"
+      className="rounded-[8px] px-2.5 py-1.5 text-[12px] font-[500] outline-none"
+      style={{
+        background: 'var(--color-surface-raised)',
+        border: '1px solid var(--color-border)',
+        color: value ? 'var(--color-text)' : 'var(--color-text-faint)',
+      }}
+    >
+      <option value="">All agents</option>
+      {agents.map((agent) => (
+        <option key={agent.agentId} value={agent.agentId}>
+          {agent.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function PeriodSelector({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (p: 7 | 30 | 90) => void;
+}) {
   return (
     <div
       className="flex items-center gap-0.5 rounded-[8px] p-0.5"
@@ -94,426 +685,18 @@ function PeriodSelector({ value, onChange }: { value: number; onChange: (p: 7 | 
   );
 }
 
-// ─── Main content ─────────────────────────────────────────────────────────────
-
-function AnalyticsContent({ stats, period }: { stats: CallStats; period: number }) {
-  return (
-    <motion.div
-      className="flex flex-col gap-5"
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
-    >
-      {/* Summary strip */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <MiniStat
-          label="Total calls"
-          value={stats.totalCalls}
-          icon={TrendingUp}
-          iconColor="var(--color-accent)"
-        />
-        <MiniStat
-          label="Completed"
-          value={`${stats.totalCalls > 0 ? Math.round((stats.completedCalls / stats.totalCalls) * 100) : 0}%`}
-          icon={CheckCircle2}
-          iconColor="var(--color-state-speaking)"
-          sub={`${stats.completedCalls} calls`}
-        />
-        <MiniStat
-          label="Error rate"
-          value={`${Math.round(stats.errorRate * 100)}%`}
-          icon={AlertCircle}
-          iconColor={stats.errorCalls > 0 ? 'var(--color-state-error)' : 'var(--color-text-faint)'}
-          sub={`${stats.errorCalls} errors`}
-        />
-        <MiniStat
-          label="p50 latency"
-          value={stats.p50LatencyMs != null ? `${stats.p50LatencyMs}ms` : '—'}
-          icon={Clock}
-          iconColor={latencyColor(stats.p50LatencyMs)}
-          sub={stats.p95LatencyMs != null ? `p95 ${stats.p95LatencyMs}ms` : undefined}
-        />
-        <MiniStat
-          label="Total cost"
-          value={formatUsd(stats.totalCostUsd)}
-          icon={DollarSign}
-          iconColor="var(--color-state-speaking)"
-          sub={stats.avgCostUsd != null ? `${formatUsd(stats.avgCostUsd)} / call` : undefined}
-        />
-      </div>
-
-      {/* Call volume chart */}
-      <ChartCard
-        title="Call volume"
-        sub={`Calls per day — last ${period} days`}
-      >
-        <VolumeBarChart data={stats.callsPerDay} />
-      </ChartCard>
-
-      {/* Bottom row */}
-      <div className="grid grid-cols-2 gap-4">
-        <ChartCard title="Status breakdown" sub="Share of call outcomes">
-          <StatusDonut
-            completed={stats.completedCalls}
-            errors={stats.errorCalls}
-            inProgress={stats.inProgressCalls}
-          />
-        </ChartCard>
-
-        <ChartCard title="Latency percentiles" sub="Response time distribution">
-          <LatencyBars
-            avg={stats.avgLatencyMs}
-            p50={stats.p50LatencyMs}
-            p95={stats.p95LatencyMs}
-          />
-        </ChartCard>
-      </div>
-
-      {/* Top tools */}
-      {stats.topTools.length > 0 && (
-        <ChartCard title="Tool usage" sub={`Top tools invoked — last ${period} days`}>
-          <ToolsBarChart tools={stats.topTools} />
-        </ChartCard>
-      )}
-    </motion.div>
-  );
-}
-
-// ─── Chart card wrapper ───────────────────────────────────────────────────────
-
-function ChartCard({ title, sub, children }: { title: string; sub: string; children: React.ReactNode }) {
-  return (
-    <div
-      className="rounded-[12px] p-5"
-      style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
-    >
-      <div className="mb-4">
-        <p className="text-[13.5px] font-[500] tracking-[-0.01em]" style={{ color: 'var(--color-text)' }}>
-          {title}
-        </p>
-        <p className="text-[12px] mt-0.5" style={{ color: 'var(--color-text-faint)' }}>{sub}</p>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-// ─── Mini stat ────────────────────────────────────────────────────────────────
-
-function MiniStat({
-  label,
-  value,
-  icon: Icon,
-  iconColor,
-  sub,
-}: {
-  label: string;
-  value: string | number;
-  icon: React.ElementType;
-  iconColor: string;
-  sub?: string;
-}) {
-  return (
-    <div
-      className="flex flex-col gap-3 rounded-[10px] p-4"
-      style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] font-[500] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>
-          {label}
-        </span>
-        <Icon size={13} strokeWidth={1.75} style={{ color: iconColor }} />
-      </div>
-      <div>
-        <span className="text-[24px] font-[600] tracking-[-0.04em] leading-none" style={{ color: 'var(--color-text)' }}>
-          {value}
-        </span>
-        {sub && (
-          <p className="text-[11px] mt-1" style={{ color: 'var(--color-text-faint)' }}>{sub}</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Volume bar chart ─────────────────────────────────────────────────────────
-
-function VolumeBarChart({ data }: { data: { date: string; count: number }[] }) {
-  const [tooltip, setTooltip] = useState<{ x: number; label: string; count: number } | null>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
-
-  if (data.length === 0) {
-    return <EmptyChart />;
-  }
-
-  const maxCount = Math.max(...data.map((d) => d.count), 1);
-  const vw = 800;
-  const vh = 110;
-  const padTop = 8;
-  const padBottom = 20;
-  const chartH = vh - padTop - padBottom;
-  const labelEvery = data.length <= 7 ? 1 : data.length <= 14 ? 2 : data.length <= 31 ? 7 : 14;
-
-  return (
-    <div className="relative select-none">
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${vw} ${vh}`}
-        preserveAspectRatio="none"
-        style={{ width: '100%', height: 110, display: 'block', overflow: 'visible' }}
-      >
-        {[0.25, 0.5, 0.75, 1].map((frac) => (
-          <line
-            key={frac}
-            x1={0} y1={padTop + chartH * (1 - frac)}
-            x2={vw} y2={padTop + chartH * (1 - frac)}
-            stroke="rgba(255,255,255,0.04)"
-            strokeWidth={1}
-          />
-        ))}
-
-        {data.map((d, i) => {
-          const colW = vw / data.length;
-          const barW = Math.max(Math.floor(colW * 0.7), 2);
-          const barGapLeft = Math.floor((colW - barW) / 2);
-          const barH = (d.count / maxCount) * chartH;
-          const x = i * colW + barGapLeft;
-          const y = padTop + chartH - barH;
-          const isHov = tooltip !== null && formatShortDate(d.date) === tooltip.label;
-
-          return (
-            <g key={d.date}>
-              <rect
-                x={x - 2} y={padTop} width={barW + 4} height={chartH}
-                fill="transparent"
-                style={{ cursor: 'crosshair' }}
-                onMouseEnter={() => {
-                  const svg = svgRef.current;
-                  if (svg) {
-                    const svgRect = svg.getBoundingClientRect();
-                    setTooltip({ x: ((x + barW / 2) / vw) * svgRect.width, label: formatShortDate(d.date), count: d.count });
-                  }
-                }}
-                onMouseLeave={() => setTooltip(null)}
-              />
-              {barH > 0 && (
-                <path
-                  d={roundedTopRect(x, y, barW, Math.max(barH, 3), 2)}
-                  fill={isHov ? 'var(--color-accent)' : 'rgba(56,232,255,0.4)'}
-                  style={{ transition: 'fill 80ms' }}
-                />
-              )}
-              {i % labelEvery === 0 && (
-                <text
-                  x={x + barW / 2} y={vh - 3}
-                  textAnchor="middle"
-                  fontSize={9}
-                  fill="rgba(255,255,255,0.26)"
-                  fontFamily="var(--font-mono-var, monospace)"
-                >
-                  {formatShortDate(d.date)}
-                </text>
-              )}
-            </g>
-          );
-        })}
-      </svg>
-
-      {tooltip && (
-        <div
-          className="pointer-events-none absolute z-10 px-2.5 py-1.5 rounded-[6px] text-[11.5px] font-[500] whitespace-nowrap"
-          style={{
-            left: tooltip.x,
-            top: -36,
-            transform: 'translateX(-50%)',
-            background: 'var(--color-surface-elevated)',
-            border: '1px solid var(--color-border-strong)',
-            color: 'var(--color-text)',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-          }}
-        >
-          {tooltip.label} — {tooltip.count} {tooltip.count === 1 ? 'call' : 'calls'}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Status donut ─────────────────────────────────────────────────────────────
-
-function StatusDonut({ completed, errors, inProgress }: { completed: number; errors: number; inProgress: number }) {
-  const total = completed + errors + inProgress;
-
-  if (total === 0) {
-    return <EmptyChart height={100} />;
-  }
-
-  const cx = 60;
-  const cy = 60;
-  const r = 44;
-  const strokeW = 10;
-  const circumference = 2 * Math.PI * r;
-
-  const segments = [
-    { label: 'Completed',   count: completed,  color: 'var(--color-state-speaking)' },
-    { label: 'Errors',      count: errors,     color: 'var(--color-state-error)' },
-    { label: 'In progress', count: inProgress, color: 'var(--color-accent)' },
-  ].filter((s) => s.count > 0);
-
-  let offset = 0;
-  const arcs = segments.map((seg) => {
-    const frac = seg.count / total;
-    const dash = frac * circumference;
-    const arc = { ...seg, dash, offset };
-    offset += dash + 1;
-    return arc;
-  });
-
-  return (
-    <div className="flex items-center gap-6">
-      <svg width={120} height={120} viewBox="0 0 120 120" style={{ flexShrink: 0 }}>
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={strokeW} />
-        {arcs.map((arc) => (
-          <circle
-            key={arc.label}
-            cx={cx} cy={cy} r={r}
-            fill="none"
-            stroke={arc.color}
-            strokeWidth={strokeW}
-            strokeDasharray={`${arc.dash} ${circumference - arc.dash}`}
-            strokeDashoffset={-arc.offset}
-            strokeLinecap="butt"
-            transform="rotate(-90 60 60)"
-            style={{ opacity: 0.85 }}
-          />
-        ))}
-        <text x={cx} y={cy - 5} textAnchor="middle" fontSize={18} fontWeight={600} fill="var(--color-text)" fontFamily="var(--font-display, sans-serif)">
-          {total}
-        </text>
-        <text x={cx} y={cy + 12} textAnchor="middle" fontSize={9} fill="rgba(255,255,255,0.35)" fontFamily="var(--font-mono-var, monospace)">
-          CALLS
-        </text>
-      </svg>
-
-      <div className="flex flex-col gap-2.5">
-        {segments.map(({ label, count, color }) => (
-          <div key={label} className="flex items-center gap-2">
-            <span className="rounded-full flex-shrink-0" style={{ width: 8, height: 8, background: color }} />
-            <span className="text-[12.5px]" style={{ color: 'var(--color-text-muted)' }}>{label}</span>
-            <span className="text-[12.5px] font-[600] font-mono ml-auto pl-3" style={{ color: 'var(--color-text)' }}>{count}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Latency bars ─────────────────────────────────────────────────────────────
-
-function LatencyBars({ avg, p50, p95 }: { avg: number | null; p50: number | null; p95: number | null }) {
-  const items = [
-    { label: 'Average', value: avg },
-    { label: 'p50 (median)', value: p50 },
-    { label: 'p95', value: p95 },
-  ];
-
-  const max = Math.max(...items.map((i) => i.value ?? 0), 1);
-
-  if (items.every((i) => i.value == null)) {
-    return <EmptyChart height={80} label="No latency data yet" />;
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      {items.map(({ label, value }) => (
-        <div key={label} className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>{label}</span>
-            <span className="text-[12.5px] font-[600] font-mono" style={{ color: latencyColor(value) }}>
-              {value != null ? `${value}ms` : '—'}
-            </span>
-          </div>
-          <div className="h-[5px] rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
-            <div
-              className="h-full w-full rounded-full origin-left"
-              style={{
-                transform: `scaleX(${value != null ? value / max : 0})`,
-                background: latencyColor(value),
-                opacity: 0.8,
-                transition: 'transform 400ms cubic-bezier(0.22, 1, 0.36, 1)',
-              }}
-            />
-          </div>
-        </div>
-      ))}
-      <p className="text-[11px] mt-1" style={{ color: 'var(--color-text-faint)' }}>
-        &lt; 500ms good · 500–1000ms acceptable · &gt; 1000ms degraded
-      </p>
-    </div>
-  );
-}
-
-// ─── Tools bar chart ──────────────────────────────────────────────────────────
-
-function ToolsBarChart({ tools }: { tools: { name: string; count: number }[] }) {
-  const max = tools[0]?.count ?? 1;
-
-  return (
-    <div className="flex flex-col gap-2">
-      {tools.map(({ name, count }) => (
-        <div key={name} className="flex items-center gap-3">
-          <span
-            className="text-[12px] font-mono flex-shrink-0"
-            style={{
-              color: 'var(--color-text-muted)',
-              width: 160,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {name}
-          </span>
-          <div className="flex-1 h-[5px] rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
-            <div
-              className="h-full w-full rounded-full origin-left"
-              style={{
-                transform: `scaleX(${count / max})`,
-                background: 'rgba(56,232,255,0.55)',
-                transition: 'transform 400ms cubic-bezier(0.22, 1, 0.36, 1)',
-              }}
-            />
-          </div>
-          <span
-            className="text-[12px] font-[500] font-mono flex-shrink-0"
-            style={{ color: 'var(--color-text-faint)', width: 32, textAlign: 'right' }}
-          >
-            {count}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Empty / skeleton / error ─────────────────────────────────────────────────
-
-function EmptyChart({ height = 80, label = 'No data for this period' }: { height?: number; label?: string }) {
-  return (
-    <div className="flex items-center justify-center" style={{ height }}>
-      <span className="text-[12px]" style={{ color: 'var(--color-text-faint)' }}>{label}</span>
-    </div>
-  );
-}
-
 function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div
-      className="flex flex-col items-center gap-3 py-12 rounded-[12px] text-center"
+      className="flex flex-col items-center gap-3 rounded-[12px] py-12 text-center"
       style={{ border: '1px dashed var(--color-border)' }}
     >
-      <p className="text-[13px] font-[500]" style={{ color: 'var(--color-state-error)' }}>{message}</p>
-      <Button variant="ghost" size="sm" onClick={onRetry}>Try again</Button>
+      <p className="text-[13px] font-[500]" style={{ color: 'var(--color-state-error)' }}>
+        {message}
+      </p>
+      <Button variant="ghost" size="sm" onClick={onRetry}>
+        Try again
+      </Button>
     </div>
   );
 }
@@ -521,53 +704,32 @@ function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void
 function AnalyticsSkeleton() {
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-4 gap-3">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-[88px] rounded-[10px] animate-pulse" style={{ background: 'var(--color-surface-raised)' }} />
+      <div className="grid grid-cols-5 gap-3">
+        {[...Array(5)].map((_, i) => (
+          <div
+            key={i}
+            className="h-[92px] animate-pulse rounded-[10px]"
+            style={{ background: 'var(--color-surface-raised)' }}
+          />
         ))}
       </div>
-      <div className="h-[172px] rounded-[12px] animate-pulse" style={{ background: 'var(--color-surface-raised)' }} />
+      <div
+        className="h-[200px] animate-pulse rounded-[12px]"
+        style={{ background: 'var(--color-surface-raised)' }}
+      />
       <div className="grid grid-cols-2 gap-4">
-        <div className="h-[180px] rounded-[12px] animate-pulse" style={{ background: 'var(--color-surface-raised)' }} />
-        <div className="h-[180px] rounded-[12px] animate-pulse" style={{ background: 'var(--color-surface-raised)' }} />
+        {[...Array(4)].map((_, i) => (
+          <div
+            key={i}
+            className="h-[190px] animate-pulse rounded-[12px]"
+            style={{ background: 'var(--color-surface-raised)' }}
+          />
+        ))}
       </div>
     </div>
   );
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatUsd(usd: number): string {
-  if (!usd) return '$0';
-  if (usd < 0.01) return `$${usd.toFixed(4)}`;
-  if (usd < 1) return `$${usd.toFixed(3)}`;
-  if (usd < 100) return `$${usd.toFixed(2)}`;
-  return `$${Math.round(usd)}`;
-}
-
-function latencyColor(ms: number | null): string {
-  if (ms == null) return 'var(--color-text-faint)';
-  if (ms < 500) return 'var(--color-state-speaking)';
-  if (ms < 1000) return 'var(--color-state-warning)';
-  return 'var(--color-state-error)';
-}
-
-function roundedTopRect(x: number, y: number, w: number, h: number, r: number): string {
-  const safe = Math.min(r, w / 2, h);
-  return [
-    `M ${x + safe} ${y}`,
-    `H ${x + w - safe}`,
-    `Q ${x + w} ${y} ${x + w} ${y + safe}`,
-    `V ${y + h}`,
-    `H ${x}`,
-    `V ${y + safe}`,
-    `Q ${x} ${y} ${x + safe} ${y}`,
-    'Z',
-  ].join(' ');
-}
-
-function formatShortDate(iso: string): string {
-  const [, m, d] = iso.split('-');
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}`;
+function countOutcome(stats: CallStats, outcome: string): number {
+  return stats.outcomeMix.find((o) => o.outcome === outcome)?.count ?? 0;
 }

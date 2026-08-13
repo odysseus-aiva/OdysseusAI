@@ -38,6 +38,7 @@ export class AgentToolResolverService {
     return {
       ...partial,
       agentId: resolved.agentId,
+      agentName: resolved.name,
       // Engine is an agent-level property; a per-request override may still pick
       // it (e.g. Engine Compare), otherwise the persisted engine wins.
       engine: partial.engine ?? resolved.engine,

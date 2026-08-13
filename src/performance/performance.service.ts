@@ -24,14 +24,32 @@ export class PerformanceService {
     return record;
   }
 
-  recordMilestone(callId: string, milestone: PerformanceMilestone): LatencyMetrics {
+  /**
+   * @param opts.firstWins keep an already-recorded timestamp for this turn
+   *   instead of overwriting. Used for `agent_playback_start`, where the
+   *   metric of interest is when the user heard the *first* audio — a tool
+   *   filler counts, and the final answer must not overwrite it.
+   */
+  recordMilestone(
+    callId: string,
+    milestone: PerformanceMilestone,
+    opts?: { firstWins?: boolean },
+  ): LatencyMetrics {
     const record = this.getOrCreate(callId);
+    if (opts?.firstWins && record.milestones[milestone] !== undefined) {
+      return { ...record.latencyMetrics };
+    }
     const now = Date.now();
     record.milestones[milestone] = now;
 
     switch (milestone) {
       case 'user_speech_start':
         record.latencyMetrics.userSpeechStart = now;
+        // A new user utterance opens a new response turn. Any playback already
+        // recorded belongs to the greeting or the previous turn, and keeping it
+        // would make this turn's time-to-first-audio negative.
+        delete record.milestones.agent_playback_start;
+        record.latencyMetrics.agentPlaybackStart = undefined;
         break;
       case 'user_speech_end':
         record.latencyMetrics.userSpeechEnd = now;
@@ -141,8 +159,15 @@ export class PerformanceService {
       metrics.ttsLatencyMs = m.tts_end - m.tts_start;
     }
 
-    if (m.user_speech_end && m.agent_playback_start) {
-      metrics.totalResponseLatencyMs = m.agent_playback_start - m.user_speech_end;
+    // Playback recorded before the user finished speaking cannot be a response
+    // to it, so fall back to synthesis completion rather than emit a negative.
+    if (
+      m.user_speech_end &&
+      m.agent_playback_start !== undefined &&
+      m.agent_playback_start >= m.user_speech_end
+    ) {
+      metrics.totalResponseLatencyMs =
+        m.agent_playback_start - m.user_speech_end;
     } else if (m.user_speech_end && m.tts_end) {
       metrics.totalResponseLatencyMs = m.tts_end - m.user_speech_end;
     }

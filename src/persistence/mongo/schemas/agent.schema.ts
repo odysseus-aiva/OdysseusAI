@@ -37,6 +37,10 @@ export class AgentEntity {
   @Prop()
   language?: string;
 
+  /** Twilio DID in E.164. Sparse unique index — many agents may have none. */
+  @Prop({ sparse: true, unique: true, index: true })
+  phoneNumber?: string;
+
   @Prop({ required: true })
   createdAt!: number;
 

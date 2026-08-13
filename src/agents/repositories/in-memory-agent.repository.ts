@@ -28,6 +28,7 @@ export class InMemoryAgentRepository implements AgentRepository {
       defaultProviders: input.defaultProviders,
       voiceId: input.voiceId,
       language: input.language,
+      phoneNumber: input.phoneNumber,
       createdAt: now,
       updatedAt: now,
     };
@@ -38,6 +39,13 @@ export class InMemoryAgentRepository implements AgentRepository {
   async findByAgentId(agentId: string): Promise<AgentRecord | null> {
     const record = this.agents.get(agentId);
     return record ? { ...record } : null;
+  }
+
+  async findByPhoneNumber(phoneNumber: string): Promise<AgentRecord | null> {
+    for (const agent of this.agents.values()) {
+      if (agent.phoneNumber === phoneNumber) return { ...agent };
+    }
+    return null;
   }
 
   async list(): Promise<AgentRecord[]> {
@@ -52,9 +60,14 @@ export class InMemoryAgentRepository implements AgentRepository {
   ): Promise<AgentRecord | null> {
     const existing = this.agents.get(agentId);
     if (!existing) return null;
+    // null phoneNumber means "clear" — store as undefined so AgentRecord stays consistent
+    const safePatch: Partial<AgentRecord> = {
+      ...patch,
+      phoneNumber: patch.phoneNumber === null ? undefined : patch.phoneNumber,
+    };
     const updated: AgentRecord = {
       ...existing,
-      ...patch,
+      ...safePatch,
       agentId: existing.agentId,
       createdAt: existing.createdAt,
       updatedAt: Date.now(),

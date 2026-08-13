@@ -11,6 +11,7 @@ import { SttModule } from './stt/stt.module';
 import { LlmModule } from './llm/llm.module';
 import { TtsModule } from './tts/tts.module';
 import { AgentsModule } from './agents/agents.module';
+import { TwilioModule } from './twilio/twilio.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AgentsModule } from './agents/agents.module';
     TtsModule,
     CallLogsModule,
     AgentsModule,
+    TwilioModule,
     VoiceAgentModule,
     LivekitModule,
     SessionModule,

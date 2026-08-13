@@ -9,6 +9,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { CallLogsService } from '../call-logs/call-logs.service';
 import { VoiceAgentService } from '../voice-agent/voice-agent.service';
+import { AgentsService } from '../agents/agents.service';
 
 /**
  * SIP participants always carry the "sip.callID" attribute set by LiveKit SIP.
@@ -34,6 +35,7 @@ export class LivekitService {
     private readonly configService: ConfigService,
     private readonly callLogsService: CallLogsService,
     private readonly voiceAgentService: VoiceAgentService,
+    private readonly agentsService: AgentsService,
   ) {}
 
   private getRoomClient(): RoomServiceClient {
@@ -188,9 +190,44 @@ export class LivekitService {
 
   /**
    * Returns the agentId to use for an inbound SIP call to the given Twilio DID.
-   * Resolution order: exact DID match → "default" key → "assistant" fallback.
+   * Resolution order: DB phone-number field → env phoneNumberMap → "assistant".
    */
-  private resolveAgentIdForDid(calledNumber: string): string {
+  private async resolveAgentIdForDid(calledNumber: string): Promise<string> {
+    if (calledNumber) {
+      // LiveKit may omit the leading '+' from E.164 numbers — normalise before lookup.
+      const normalized = calledNumber.startsWith('+')
+        ? calledNumber
+        : `+${calledNumber}`;
+      this.logger.debug(
+        `resolveAgentIdForDid: raw="${calledNumber}" normalized="${normalized}"`,
+      );
+
+      const agent = await this.agentsService.findByPhoneNumber(normalized);
+
+      if (agent?.agentId) {
+        this.logger.debug(
+          `resolveAgentIdForDid: matched agent=${agent.agentId}`,
+        );
+
+        return agent.agentId;
+      }
+      // Also try the raw value in case the DB stored it without '+'.
+      if (normalized !== calledNumber) {
+        const agentRaw =
+          await this.agentsService.findByPhoneNumber(calledNumber);
+
+        if (agentRaw?.agentId) {
+          this.logger.debug(
+            `resolveAgentIdForDid: matched agent (raw)=${agentRaw.agentId}`,
+          );
+
+          return agentRaw.agentId;
+        }
+      }
+      this.logger.warn(
+        `resolveAgentIdForDid: no agent found for "${normalized}" — falling back to map/default`,
+      );
+    }
     const map =
       this.configService.get<Record<string, string>>(
         'livekit.sip.phoneNumberMap',
@@ -208,24 +245,23 @@ export class LivekitService {
     calledNumber: string,
   ): void {
     const callId = uuidv4();
-    const agentId = this.resolveAgentIdForDid(calledNumber);
-
-    this.logger.log(
-      `SIP inbound call: room=${roomName} from=${callerNumber} to=${calledNumber} → agent=${agentId}`,
-    );
-
-    void this.voiceAgentService
-      .startSession(
-        roomName,
-        callId,
-        { agentId },
-        {
-          direction: 'inbound',
-          channel: 'pstn',
-          from: callerNumber,
-          to: calledNumber,
-        },
-      )
+    void this.resolveAgentIdForDid(calledNumber)
+      .then((agentId) => {
+        this.logger.log(
+          `SIP inbound call: room=${roomName} from=${callerNumber} to=${calledNumber} → agent=${agentId}`,
+        );
+        return this.voiceAgentService.startSession(
+          roomName,
+          callId,
+          { agentId },
+          {
+            direction: 'inbound',
+            channel: 'pstn',
+            from: callerNumber,
+            to: calledNumber,
+          },
+        );
+      })
       .catch((error: Error) => {
         // ConflictException is expected when the webhook fires a duplicate
         // participant_joined event — the session is already running, so ignore it.

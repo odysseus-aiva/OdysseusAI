@@ -77,6 +77,12 @@ export default () => ({
   braveSearch: {
     apiKey: process.env.BRAVE_SEARCH_API_KEY ?? '',
   },
+  twilio: {
+    accountSid: process.env.TWILIO_ACCOUNT_SID ?? '',
+    authToken: process.env.TWILIO_AUTH_TOKEN ?? '',
+    /** Elastic SIP Trunk SID (TKxxxx) — numbers are attached here after purchase. */
+    trunkSid: process.env.TWILIO_TRUNK_SID ?? '',
+  },
   persistence: {
     /** `memory` (default) or `mongodb` */
     provider: process.env.PERSISTENCE_PROVIDER ?? 'memory',

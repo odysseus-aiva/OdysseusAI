@@ -307,7 +307,14 @@ export default function AgentDetailPage() {
             {tab === 'variables' && (
               <VariablesTab systemPrompt={draft.systemPrompt} greeting={draft.greeting} />
             )}
-            {tab === 'advanced' && <AdvancedTab agent={agent} toolDrafts={toolDrafts} />}
+            {tab === 'advanced' && (
+              <AdvancedTab
+                agent={agent}
+                draft={draft}
+                setField={setField}
+                toolDrafts={toolDrafts}
+              />
+            )}
           </motion.div>
         </AnimatePresence>
       </div>

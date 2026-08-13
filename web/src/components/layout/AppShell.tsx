@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  Phone,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { useVoiceStore } from '@/features/voice/state/voice.store';
@@ -23,6 +24,7 @@ const NAV_SECTIONS = [
   { href: '/', icon: Mic2, label: 'Voice', exact: true },
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/agents', icon: Bot, label: 'Agents' },
+  { href: '/phone-numbers', icon: Phone, label: 'Phone Numbers' },
   { href: '/calls', icon: PhoneCall, label: 'Call History' },
   { href: '/live', icon: Radio, label: 'Live Calls' },
   { href: '/tools', icon: Wrench, label: 'Tools' },

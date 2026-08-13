@@ -545,7 +545,8 @@ export class OmniEngineService {
       call_id?: string;
       tool?: string;
       name?: string;
-      arguments?: Record<string, unknown>;
+      // PyAI sends this as a JSON string, not an object — normalized below.
+      arguments?: unknown;
     },
     roomName: string,
     callId: string,
@@ -556,8 +557,14 @@ export class OmniEngineService {
     const invocationId = msg.call_id;
     // Docs: tool_call uses `name`; accept `tool` as legacy fallback.
     const toolName = msg.name ?? msg.tool;
-    const args = msg.arguments ?? {};
+    // PyAI delivers arguments as a JSON string (e.g. '{"location":"Noida"}');
+    // validate/execute expect an object, so parse it here.
+    const args = coerceToolArgs(msg.arguments);
     if (!invocationId || !toolName) return;
+
+    this.logger.log(
+      `[${callId}] Omni tool_call ${toolName} args=${JSON.stringify(args)}`,
+    );
 
     const validationError = this.toolRegistry.validateToolCall(
       toolName,
@@ -565,6 +572,19 @@ export class OmniEngineService {
       config.enabledTools,
     );
     if (validationError) {
+      // The reject path skips ToolExecutionService (which normally logs the
+      // tool_call/tool_result events), so log the attempt + failure here to
+      // keep Omni tool executions observable in the call timeline.
+      await this.callLogsService.appendLog(callId, 'tool_call', {
+        roomName,
+        data: { toolName, args, engine: 'omni' },
+      });
+      await this.callLogsService.appendLog(callId, 'tool_result', {
+        roomName,
+        data: { toolName, success: false, error: validationError },
+        error: validationError,
+      });
+      this.logger.warn(`[${callId}] Omni tool "${toolName}" rejected: ${validationError}`);
       sendControl(socket, {
         type: 'tool_result',
         call_id: invocationId,
@@ -659,12 +679,38 @@ function extractControlTranscript(
     msg.reply ??
     msg.message;
   if (typeof textField !== 'string' || !textField.trim()) return null;
-  const hint = String(msg.role ?? msg.speaker ?? msg.event ?? msg.type ?? '').toLowerCase();
+  // Only string fields hint at the speaker; ignore any object-valued field so
+  // we never stringify to '[object Object]'.
+  const hintRaw =
+    [msg.role, msg.speaker, msg.event, msg.type].find((v) => typeof v === 'string') ?? '';
+  const hint = (hintRaw as string).toLowerCase();
   const role: 'user' | 'assistant' = /user|caller|input|human/.test(hint)
     ? 'user'
     : 'assistant';
   const isFinal = (msg.final as boolean) ?? (msg.is_final as boolean) ?? true;
   return { role, text: textField, isFinal };
+}
+
+/**
+ * Normalize an Omni tool_call `arguments` payload to an object. PyAI sends it as
+ * a JSON string; older/variant frames may send an object. Non-JSON strings are
+ * wrapped so the tool still receives something rather than throwing.
+ */
+function coerceToolArgs(input: unknown): Record<string, unknown> {
+  if (input == null) return {};
+  if (typeof input === 'object') return input as Record<string, unknown>;
+  if (typeof input === 'string') {
+    const trimmed = input.trim();
+    if (!trimmed) return {};
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>;
+      return { value: parsed };
+    } catch {
+      return { value: input };
+    }
+  }
+  return { value: input };
 }
 
 /**

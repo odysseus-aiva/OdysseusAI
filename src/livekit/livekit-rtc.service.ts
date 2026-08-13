@@ -304,9 +304,10 @@ export class LivekitRtcService {
     };
     this.connections.set(roomName, connection);
 
-    // Do NOT block here: the browser can only subscribe after it receives the
-    // token this call returns. Wait for a subscriber in the background, then
+    // Do NOT block here — wait for a subscriber in the background, then
     // notify the caller so it can send the greeting once audio can be heard.
+    // For browser sessions the subscriber joins after receiving the token;
+    // for SIP inbound sessions the LiveKit SIP bridge subscribes automatically.
     void trackPublication
       .waitForSubscription()
       .then(() => {

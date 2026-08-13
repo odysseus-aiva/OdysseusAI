@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { X, Search, Phone, Check, Loader2, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Search, Phone, Check, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
 import {
   searchAvailableNumbers,
   purchaseNumber,
@@ -19,6 +19,108 @@ const COUNTRY_OPTIONS = [
   { code: 'DE', label: 'Germany' },
   { code: 'FR', label: 'France' },
 ];
+
+function CountrySelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (code: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  const selected = COUNTRY_OPTIONS.find((c) => c.code === value) ?? COUNTRY_OPTIONS[0]!;
+
+  const openDropdown = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setDropdownStyle({
+      position: 'fixed',
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+      zIndex: 9999,
+    });
+    setOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  return (
+    <div className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={open ? () => setOpen(false) : openDropdown}
+        className="flex w-full items-center justify-between rounded-[8px] px-3 py-2 text-[13px] outline-none transition-all duration-[140ms]"
+        style={{
+          background: 'var(--color-surface-raised)',
+          border: `1px solid ${open ? 'var(--color-border-strong)' : 'var(--color-border)'}`,
+          color: 'var(--color-text)',
+        }}
+      >
+        <span>{selected.label}</span>
+        <ChevronDown
+          size={13}
+          strokeWidth={2}
+          style={{
+            color: 'var(--color-text-faint)',
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 150ms ease',
+          }}
+        />
+      </button>
+
+      {open && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{
+            ...dropdownStyle,
+            background: 'var(--color-surface-raised)',
+            border: '1px solid var(--color-border-strong)',
+            borderRadius: 10,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
+            overflow: 'hidden',
+          }}
+        >
+          {COUNTRY_OPTIONS.map((c) => (
+            <button
+              key={c.code}
+              type="button"
+              onMouseDown={() => {
+                onChange(c.code);
+                setOpen(false);
+              }}
+              className="flex w-full items-center justify-between px-3 py-2.5 text-[13px] transition-colors duration-[100ms]"
+              style={{
+                color: c.code === value ? 'var(--color-accent)' : 'var(--color-text)',
+                background: 'transparent',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--color-surface-elevated)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              {c.label}
+              {c.code === value && (
+                <Check size={12} strokeWidth={2.5} style={{ color: 'var(--color-accent)' }} />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface BuyNumberModalProps {
   onClose: () => void;
@@ -181,20 +283,7 @@ export function BuyNumberModal({ onClose, onPurchased }: BuyNumberModalProps) {
                   <label className="text-[11px] font-[600] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>
                     Country
                   </label>
-                  <select
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                    className="rounded-[8px] px-3 py-2 text-[13px] outline-none transition-all duration-[140ms]"
-                    style={{
-                      background: 'var(--color-surface-raised)',
-                      border: '1px solid var(--color-border)',
-                      color: 'var(--color-text)',
-                    }}
-                  >
-                    {COUNTRY_OPTIONS.map((c) => (
-                      <option key={c.code} value={c.code}>{c.label}</option>
-                    ))}
-                  </select>
+                  <CountrySelect value={country} onChange={setCountry} />
                 </div>
                 <div className="flex flex-col gap-1.5 w-[120px]">
                   <label className="text-[11px] font-[600] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>

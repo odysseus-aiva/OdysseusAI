@@ -35,7 +35,9 @@ export type CallLogStep =
   | 'response_planned'
   | 'guardrail_check'
   | 'orchestration_complete'
-  | 'orchestration_error';
+  | 'orchestration_error'
+  /** Diagnostic: a raw PyAI Omni wire frame, sampled for protocol inspection. */
+  | 'omni_frame';
 
 export interface CallLogEntry {
   id: string;

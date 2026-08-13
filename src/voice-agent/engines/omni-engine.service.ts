@@ -140,6 +140,15 @@ export class OmniEngineService {
       }
     };
 
+    // ── Raw-frame diagnostics ────────────────────────────────────────────────
+    // Persist a bounded sample of inbound frames to the call log so the exact
+    // PyAI wire protocol — especially how (or whether) the agent's own
+    // transcript arrives — can be inspected from Mongo after a live call.
+    const debugKinds = new Set<string>();
+    let debug02 = 0;
+    let agentAudioFrames = 0;
+    const DEBUG_02_MAX = 40;
+
     const wireHandlers = (socket: WebSocket) => {
       socket.on('message', (data: WebSocket.RawData) => {
         const frame = toBuffer(data);
@@ -153,16 +162,26 @@ export class OmniEngineService {
           );
         }
         if (tag === CONTROL_TAG) {
+          const rawControl = payload.toString('utf8');
+          // Diagnostics: persist the first occurrence of each control event kind
+          // (full raw) so an unhandled agent-transcript event becomes visible.
+          let kind = 'control';
+          try {
+            const o = JSON.parse(rawControl) as { event?: string; type?: string };
+            kind = String(o.event ?? o.type ?? 'control');
+          } catch {
+            /* not JSON */
+          }
+          if (kind !== 'audio_position' && !debugKinds.has(kind)) {
+            debugKinds.add(kind);
+            void this.callLogsService.appendLog(callId, 'omni_frame', {
+              roomName,
+              data: { tag: '0x03', kind, raw: rawControl.slice(0, 500) },
+            });
+          }
           // A control frame marks a turn boundary — flush any buffered tokens.
           flushPending();
-          void this.handleControl(
-            payload.toString('utf8'),
-            roomName,
-            callId,
-            config,
-            socket,
-            callbacks,
-          );
+          void this.handleControl(rawControl, roomName, callId, config, socket, callbacks);
         } else if (tag === TRANSCRIPT_TAG) {
           // 0x02 = transcript from the server. Two shapes seen in the wild:
           // structured JSON, or bare token chunks. Handle both, always capture.
@@ -170,6 +189,13 @@ export class OmniEngineService {
           this.logger.log(
             `[${callId}] Omni transcript frame (0x02) ${payload.length}B: ${text.slice(0, 120)}`,
           );
+          if (debug02 < DEBUG_02_MAX) {
+            debug02 += 1;
+            void this.callLogsService.appendLog(callId, 'omni_frame', {
+              roomName,
+              data: { tag: '0x02', raw: text.slice(0, 300) },
+            });
+          }
           const structured = tryParseTranscriptJson(text);
           if (structured) {
             flushPending(); // don't mix a raw run into a structured frame
@@ -209,6 +235,13 @@ export class OmniEngineService {
             // their turn just ended — flush it before assistant tokens arrive.
             if (pendingRole === 'user') flushPending();
             lastAgentAudioAt = Date.now();
+            agentAudioFrames += 1;
+            if (agentAudioFrames === 1) {
+              void this.callLogsService.appendLog(callId, 'omni_frame', {
+                roomName,
+                data: { tag: '0x01', note: 'agent audio started' },
+              });
+            }
             audioFramesIn += 1;
             audioBytesIn += payload.length;
             if (audioFramesIn <= 5) {

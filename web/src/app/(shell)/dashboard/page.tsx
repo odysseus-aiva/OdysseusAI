@@ -15,10 +15,10 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
-import { BarChart } from '@/components/charts/BarChart';
+import { AreaChart } from '@/components/charts/AreaChart';
 import { ChartCard, EmptyChart, SampleBadge } from '@/components/charts/ChartCard';
 import { CompositionBar, HBarList } from '@/components/charts/HBarList';
-import { StatTile } from '@/components/charts/StatTile';
+import { HeroKPI } from '@/components/charts/HeroKPI';
 import {
   formatMs,
   formatPct,
@@ -111,6 +111,11 @@ function DashboardContent({ data, period }: { data: DashboardData; period: numbe
   const engaged = stats.outcomeMix.find((o) => o.outcome === 'engaged')?.count ?? 0;
   const noInteraction = stats.outcomeMix.find((o) => o.outcome === 'no_interaction')?.count ?? 0;
 
+  const volumePoints = stats.series.points.map((p) => ({
+    date: p.date,
+    values: { engaged: p.engaged, noInteraction: p.noInteraction, failed: p.failed },
+  }));
+
   return (
     <motion.div
       className="flex flex-col gap-5"
@@ -118,42 +123,44 @@ function DashboardContent({ data, period }: { data: DashboardData; period: numbe
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
     >
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatTile
+      {/* Row 1: KPI tiles */}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        <HeroKPI
           label="Total calls"
           value={stats.totalCalls}
           icon={Phone}
           iconColor="var(--color-accent)"
           delta={stats.deltas.totalCalls}
-          formatDelta={(d) => `${d > 0 ? '+' : ''}${d}`}
+          formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${d}`}
         />
-        <StatTile
+        <HeroKPI
           label="Engaged"
           value={formatPct(stats.engagementRate)}
           sub={`${engaged} conversed`}
           icon={MessageSquare}
           iconColor="var(--color-state-speaking)"
           delta={stats.deltas.engagementRate}
-          formatDelta={(d) => `${d > 0 ? '+' : ''}${(d * 100).toFixed(1)}pp`}
+          formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${(d * 100).toFixed(1)}pp`}
         />
-        <StatTile
+        <HeroKPI
           label="No interaction"
           value={noInteraction}
           sub="connected, never spoke"
           icon={AlertCircle}
           iconColor={noInteraction > 0 ? 'var(--color-state-warning)' : 'var(--color-text-faint)'}
         />
-        <StatTile
+        <HeroKPI
           label="p50 latency"
           value={formatMs(stats.p50LatencyMs)}
+          valueColor={latencyColor(stats.p50LatencyMs)}
           sub={stats.p95LatencyMs != null ? `p95 ${formatMs(stats.p95LatencyMs)}` : undefined}
           icon={Clock}
           iconColor={latencyColor(stats.p50LatencyMs)}
           delta={stats.deltas.p50LatencyMs}
           lowerIsBetter
-          formatDelta={(d) => `${d > 0 ? '+' : ''}${Math.round(d)}ms`}
+          formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${Math.round(d)}ms`}
         />
-        <StatTile
+        <HeroKPI
           label="Cost / call"
           value={formatUsd(stats.avgCostUsd)}
           sub={`${formatUsd(stats.totalCostUsd)} total`}
@@ -161,10 +168,11 @@ function DashboardContent({ data, period }: { data: DashboardData; period: numbe
           iconColor="var(--color-state-speaking)"
           delta={stats.deltas.avgCostUsd}
           lowerIsBetter
-          formatDelta={(d) => `${d > 0 ? '+' : ''}${(d * 1000).toFixed(2)}m$`}
+          formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${(d * 1000).toFixed(2)}m$`}
         />
       </div>
 
+      {/* Row 2: Call volume area chart */}
       <ChartCard
         title="Call volume by outcome"
         sub={`Calls per ${stats.series.bucket} — last ${period} days`}
@@ -181,12 +189,9 @@ function DashboardContent({ data, period }: { data: DashboardData; period: numbe
         }
         footnote="Engaged means the call produced at least one agent response turn."
       >
-        <BarChart
-          height={110}
-          points={stats.series.points.map((p) => ({
-            date: p.date,
-            values: { engaged: p.engaged, noInteraction: p.noInteraction, failed: p.failed },
-          }))}
+        <AreaChart
+          height={140}
+          points={volumePoints}
           series={[
             { key: 'engaged', label: 'Engaged', color: OUTCOME_COLORS.engaged },
             { key: 'noInteraction', label: 'No interaction', color: OUTCOME_COLORS.no_interaction },
@@ -195,6 +200,7 @@ function DashboardContent({ data, period }: { data: DashboardData; period: numbe
         />
       </ChartCard>
 
+      {/* Row 3: Latency decomposition + tool usage */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard
           title="Latency decomposition"
@@ -311,17 +317,17 @@ function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void
 function DashboardSkeleton() {
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {[...Array(5)].map((_, i) => (
           <div
             key={i}
-            className="h-[92px] animate-pulse rounded-[10px]"
+            className="h-[110px] animate-pulse rounded-[12px]"
             style={{ background: 'var(--color-surface-raised)' }}
           />
         ))}
       </div>
       <div
-        className="h-[190px] animate-pulse rounded-[12px]"
+        className="h-[220px] animate-pulse rounded-[12px]"
         style={{ background: 'var(--color-surface-raised)' }}
       />
       <div className="grid grid-cols-2 gap-4">

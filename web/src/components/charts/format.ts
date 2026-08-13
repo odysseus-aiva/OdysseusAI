@@ -17,6 +17,14 @@ export function formatMs(ms: number | null): string {
   return `${(ms / 1000).toFixed(ms < 10000 ? 2 : 1)}s`;
 }
 
+export function formatDuration(ms: number | null): string {
+  if (ms == null) return '—';
+  if (ms < 60_000) return formatMs(ms);
+  const m = Math.floor(ms / 60_000);
+  const s = Math.round((ms % 60_000) / 1000);
+  return s === 0 ? `${m}m` : `${m}m ${s}s`;
+}
+
 export function formatPct(fraction: number | null, digits = 0): string {
   if (fraction == null) return '—';
   return `${(fraction * 100).toFixed(digits)}%`;

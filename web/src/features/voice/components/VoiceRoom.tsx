@@ -65,12 +65,14 @@ export function VoiceRoom({ agent, callId, onDisconnect, onReconnect }: VoiceRoo
   const audioData = isSpeaking ? agentData : micData;
 
   const details: StatusDetail[] = useMemo(() => {
-    const rail: StatusDetail[] = [
+    if (agent?.engine === 'omni') {
+      return [{ label: 'Powered by', value: 'PyAI Omni' }];
+    }
+    return [
       { label: 'LLM', value: providerName(agent?.defaultProviders?.llm, 'openai') },
       { label: 'STT', value: providerName(agent?.defaultProviders?.stt, 'deepgram') },
       { label: 'TTS', value: providerName(agent?.defaultProviders?.tts, 'openai') },
     ];
-    return rail;
   }, [agent]);
 
   return (

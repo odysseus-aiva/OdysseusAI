@@ -127,6 +127,7 @@ export default function AgentsPage() {
                     key={agent.agentId}
                     agent={agent}
                     toolCount={toolCounts[agent.agentId]}
+                    onDeleted={() => void reload()}
                   />
                 ))}
                 {/* Trailing add tile — keeps the CTA where you'd create one, so

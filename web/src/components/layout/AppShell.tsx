@@ -168,7 +168,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               className="text-[13.5px] font-[650] tracking-[-0.03em] leading-none"
               style={{ color: 'var(--color-text)' }}
             >
-              Synaptic
+              Odysseus
             </span>
             <span
               className="text-[10px] font-[450] tracking-[0.06em] leading-none mt-[3px]"

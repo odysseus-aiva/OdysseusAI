@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { Bot, Wrench, ArrowUpRight, Ear, BrainCircuit, AudioLines, Cpu } from 'lucide-react';
+import { Bot, Wrench, ArrowUpRight, Ear, BrainCircuit, AudioLines, Cpu, Trash2 } from 'lucide-react';
 import type { Agent } from '@/lib/api/agents';
+import { deleteAgent } from '@/lib/api/agents';
 import {
   STT_PROVIDERS,
   LLM_PROVIDERS,
@@ -20,11 +22,28 @@ import {
 export function AgentCard({
   agent,
   toolCount,
+  onDeleted,
 }: {
   agent: Agent;
   /** undefined while the count is still resolving. */
   toolCount: number | undefined;
+  onDeleted?: () => void;
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDeleting(true);
+    try {
+      await deleteAgent(agent.agentId);
+      onDeleted?.();
+    } catch {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
   const stt = providerLabel(STT_PROVIDERS, agent.defaultProviders?.stt || PLATFORM_DEFAULTS.stt);
   const llm = providerLabel(LLM_PROVIDERS, agent.defaultProviders?.llm || PLATFORM_DEFAULTS.llm);
   const tts = providerLabel(TTS_PROVIDERS, agent.defaultProviders?.tts || PLATFORM_DEFAULTS.tts);
@@ -157,15 +176,53 @@ export function AgentCard({
 
         <span className="flex-1" />
 
-        <span className="flex-shrink-0 text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
-          {relativeTime(agent.updatedAt)}
-        </span>
-        <ArrowUpRight
-          size={13}
-          strokeWidth={2}
-          className="flex-shrink-0 -translate-x-0.5 opacity-0 transition-all duration-[160ms] group-hover:translate-x-0 group-hover:opacity-100"
-          style={{ color: 'var(--color-accent)' }}
-        />
+        {confirmDelete ? (
+          <span className="flex items-center gap-1.5" onClick={(e) => e.preventDefault()}>
+            <span className="text-[11px]" style={{ color: 'var(--color-state-error)' }}>
+              Delete?
+            </span>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="rounded-[5px] px-1.5 py-0.5 text-[11px] font-[500] transition-colors duration-[120ms]"
+              style={{ background: 'rgb(251 113 133 / 0.15)', color: 'var(--color-state-error)' }}
+            >
+              {deleting ? '…' : 'Yes'}
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(false); }}
+              className="rounded-[5px] px-1.5 py-0.5 text-[11px] font-[500] transition-colors duration-[120ms]"
+              style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}
+            >
+              No
+            </button>
+          </span>
+        ) : (
+          <>
+            <span className="flex-shrink-0 text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
+              {relativeTime(agent.updatedAt)}
+            </span>
+            <button
+              type="button"
+              aria-label={`Delete ${agent.name}`}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(true); }}
+              className="flex-shrink-0 flex items-center justify-center rounded-[6px] opacity-0 transition-all duration-[140ms] group-hover:opacity-100"
+              style={{ width: 24, height: 24, color: 'var(--color-text-faint)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-state-error)'; e.currentTarget.style.background = 'rgb(251 113 133 / 0.1)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-faint)'; e.currentTarget.style.background = 'transparent'; }}
+            >
+              <Trash2 size={12} strokeWidth={2} />
+            </button>
+            <ArrowUpRight
+              size={13}
+              strokeWidth={2}
+              className="flex-shrink-0 -translate-x-0.5 opacity-0 transition-all duration-[160ms] group-hover:translate-x-0 group-hover:opacity-100"
+              style={{ color: 'var(--color-accent)' }}
+            />
+          </>
+        )}
       </div>
     </Link>
   );

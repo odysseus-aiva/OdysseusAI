@@ -64,8 +64,19 @@ export interface CallLogsRepository {
       turnCount: number;
       finalLatencyMetrics?: LatencyMetrics;
       finalCost?: CallCost;
+      /** Replaces the stored snapshot — used to backfill the runtime LLM model. */
+      agentSnapshot?: AgentSnapshot;
     },
   ): Promise<void>;
+  /**
+   * Events across many calls, for cross-call aggregation. Unlike the per-call
+   * event reader this never loads full call records.
+   */
+  listEventsForCalls(
+    callIds: string[],
+    steps: string[],
+    limit: number,
+  ): Promise<CallLogEntry[]>;
   /**
    * Returns lightweight summary rows — never loads call_events.
    * Results are sorted by createdAt descending by default.

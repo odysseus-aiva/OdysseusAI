@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import { LatencyMetrics } from '../../common/types/performance.types';
 import { CallCost } from '../../common/types/cost.types';
 import {
+  AgentSnapshot,
   CallAnalysis,
   CallEndedBy,
   CallLogEntry,
@@ -140,6 +141,7 @@ export class MongoCallLogsRepository implements CallLogsRepository {
       turnCount: number;
       finalLatencyMetrics?: LatencyMetrics;
       finalCost?: CallCost;
+      agentSnapshot?: AgentSnapshot;
     },
   ): Promise<void> {
     const $set: Record<string, unknown> = {
@@ -150,6 +152,10 @@ export class MongoCallLogsRepository implements CallLogsRepository {
       turnCount: outcome.turnCount,
       updatedAt: Date.now(),
     };
+
+    if (outcome.agentSnapshot) {
+      $set.agentSnapshot = outcome.agentSnapshot;
+    }
 
     if (outcome.finalLatencyMetrics) {
       const existing = await this.callModel
@@ -213,6 +219,36 @@ export class MongoCallLogsRepository implements CallLogsRepository {
       updatedAt: doc.updatedAt,
       latencyMetrics: (doc.latencyMetrics as LatencyMetrics) ?? {},
       errors: doc.callErrors ?? [],
+    }));
+  }
+
+  async listEventsForCalls(
+    callIds: string[],
+    steps: string[],
+    limit: number,
+  ): Promise<CallLogEntry[]> {
+    if (callIds.length === 0) return [];
+
+    const filter: Record<string, unknown> = { callId: { $in: callIds } };
+    if (steps.length) filter.step = { $in: steps };
+
+    const docs = await this.eventModel
+      .find(filter)
+      .sort({ timestamp: 1 })
+      .limit(limit)
+      .lean()
+      .exec();
+
+    return docs.map((doc) => ({
+      id: doc.eventId,
+      callId: doc.callId,
+      roomName: doc.roomName,
+      participantId: doc.participantId,
+      step: doc.step as CallLogStep,
+      timestamp: doc.timestamp,
+      data: doc.data,
+      error: doc.error,
+      latencyMs: doc.latencyMs,
     }));
   }
 

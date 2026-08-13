@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { CONVERSATION_STATE_REPOSITORY } from '../orchestration/interfaces/conversation-state-repository.interface';
 import type { ConversationStateRepository } from '../orchestration/interfaces/conversation-state-repository.interface';
+import { AnalyticsService } from './analytics.service';
 import { CallLogsService } from './call-logs.service';
 import type { CallStatus } from '../common/types/call-log.types';
 
@@ -17,6 +18,7 @@ import type { CallStatus } from '../common/types/call-log.types';
 export class CallLogsController {
   constructor(
     private readonly callLogsService: CallLogsService,
+    private readonly analyticsService: AnalyticsService,
     @Inject(CONVERSATION_STATE_REPOSITORY)
     private readonly conversationStateRepository: ConversationStateRepository,
   ) {}
@@ -29,20 +31,20 @@ export class CallLogsController {
   async listCalls(
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
     @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
-    @Query('agentId') agentId?: string,
-    @Query('status') status?: string,
-    @Query('startAfter') startAfterRaw?: string,
-    @Query('startBefore') startBeforeRaw?: string,
-    @Query('sortBy') sortBy?: string,
-    @Query('order') order?: string,
+    @Query('agentId') agentId?: unknown,
+    @Query('status') status?: unknown,
+    @Query('startAfter') startAfterRaw?: unknown,
+    @Query('startBefore') startBeforeRaw?: unknown,
+    @Query('sortBy') sortBy?: unknown,
+    @Query('order') order?: unknown,
   ) {
     return this.callLogsService.listCalls({
       limit,
       offset,
-      agentId: agentId || undefined,
+      agentId: cleanAgentId(agentId),
       status: isValidStatus(status) ? status : undefined,
-      startAfter: startAfterRaw ? Number(startAfterRaw) : undefined,
-      startBefore: startBeforeRaw ? Number(startBeforeRaw) : undefined,
+      startAfter: cleanTimestamp(startAfterRaw),
+      startBefore: cleanTimestamp(startBeforeRaw),
       sortBy: isValidSortBy(sortBy) ? sortBy : undefined,
       order: order === 'asc' ? 'asc' : 'desc',
     });
@@ -55,11 +57,41 @@ export class CallLogsController {
   @Get('stats')
   async getStats(
     @Query('period', new DefaultValuePipe(7), ParseIntPipe) period: number,
-    @Query('agentId') agentId?: string,
+    @Query('agentId') agentId?: unknown,
   ) {
-    return this.callLogsService.getStats({
-      period: Math.min(Math.max(period, 1), 90),
-      agentId: agentId || undefined,
+    return this.analyticsService.getStats({
+      period: clampPeriod(period),
+      agentId: cleanAgentId(agentId),
+    });
+  }
+
+  /**
+   * Turn-level latency analytics: percentiles, stage decomposition, histogram.
+   * GET /call-logs/latency?period=7&agentId=
+   */
+  @Get('latency')
+  async getLatency(
+    @Query('period', new DefaultValuePipe(7), ParseIntPipe) period: number,
+    @Query('agentId') agentId?: unknown,
+  ) {
+    return this.analyticsService.getLatency({
+      period: clampPeriod(period),
+      agentId: cleanAgentId(agentId),
+    });
+  }
+
+  /**
+   * Tool execution analytics from tool_call / tool_result events.
+   * GET /call-logs/tools?period=7&agentId=
+   */
+  @Get('tools')
+  async getTools(
+    @Query('period', new DefaultValuePipe(7), ParseIntPipe) period: number,
+    @Query('agentId') agentId?: unknown,
+  ) {
+    return this.analyticsService.getTools({
+      period: clampPeriod(period),
+      agentId: cleanAgentId(agentId),
     });
   }
 
@@ -103,7 +135,12 @@ export class CallLogsController {
     @Query('limit', new DefaultValuePipe(100), ParseIntPipe) limit?: number,
     @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset?: number,
   ) {
-    const steps = stepRaw ? stepRaw.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
+    const steps = stepRaw
+      ? stepRaw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : undefined;
     return this.callLogsService.listEvents(callId, { limit, offset, steps });
   }
 
@@ -116,8 +153,7 @@ export class CallLogsController {
    */
   @Get(':callId/transcript')
   async getTranscript(@Param('callId') callId: string) {
-    const state =
-      await this.conversationStateRepository.findByCallId(callId);
+    const state = await this.conversationStateRepository.findByCallId(callId);
     if (!state) {
       throw new NotFoundException(
         `No conversation state found for call: ${callId}`,
@@ -136,14 +172,37 @@ export class CallLogsController {
   }
 }
 
-function isValidStatus(s?: string): s is CallStatus {
+function isValidStatus(s: unknown): s is CallStatus {
   return s === 'in_progress' || s === 'completed' || s === 'error';
 }
 
 function isValidSortBy(
-  s?: string,
+  s: unknown,
 ): s is 'createdAt' | 'durationMs' | 'totalResponseLatencyMs' {
   return (
     s === 'createdAt' || s === 'durationMs' || s === 'totalResponseLatencyMs'
   );
+}
+
+function clampPeriod(period: number): number {
+  if (!Number.isFinite(period)) return 7;
+  return Math.min(Math.max(Math.trunc(period), 1), 90);
+}
+
+/**
+ * Query strings parsed by Express can yield arrays or objects (`?agentId[$ne]=x`),
+ * which would reach the database as a query operator. Only accept a plain,
+ * bounded string.
+ */
+function cleanAgentId(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 128) return undefined;
+  return trimmed;
+}
+
+function cleanTimestamp(value: unknown): number | undefined {
+  if (typeof value !== 'string') return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
 }

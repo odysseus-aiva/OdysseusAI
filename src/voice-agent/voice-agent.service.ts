@@ -129,6 +129,7 @@ export class VoiceAgentService {
       updatedAt: now,
     };
     const agentSnapshot: AgentSnapshot = {
+      name: config.agentName,
       llmProvider: config.llmProvider,
       ttsProvider: config.ttsProvider,
       sttProvider: config.sttProvider,
@@ -823,6 +824,15 @@ export class VoiceAgentService {
         );
         return 'interrupted';
       }
+
+      // First audio of the turn reaching the room is the closest proxy we have
+      // for "the user heard something". Without it, response latency silently
+      // degrades to "synthesis finished", which overstates perceived delay.
+      this.performanceService.recordMilestone(
+        context.session.callId,
+        'agent_playback_start',
+        { firstWins: true },
+      );
 
       const result = await this.livekitRtcService.publishPcm(
         roomName,

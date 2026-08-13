@@ -74,6 +74,20 @@ export interface TtsLogData {
 
 export type CallStatus = 'in_progress' | 'completed' | 'error';
 
+/**
+ * Conversation quality, which is orthogonal to `CallStatus`.
+ *
+ * `status` only answers "did the pipeline throw", so a call where the user
+ * connected and left without speaking is indistinguishable from a successful
+ * conversation. Outcome makes that distinction explicit and is derived from
+ * fields already on the call record, so it applies retroactively.
+ */
+export type CallOutcome =
+  | 'engaged' // at least one completed agent response turn
+  | 'no_interaction' // connected and ended cleanly, but never conversed
+  | 'failed' // pipeline error
+  | 'in_progress';
+
 export type CallSentiment = 'positive' | 'negative' | 'neutral';
 
 export interface CallAnalysis {

@@ -11,6 +11,7 @@ import { CostModule } from '../cost/cost.module';
 import { LivekitRtcModule } from '../livekit/livekit-rtc.module';
 import { OrchestrationModule } from '../orchestration/orchestration.module';
 import { AgentsModule } from '../agents/agents.module';
+import { RecordingModule } from '../recording/recording.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AgentsModule } from '../agents/agents.module';
     LivekitRtcModule,
     OrchestrationModule,
     AgentsModule,
+    RecordingModule,
   ],
   controllers: [VoiceAgentController],
   providers: [VoiceAgentService, TurnDetectionService, OmniEngineService],

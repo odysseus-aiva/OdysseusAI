@@ -33,6 +33,7 @@ import {
 } from './engines/omni-engine.service';
 import { TurnDetectionService } from './turn-detection.service';
 import { hasContentWord } from './barge-in.util';
+import { RecordingService } from '../recording/recording.service';
 
 interface ActiveSessionContext {
   session: VoiceAgentSession;
@@ -82,6 +83,7 @@ export class VoiceAgentService {
     private readonly conversationStateService: ConversationStateService,
     private readonly agentToolResolver: AgentToolResolverService,
     private readonly omniEngine: OmniEngineService,
+    private readonly recordingService: RecordingService,
   ) {}
 
   async startSession(
@@ -140,6 +142,7 @@ export class VoiceAgentService {
     };
 
     this.logger.log(`Session created: ${JSON.stringify(session)}`);
+    this.recordingService.startRecording(roomName, callId);
     await this.callLogsService.initCall(callId, roomName, undefined, config.agentId, agentSnapshot, metadata);
     await this.callLogsService.appendLog(callId, 'session_start', {
       roomName: roomName,
@@ -306,6 +309,8 @@ export class VoiceAgentService {
     session.updatedAt = Date.now();
 
     const hasErrors = Boolean(session.error);
+    const recordingUrl = await this.recordingService.stopRecording(roomName).catch(() => null);
+
     await this.callLogsService.appendLog(session.callId, 'session_stop', {
       roomName: roomName,
       data: {
@@ -320,6 +325,7 @@ export class VoiceAgentService {
       turnCount,
       finalLatencyMetrics,
       finalCost,
+      recordingUrl: recordingUrl ?? undefined,
     });
 
     // Fire-and-forget post-call analysis (summary + sentiment).

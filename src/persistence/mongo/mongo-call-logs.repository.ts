@@ -142,6 +142,7 @@ export class MongoCallLogsRepository implements CallLogsRepository {
       finalLatencyMetrics?: LatencyMetrics;
       finalCost?: CallCost;
       agentSnapshot?: AgentSnapshot;
+      recordingUrl?: string;
     },
   ): Promise<void> {
     const $set: Record<string, unknown> = {
@@ -171,6 +172,10 @@ export class MongoCallLogsRepository implements CallLogsRepository {
 
     if (outcome.finalCost) {
       $set.cost = outcome.finalCost;
+    }
+
+    if (outcome.recordingUrl) {
+      $set.recordingUrl = outcome.recordingUrl;
     }
 
     await this.callModel.updateOne({ callId }, { $set }).exec();
@@ -215,6 +220,7 @@ export class MongoCallLogsRepository implements CallLogsRepository {
       turnCount: doc.turnCount ?? 0,
       analysis: doc.analysis as CallAnalysis | undefined,
       cost: doc.cost as CallCost | undefined,
+      recordingUrl: doc.recordingUrl,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
       latencyMetrics: (doc.latencyMetrics as LatencyMetrics) ?? {},
@@ -297,6 +303,7 @@ export class MongoCallLogsRepository implements CallLogsRepository {
       turnCount?: number;
       analysis?: CallAnalysis;
       cost?: CallCost;
+      recordingUrl?: string;
       latencyMetrics?: LatencyMetrics;
       callErrors?: string[];
       createdAt: number;
@@ -328,6 +335,7 @@ export class MongoCallLogsRepository implements CallLogsRepository {
       turnCount: call.turnCount ?? 0,
       analysis: call.analysis,
       cost: call.cost,
+      recordingUrl: call.recordingUrl,
       createdAt: call.createdAt,
       updatedAt: call.updatedAt,
       latencyMetrics: call.latencyMetrics ?? {},

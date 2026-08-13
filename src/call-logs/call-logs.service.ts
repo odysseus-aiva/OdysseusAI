@@ -111,6 +111,7 @@ export class CallLogsService {
       turnCount?: number;
       finalLatencyMetrics?: LatencyMetrics;
       finalCost?: CallCost;
+      recordingUrl?: string;
     },
   ): Promise<void> {
     const endedAt = Date.now();
@@ -136,6 +137,7 @@ export class CallLogsService {
       finalLatencyMetrics: opts?.finalLatencyMetrics,
       finalCost: opts?.finalCost,
       agentSnapshot,
+      recordingUrl: opts?.recordingUrl,
     });
 
     this.logger.log(

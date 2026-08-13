@@ -48,13 +48,19 @@ function providerName(id: string | undefined, fallback: string): string {
 export function resolveHero(ctx: HeroContext): HeroContent {
   const { phase, agent, agentCount, error } = ctx;
 
+  const pipelineProviders = (dp?: { llm?: string; stt?: string; tts?: string }) => [
+    { label: 'LLM', value: providerName(dp?.llm, DEFAULTS.llm) },
+    { label: 'STT', value: providerName(dp?.stt, DEFAULTS.stt) },
+    { label: 'TTS', value: providerName(dp?.tts, DEFAULTS.tts) },
+  ];
+
   const providers = agent
-    ? [
-        { label: 'LLM', value: providerName(agent.defaultProviders?.llm, DEFAULTS.llm) },
-        { label: 'STT', value: providerName(agent.defaultProviders?.stt, DEFAULTS.stt) },
-        { label: 'TTS', value: providerName(agent.defaultProviders?.tts, DEFAULTS.tts) },
-      ]
-    : [];
+    ? agent.engine === 'omni'
+      ? [{ label: 'Powered by', value: 'PyAI Omni' }]
+      : pipelineProviders(agent.defaultProviders)
+    : agentCount > 0
+      ? pipelineProviders()
+      : [];
 
   if (phase === 'error') {
     return {

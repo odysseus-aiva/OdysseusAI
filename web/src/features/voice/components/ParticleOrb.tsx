@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, useCallback, forwardRef, useImperativeHandle, useState } from 'react';
 import * as THREE from 'three';
 import type { VoiceState } from '../types';
 import type { AudioFrame } from '../hooks/useAudioLevel';
 import {
-  ORB_STATES,
   ORB_NUMERIC_KEYS,
   DEFAULT_ENTER_RATE,
+  resolveOrbState,
   type OrbNumericKey,
 } from '../orb-states';
 
@@ -204,16 +204,28 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
   const audioRef     = useRef(audioLevel);
   const audioDataRef = useRef<React.RefObject<AudioFrame | null> | undefined>(audioData);
   const rafRef       = useRef<number>(0);
+  // Force remount when html data-theme flips (source of truth for light/dark).
+  const [themeTick, setThemeTick] = useState(0);
 
   // Keep props in sync with the imperative refs the render loop reads.
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { audioRef.current = audioLevel; }, [audioLevel]);
   useEffect(() => { audioDataRef.current = audioData; }, [audioData]);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    const obs = new MutationObserver(() => setThemeTick((n) => n + 1));
+    obs.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+
   const setState = useCallback((v: VoiceState) => { stateRef.current = v; }, []);
   const setAudioLevel = useCallback((v: number) => { audioRef.current = v; }, []);
 
   useImperativeHandle(ref, () => ({ setState, setAudioLevel }), [setState, setAudioLevel]);
+
+  const htmlTheme = (): 'light' | 'dark' =>
+    document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
 
   useEffect(() => {
     const container = containerRef.current;
@@ -222,6 +234,8 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const PARTICLE_COUNT = window.matchMedia('(min-width:768px)').matches ? 90_000 : 35_000;
     const pr = Math.min(window.devicePixelRatio || 1, 2);
+    const theme = htmlTheme();
+    const lightTheme = theme === 'light';
 
     // ── Renderer ──────────────────────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
@@ -263,7 +277,7 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
     geo.setAttribute('aSize',    new THREE.BufferAttribute(aSize,  1));
 
     // ── Uniforms ──────────────────────────────────────────────────────────
-    const initial = ORB_STATES[stateRef.current] ?? ORB_STATES.idle;
+    const initial = resolveOrbState(stateRef.current, theme);
     const uniforms = {
       uTime:         { value: 0 },
       uRotPhase:     { value: 0 },
@@ -288,6 +302,8 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
       uFar:          { value: 100 },
     };
 
+    // Additive glow works on dark; black particles on light need normal blending
+    // or they disappear (additive black contributes nothing).
     const mat = new THREE.ShaderMaterial({
       uniforms,
       vertexShader:   VERT,
@@ -295,7 +311,7 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
       transparent:    true,
       depthTest:      false,
       depthWrite:     false,
-      blending:       THREE.AdditiveBlending,
+      blending:       lightTheme ? THREE.NormalBlending : THREE.AdditiveBlending,
     });
 
     scene.add(new THREE.Points(geo, mat));
@@ -317,8 +333,6 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
     if (!reduceMotion) window.addEventListener('mousemove', onMouse);
 
     // ── Animated scalar bank ──────────────────────────────────────────────
-    // Every numeric field in OrbVisualState is lerped generically, so a new
-    // state entry animates correctly with no loop changes.
     const current: Record<OrbNumericKey, number> = {
       noiseAmp:      initial.noiseAmp,
       rotSpeed:      initial.rotSpeed,
@@ -332,14 +346,16 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
       ring:          initial.ring,
     };
 
+    // Snap to resolved colors immediately (no lerp from cyan leftovers).
     const colBase   = new THREE.Color(initial.colorBase);
     const colAccent = new THREE.Color(initial.colorAccent);
-    const tgtBase   = new THREE.Color();
-    const tgtAccent = new THREE.Color();
+    const tgtBase   = new THREE.Color(initial.colorBase);
+    const tgtAccent = new THREE.Color(initial.colorAccent);
 
     let smoothedAudio = 0;
     let sBass = 0, sMid = 0, sTreble = 0;
     let ringPainted = -1;
+    let activeTheme = theme;
 
     // Heavy smoothing so reactions read as fluid surface energy, not twitch:
     // gentle attack, slow release.
@@ -361,21 +377,26 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
       const dt  = Math.min((now - prevNow) / 1000, 0.05);
       prevNow   = now;
 
-      const target = ORB_STATES[stateRef.current] ?? ORB_STATES.idle;
+      const nextTheme = htmlTheme();
+      if (nextTheme !== activeTheme) {
+        activeTheme = nextTheme;
+        mat.blending = nextTheme === 'light' ? THREE.NormalBlending : THREE.AdditiveBlending;
+        mat.needsUpdate = true;
+      }
+
+      const target = resolveOrbState(stateRef.current, activeTheme);
       const rate = Math.min((target.enterRate ?? DEFAULT_ENTER_RATE) * (dt * 60), 1);
 
-      // Lerp every numeric field toward the active state.
       for (const key of ORB_NUMERIC_KEYS) {
         current[key] += (target[key] - current[key]) * rate;
       }
 
-      // Lerp colors in the same pass.
       tgtBase.set(target.colorBase);
       tgtAccent.set(target.colorAccent);
       colBase.lerp(tgtBase, rate);
       colAccent.lerp(tgtAccent, rate);
 
-      // Live audio: prefer the per-frame spectral ref, fall back to the scalar
+// Live audio: prefer the per-frame spectral ref, fall back to the scalar
       // prop. Smooth level + each band, then gate everything by the state's
       // reactivity (thinking/idle/etc. read as 0 → purely autonomous motion).
       const frame = audioDataRef.current?.current;
@@ -393,24 +414,22 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
       uniforms.uAmpPulse.value    = current.ampPulse;
       uniforms.uConverge.value    = current.converge;
       uniforms.uRipple.value      = current.ripple;
-      uniforms.uAudio.value       = compress(smoothedAudio) * react;
+uniforms.uAudio.value       = compress(smoothedAudio) * react;
       uniforms.uBass.value        = compress(sBass) * react;
       uniforms.uMid.value         = compress(sMid) * react;
       uniforms.uTreble.value      = compress(sTreble) * react;
-      uniforms.uColorBase.value   = colBase;
-      uniforms.uColorAccent.value = colAccent;
+      uniforms.uColorBase.value.copy(colBase);
+      uniforms.uColorAccent.value.copy(colAccent);
 
-      // Rotation is phase-accumulated so speed changes never snap the angle.
       uniforms.uRotSpeed.value = current.rotSpeed;
       uniforms.uRotPhase.value += current.rotSpeed * dt * 60 * (reduceMotion ? 0.25 : 1);
 
-      // Fade in, then respect the state's target opacity.
       const fadeIn = Math.min((now - mountTime) / FADE_DURATION, 1);
       uniforms.uOpacity.value = fadeIn * current.opacity;
 
       uniforms.uTime.value += reduceMotion ? dt * 0.35 : dt;
 
-      // Outer energy ring — a DOM layer, repainted only when it visibly moves.
+// Outer energy ring — a DOM layer, repainted only when it visibly moves.
       const ringIntensity = current.ring * (1 + compress(smoothedAudio) * current.audioReactive * 0.4);
       if (ringRef.current && Math.abs(ringIntensity - ringPainted) > 0.004) {
         ringPainted = ringIntensity;
@@ -418,7 +437,6 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
         ringRef.current.style.transform = `scale(${1 + ringIntensity * 0.06})`;
       }
 
-      // Camera parallax
       curPX += (tgtPX - curPX) * 0.05;
       curPY += (tgtPY - curPY) * 0.05;
       camera.position.set(-curPX * 0.22, curPY * 0.22, camZ);
@@ -428,7 +446,6 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
     };
     tick();
 
-    // ── Cleanup ───────────────────────────────────────────────────────────
     return () => {
       cancelAnimationFrame(rafRef.current);
       window.removeEventListener('mousemove', onMouse);
@@ -438,9 +455,14 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
       mat.dispose();
       if (container.contains(canvas)) container.removeChild(canvas);
     };
-  }, [size]);
+  }, [size, themeTick]);
 
-  const activeColor = (ORB_STATES[state] ?? ORB_STATES.idle).colorBase;
+  const activeColor = resolveOrbState(
+    state,
+    typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light'
+      ? 'light'
+      : 'dark',
+  ).colorBase;
 
   return (
     <div

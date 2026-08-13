@@ -36,12 +36,18 @@ export interface OrbVisualState {
   enterRate?: number;
 }
 
-/** Cyan → violet is the platform's resting identity. */
+/** Cyan → violet is the platform's resting identity (dark theme). */
 const CYAN = '#00c8e8';
 const VIOLET = '#7b2fff';
 const GREEN = '#34d97e';
 const ROSE = '#fb7185';
 const AMBER = '#fbbf24';
+
+/** Light theme: near-black shell so the orb reads on a white field. */
+const INK = '#000000';
+const INK_SOFT = '#1a1a1a';
+const INK_MID = '#0d0d0d';
+const INK_GREEN = '#0a140c';
 
 export const ORB_STATES: Record<VoiceState, OrbVisualState> = {
   /** Slow breathing, subtle drift, ambient glow. The resting signature. */
@@ -158,6 +164,30 @@ export const ORB_STATES: Record<VoiceState, OrbVisualState> = {
     enterRate: 0.16,
   },
 };
+
+/** Light-theme color overrides — black/charcoal on white (error stays rose). */
+const LIGHT_COLORS: Partial<
+  Record<VoiceState, Pick<OrbVisualState, 'colorBase' | 'colorAccent' | 'opacity'>>
+> = {
+  idle:         { colorBase: INK, colorAccent: INK_SOFT, opacity: 0.88 },
+  connecting:   { colorBase: INK_MID, colorAccent: INK_MID, opacity: 0.92 },
+  listening:    { colorBase: INK, colorAccent: INK_SOFT, opacity: 0.90 },
+  thinking:     { colorBase: INK_MID, colorAccent: INK_SOFT, opacity: 0.92 },
+  speaking:     { colorBase: INK_GREEN, colorAccent: INK, opacity: 0.94 },
+  disconnected: { colorBase: '#6b7280', colorAccent: '#6b7280', opacity: 0.45 },
+  error:        { colorBase: ROSE, colorAccent: AMBER, opacity: 0.90 },
+};
+
+/** Resolve orb visuals for the active color theme. */
+export function resolveOrbState(
+  state: VoiceState,
+  theme: 'dark' | 'light' = 'dark',
+): OrbVisualState {
+  const base = ORB_STATES[state] ?? ORB_STATES.idle;
+  if (theme !== 'light') return base;
+  const light = LIGHT_COLORS[state];
+  return light ? { ...base, ...light } : base;
+}
 
 /** Numeric fields the render loop lerps generically. */
 export const ORB_NUMERIC_KEYS = [

@@ -12,7 +12,7 @@ interface LiveTranscriptPanelProps {
 
 /**
  * Live call captions — Agent / Customer turns beside the orb.
- * Quiet glass rail so the orb stays the visual center.
+ * Token-driven so light mode stays bright paper; dark stays quiet glass.
  */
 export function LiveTranscriptPanel({
   lines,
@@ -25,7 +25,6 @@ export function LiveTranscriptPanel({
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
-    // Instant scroll — smooth animation lags behind live typing.
     el.scrollTop = el.scrollHeight;
   }, [lines.length, lastText]);
 
@@ -33,22 +32,26 @@ export function LiveTranscriptPanel({
     <aside
       className="flex w-full flex-col overflow-hidden rounded-[18px]"
       style={{
-        background: 'rgb(8 10 16 / 0.72)',
-        border: '1px solid var(--color-border)',
-        boxShadow: '0 12px 40px rgb(0 0 0 / 0.45)',
-        backdropFilter: 'blur(18px)',
+        /* Elevated cool sheet — separates from pale void in light mode */
+        background: 'var(--color-surface-elevated)',
+        border: '1px solid var(--color-border-strong)',
+        boxShadow:
+          '0 1px 0 var(--color-border-strong), 0 16px 40px rgb(12 17 32 / 0.14)',
         maxHeight: 'min(420px, 46vh)',
       }}
       aria-label="Live transcription"
     >
       <header
         className="flex shrink-0 items-center justify-between gap-3 px-4 py-3"
-        style={{ borderBottom: '1px solid var(--color-border)' }}
+        style={{
+          background: 'color-mix(in srgb, var(--color-surface-elevated) 70%, var(--color-surface) 30%)',
+          borderBottom: '1px solid var(--color-border-strong)',
+        }}
       >
         <div className="flex items-center gap-2.5">
           <span className="relative flex h-2 w-2" aria-hidden>
             <span
-              className="absolute inset-0 animate-ping rounded-full opacity-60"
+              className="absolute inset-0 animate-ping rounded-full opacity-50"
               style={{ background: 'var(--color-accent)' }}
             />
             <span
@@ -57,15 +60,19 @@ export function LiveTranscriptPanel({
             />
           </span>
           <span
-            className="text-[10px] font-[600] uppercase tracking-[0.24em]"
-            style={{ color: 'var(--color-text-faint)' }}
+            className="text-[10px] font-[600] uppercase tracking-[0.2em]"
+            style={{ color: 'var(--color-text-muted)' }}
           >
             Live transcript
           </span>
         </div>
         <span
-          className="font-mono text-[10.5px]"
-          style={{ color: 'var(--color-text-muted)' }}
+          className="rounded-full px-2 py-0.5 font-mono text-[10.5px]"
+          style={{
+            color: 'var(--color-text-muted)',
+            background: 'var(--color-glass)',
+            border: '1px solid var(--color-border)',
+          }}
         >
           {lines.length === 0
             ? 'waiting'
@@ -76,12 +83,15 @@ export function LiveTranscriptPanel({
       <div
         ref={scrollerRef}
         className="flex-1 overflow-y-auto px-3 py-3"
-        style={{ scrollbarGutter: 'stable' }}
+        style={{
+          scrollbarGutter: 'stable',
+          background: 'var(--color-surface-elevated)',
+        }}
       >
         {!ready || lines.length === 0 ? (
           <EmptyState listening={ready} />
         ) : (
-          <ul className="flex flex-col gap-2.5">
+          <ul className="flex flex-col gap-3">
             {lines.map((line, index) => (
               <TranscriptLine
                 key={line.id}
@@ -123,47 +133,70 @@ function TranscriptLine({
 }) {
   const isAgent = line.role === 'assistant';
   const label = isAgent ? agentName : 'Customer';
-  const accent = isAgent ? 'var(--color-accent)' : 'var(--color-text-muted)';
 
   return (
     <li
-      className="relative rounded-[12px] px-3 py-2.5"
-      style={{
-        background: isAgent ? 'var(--color-accent-subtle)' : 'var(--color-glass)',
-        border: `1px solid ${isAgent ? 'var(--color-accent-hairline)' : 'var(--color-border)'}`,
-        boxShadow: isLatest && isAgent ? '0 0 24px var(--color-accent-glow)' : undefined,
-      }}
+      className={`flex ${isAgent ? 'justify-start' : 'justify-end'}`}
     >
-      <div className="mb-1 flex items-center gap-1.5">
-        {isAgent ? (
-          <AudioLines size={12} strokeWidth={2} style={{ color: accent }} />
-        ) : (
-          <User size={12} strokeWidth={2} style={{ color: accent }} />
-        )}
-        <span
-          className="text-[11px] font-[600] tracking-[0.04em]"
-          style={{ color: accent }}
-        >
-          {label}
-        </span>
-        <time
-          className="ml-auto font-mono text-[10px]"
-          style={{ color: 'var(--color-text-faint)' }}
-          dateTime={new Date(line.timestamp).toISOString()}
-        >
-          {formatClock(line.timestamp)}
-        </time>
-      </div>
-      <p
-        className="whitespace-pre-wrap text-[13.5px] leading-[1.55]"
+      <div
+        className="relative max-w-[92%] rounded-[14px] px-3.5 py-2.5"
         style={{
-          color: 'var(--color-text)',
-          opacity: line.isFinal ? 1 : 0.78,
+          /* White bubbles on cool sheet — readable lift in light mode */
+          background: isAgent
+            ? 'var(--color-accent-subtle)'
+            : 'var(--color-surface)',
+          border: `1px solid ${
+            isAgent ? 'var(--color-accent-border)' : 'var(--color-border-strong)'
+          }`,
+          borderLeft: isAgent
+            ? '3px solid var(--color-accent)'
+            : '1px solid var(--color-border-strong)',
+          boxShadow: isLatest
+            ? '0 2px 8px rgb(12 17 32 / 0.1)'
+            : '0 1px 2px rgb(12 17 32 / 0.05)',
         }}
       >
-        {line.text}
-        {!line.isFinal ? <Caret /> : null}
-      </p>
+        <div className="mb-1 flex items-center gap-1.5">
+          {isAgent ? (
+            <AudioLines
+              size={12}
+              strokeWidth={2}
+              style={{ color: 'var(--color-accent)' }}
+            />
+          ) : (
+            <User
+              size={12}
+              strokeWidth={2}
+              style={{ color: 'var(--color-text-muted)' }}
+            />
+          )}
+          <span
+            className="text-[11px] font-[600] tracking-[0.03em]"
+            style={{
+              color: isAgent ? 'var(--color-accent)' : 'var(--color-text-muted)',
+            }}
+          >
+            {label}
+          </span>
+          <time
+            className="ml-auto font-mono text-[10px]"
+            style={{ color: 'var(--color-text-faint)' }}
+            dateTime={new Date(line.timestamp).toISOString()}
+          >
+            {formatClock(line.timestamp)}
+          </time>
+        </div>
+        <p
+          className="whitespace-pre-wrap text-[13.5px] leading-[1.55]"
+          style={{
+            color: 'var(--color-text)',
+            opacity: line.isFinal ? 1 : 0.72,
+          }}
+        >
+          {line.text}
+          {!line.isFinal ? <Caret /> : null}
+        </p>
+      </div>
     </li>
   );
 }

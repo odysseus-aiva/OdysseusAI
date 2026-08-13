@@ -17,6 +17,7 @@ import {
   Moon,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
+import { useVoiceStore } from '@/features/voice/state/voice.store';
 
 const NAV_SECTIONS = [
   { href: '/', icon: Mic2, label: 'Voice', exact: true },
@@ -35,12 +36,14 @@ function NavItem({
   label,
   exact,
   index,
+  rail,
 }: {
   href: string;
   icon: React.ElementType;
   label: string;
   exact?: boolean;
   index: number;
+  rail: boolean;
 }) {
   const pathname = usePathname();
   const active = exact ? pathname === href : pathname.startsWith(href);
@@ -54,10 +57,13 @@ function NavItem({
       <Link
         href={href}
         title={label}
-        className="group relative flex items-center gap-3 rounded-[8px] px-3 py-[7px] max-lg:justify-center max-lg:px-0"
+        className={`group relative flex items-center gap-3 rounded-[8px] py-[7px] ${
+          rail
+            ? 'justify-center px-0'
+            : 'px-3 max-lg:justify-center max-lg:px-0'
+        }`}
         style={{ color: active ? 'var(--color-accent)' : 'var(--color-text-muted)' }}
       >
-        {/* Shared layout animation for active pill */}
         {active && (
           <motion.div
             layoutId="nav-pill"
@@ -71,7 +77,6 @@ function NavItem({
           />
         )}
 
-        {/* Hover surface — no layout animation so it's always instant */}
         <span
           className="absolute inset-0 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity duration-[140ms] pointer-events-none"
           style={{ background: 'rgb(255 255 255 / 0.035)' }}
@@ -85,14 +90,15 @@ function NavItem({
           />
         </span>
 
-        <span
-          className="relative z-10 text-[13px] font-[450] leading-none tracking-[-0.01em] transition-colors duration-[140ms] group-hover:text-[--color-text] max-lg:hidden"
-          style={{ color: active ? 'var(--color-accent)' : undefined }}
-        >
-          {label}
-        </span>
+        {!rail && (
+          <span
+            className="relative z-10 text-[13px] font-[450] leading-none tracking-[-0.01em] transition-colors duration-[140ms] group-hover:text-[--color-text] max-lg:hidden"
+            style={{ color: active ? 'var(--color-accent)' : undefined }}
+          >
+            {label}
+          </span>
+        )}
 
-        {/* Active left accent stripe */}
         {active && (
           <motion.span
             layoutId="nav-stripe"
@@ -113,33 +119,40 @@ function NavItem({
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { theme, toggle } = useTheme();
+  const phase = useVoiceStore((s) => s.phase);
+  // Icon rail during an active / connecting call — expands again on idle/error.
+  const callRail = phase === 'requesting' || phase === 'connected';
+
   return (
     <div
-      className="fixed inset-0 z-10 flex [--sidebar-w:var(--width-sidebar-rail)] lg:[--sidebar-w:var(--width-sidebar-full)]"
+      className={`fixed inset-0 z-10 flex ${
+        callRail
+          ? '[--sidebar-w:var(--width-sidebar-rail)]'
+          : '[--sidebar-w:var(--width-sidebar-rail)] lg:[--sidebar-w:var(--width-sidebar-full)]'
+      }`}
     >
-      {/* Sidebar */}
+      {/* Sidebar — full labels on lg+, icon rail when narrow or mid-call */}
       <motion.aside
-        className="relative flex h-full flex-shrink-0 flex-col"
+        className="relative flex h-full flex-shrink-0 flex-col overflow-hidden"
         initial={{ opacity: 0, x: -16 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
         style={{
-          // Collapses to an icon rail below `lg` so narrow viewports keep a
-          // usable content column.
           width: 'var(--sidebar-w)',
           background: 'var(--color-sidebar)',
           borderRight: '1px solid var(--color-border)',
         }}
+        data-rail={callRail ? 'true' : undefined}
+        aria-label={callRail ? 'Platform navigation (collapsed)' : 'Platform navigation'}
       >
-        {/* Top accent hairline — a thin horizontal glow at the very top */}
         <div
           className="absolute top-0 left-4 right-4 h-px pointer-events-none"
           style={{
-            background: 'linear-gradient(90deg, transparent, var(--color-accent-border) 40%, var(--color-accent-border) 60%, transparent)',
+            background:
+              'linear-gradient(90deg, transparent, var(--color-accent-border) 40%, var(--color-accent-border) 60%, transparent)',
           }}
         />
 
-        {/* Sidebar ambient fill — mirrors the orb's energy field */}
         <div
           className="pointer-events-none absolute inset-0"
           style={{
@@ -150,7 +163,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Logo */}
         <motion.div
-          className="flex items-center gap-2.5 px-4 pb-5 pt-5 max-lg:justify-center max-lg:px-0"
+          className={`flex items-center gap-2.5 pb-5 pt-5 ${
+            callRail ? 'justify-center px-0' : 'px-4 max-lg:justify-center max-lg:px-0'
+          }`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.08, ease: 'easeOut' }}
@@ -160,48 +175,63 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             style={{
               width: 30,
               height: 30,
-              background: 'linear-gradient(145deg, var(--color-accent-soft), var(--color-accent-trace))',
+              background:
+                'linear-gradient(145deg, var(--color-accent-soft), var(--color-accent-trace))',
               border: '1px solid var(--color-accent-ring)',
               boxShadow: '0 0 12px var(--color-accent-soft)',
             }}
           >
             <Mic2 size={13} color="var(--color-accent)" strokeWidth={2.2} />
           </div>
-          <div className="flex flex-col gap-0 max-lg:hidden">
+          {!callRail && (
+            <div className="flex flex-col gap-0 max-lg:hidden">
+              <span
+                className="text-[13.5px] font-[650] tracking-[-0.03em] leading-none"
+                style={{ color: 'var(--color-text)' }}
+              >
+                Odysseus
+              </span>
+              <span
+                className="text-[10px] font-[450] tracking-[0.06em] leading-none mt-[3px]"
+                style={{ color: 'var(--color-text-faint)' }}
+              >
+                VOICE AI
+              </span>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Section label — major Platform nav only when expanded */}
+        {!callRail && (
+          <motion.div
+            className="px-3 pb-1.5 max-lg:hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.4, delay: 0.14 }}
+          >
             <span
-              className="text-[13.5px] font-[650] tracking-[-0.03em] leading-none"
-              style={{ color: 'var(--color-text)' }}
-            >
-              Odysseus
-            </span>
-            <span
-              className="text-[10px] font-[450] tracking-[0.06em] leading-none mt-[3px]"
+              className="text-[10px] font-[600] uppercase tracking-[0.1em] px-2"
               style={{ color: 'var(--color-text-faint)' }}
             >
-              VOICE AI
+              Platform
             </span>
-          </div>
-        </motion.div>
+          </motion.div>
+        )}
 
-        {/* Nav section label */}
-        <motion.div
-          className="px-3 pb-1.5 max-lg:hidden"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.4, delay: 0.14 }}
+        {/* Major sections — icons always; labels only when expanded */}
+        <nav
+          className={`flex flex-1 flex-col gap-0.5 overflow-y-auto ${
+            callRail ? 'px-1.5' : 'px-2 max-lg:px-1.5'
+          }`}
+          aria-label="Major sections"
         >
-          <span
-            className="text-[10px] font-[600] uppercase tracking-[0.1em] px-2"
-            style={{ color: 'var(--color-text-faint)' }}
-          >
-            Platform
-          </span>
-        </motion.div>
-
-        {/* Nav items */}
-        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 max-lg:px-1.5">
           {NAV_SECTIONS.map((item, i) => (
-            <NavItem key={item.href} {...item} index={i} />
+            <NavItem
+              key={item.href}
+              {...item}
+              index={i}
+              rail={callRail}
+            />
           ))}
         </nav>
 
@@ -213,32 +243,41 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4, delay: 0.55 }}
         >
-          <div className="flex items-center gap-2 rounded-[8px] px-2 py-1.5 max-lg:justify-center max-lg:px-0">
+          <div
+            className={`flex items-center gap-2 rounded-[8px] py-1.5 ${
+              callRail ? 'justify-center px-0' : 'px-2 max-lg:justify-center max-lg:px-0'
+            }`}
+          >
             <div
               className="flex-shrink-0 rounded-full flex items-center justify-center text-[9px] font-[700]"
               style={{
                 width: 22,
                 height: 22,
-                background: 'linear-gradient(135deg, var(--color-surface-elevated), var(--color-surface-raised))',
+                background:
+                  'linear-gradient(135deg, var(--color-surface-elevated), var(--color-surface-raised))',
                 border: '1px solid var(--color-border-strong)',
                 color: 'var(--color-text-faint)',
               }}
             >
               v1
             </div>
-            <span
-              className="text-[11.5px] font-[450] max-lg:hidden flex-1"
-              style={{ color: 'var(--color-text-faint)' }}
-            >
-              v0.1.0
-            </span>
+            {!callRail && (
+              <span
+                className="text-[11.5px] font-[450] max-lg:hidden flex-1"
+                style={{ color: 'var(--color-text-faint)' }}
+              >
+                v0.1.0
+              </span>
+            )}
 
-            {/* Theme toggle */}
+            {/* Theme toggle — compact on rail / narrow; labeled slot when full */}
             <button
               type="button"
               onClick={toggle}
               aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-              className="max-lg:hidden flex-shrink-0 flex items-center justify-center rounded-[7px] transition-colors duration-[140ms]"
+              className={`flex-shrink-0 flex items-center justify-center rounded-[7px] transition-colors duration-[140ms] ${
+                callRail ? '' : 'max-lg:hidden'
+              }`}
               style={{ width: 26, height: 26, color: 'var(--color-text-faint)' }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = 'var(--color-surface-raised)';
@@ -249,28 +288,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 e.currentTarget.style.color = 'var(--color-text-faint)';
               }}
             >
-              {theme === 'dark'
-                ? <Sun size={13} strokeWidth={2} />
-                : <Moon size={13} strokeWidth={2} />}
+              {theme === 'dark' ? (
+                <Sun size={13} strokeWidth={2} />
+              ) : (
+                <Moon size={13} strokeWidth={2} />
+              )}
             </button>
 
-            {/* Compact toggle for the icon-rail (narrow screens) */}
-            <button
-              type="button"
-              onClick={toggle}
-              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-              className="lg:hidden flex items-center justify-center rounded-[7px] transition-colors duration-[140ms]"
-              style={{ width: 26, height: 26, color: 'var(--color-text-faint)' }}
-            >
-              {theme === 'dark'
-                ? <Sun size={13} strokeWidth={2} />
-                : <Moon size={13} strokeWidth={2} />}
-            </button>
+            {!callRail && (
+              <button
+                type="button"
+                onClick={toggle}
+                aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+                className="lg:hidden flex items-center justify-center rounded-[7px] transition-colors duration-[140ms]"
+                style={{ width: 26, height: 26, color: 'var(--color-text-faint)' }}
+              >
+                {theme === 'dark' ? (
+                  <Sun size={13} strokeWidth={2} />
+                ) : (
+                  <Moon size={13} strokeWidth={2} />
+                )}
+              </button>
+            )}
           </div>
         </motion.div>
       </motion.aside>
 
-      {/* Main scroll container */}
       <main
         className="relative flex-1 h-full overflow-y-auto overflow-x-hidden"
         style={{ background: 'var(--color-void)' }}

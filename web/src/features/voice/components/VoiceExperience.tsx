@@ -191,6 +191,7 @@ export function VoiceExperience() {
             >
               <VoiceRoom
                 agent={selectedAgent}
+                callId={connection.callId}
                 onDisconnect={handleDisconnect}
                 onReconnect={handleReconnect}
               />

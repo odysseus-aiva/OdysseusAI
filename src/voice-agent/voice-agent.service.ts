@@ -53,6 +53,8 @@ interface ActiveSessionContext {
   turnCount: number;
   /** Set only for the Omni engine — the live Omni socket bridge. */
   omni?: OmniHandle | null;
+  /** Omni greeting already revealed in the live caption panel. */
+  greetingCaptionSent?: boolean;
 }
 
 const DEFAULT_AGENT_CONFIG: AgentConfig = {
@@ -265,6 +267,7 @@ export class VoiceAgentService {
 
     const { session, sttStream } = context;
     this.clearBargeInConfirm(context);
+    this.livekitRtcService.cancelAssistantCaption(roomName);
     this.livekitRtcService.stopPlayback(roomName);
 
     if (sttStream) {
@@ -416,17 +419,33 @@ export class VoiceAgentService {
         },
         onStatus: (status) => {
           const active = this.sessions.get(roomName);
-          if (active) this.setStatus(active, status);
+          if (!active) return;
+          this.setStatus(active, status);
+          // Greeting text is known up-front — start typing it as soon as Omni speaks.
+          if (
+            status === 'speaking' &&
+            !active.greetingCaptionSent &&
+            config.greeting?.trim()
+          ) {
+            active.greetingCaptionSent = true;
+            void this.livekitRtcService.streamAssistantCaption(
+              roomName,
+              config.greeting,
+            );
+          }
         },
         onBargeIn: () => {
+          this.livekitRtcService.cancelAssistantCaption(roomName);
           if (this.isBargeInEnabled()) {
             this.livekitRtcService.stopPlayback(roomName);
           }
         },
         onSessionEnd: () => {
+          this.livekitRtcService.cancelAssistantCaption(roomName);
           void this.stopSession(roomName, 'agent');
         },
         onFatalError: (message) => {
+          this.livekitRtcService.cancelAssistantCaption(roomName);
           const active = this.sessions.get(roomName);
           if (active) {
             active.session.error = message;
@@ -436,6 +455,38 @@ export class VoiceAgentService {
           void this.stopSession(roomName, 'error');
         },
         onTranscript: (event: OmniTranscriptEvent) => {
+          if (event.role === 'assistant') {
+            const text = event.text.trim();
+            if (!text) {
+              /* empty */
+            } else if (
+              // Only skip the Omni echo of the greeting we already started typing.
+              event.isFinal &&
+              config.greeting?.trim() &&
+              normalizeCaption(config.greeting) === normalizeCaption(text)
+            ) {
+              // Still force a final commit in case the greeting stream was aborted.
+              void this.livekitRtcService.publishLiveTranscript(roomName, {
+                role: 'assistant',
+                text,
+                isFinal: true,
+              });
+            } else if (event.isFinal) {
+              void this.livekitRtcService.streamAssistantCaption(roomName, text);
+            } else {
+              void this.livekitRtcService.publishLiveTranscript(roomName, {
+                role: 'assistant',
+                text,
+                isFinal: false,
+              });
+            }
+          } else {
+            void this.livekitRtcService.publishLiveTranscript(roomName, {
+              role: 'user',
+              text: event.text,
+              isFinal: event.isFinal,
+            });
+          }
           if (!event.isFinal) return;
           void (async () => {
             try {
@@ -832,6 +883,7 @@ export class VoiceAgentService {
 
     if (greeting === '') return;
 
+    void this.livekitRtcService.streamAssistantCaption(roomName, greeting);
     await this.speakToRoom(roomName, greeting);
 
     await this.callLogsService.appendLog(
@@ -853,10 +905,7 @@ export class VoiceAgentService {
     );
   }
 
-  private async handleSttEvent(
-    roomName: string,
-    event: SttEvent,
-  ): Promise<void> {
+  private handleSttEvent(roomName: string, event: SttEvent): void {
     const context = this.sessions.get(roomName);
     if (!context) return;
 
@@ -868,33 +917,51 @@ export class VoiceAgentService {
     const { session } = context;
     const silenceMs = session.agentConfig.turnSilenceMs ?? 700;
 
-    await this.callLogsService.appendLog(session.callId, 'stt_event', {
-      roomName: roomName,
-      participantId: session.participantId,
-      data: { event },
-    });
-
-    if (event.type === 'interim' && event.transcript) {
-      session.interimTranscript = event.transcript;
+    // Captions first — never wait on Mongo before pushing to the browser.
+    if (
+      (event.type === 'interim' || event.type === 'final') &&
+      event.transcript
+    ) {
+      if (event.type === 'interim') {
+        session.interimTranscript = event.transcript;
+      } else {
+        session.finalTranscript = event.transcript;
+        this.performanceService.recordMilestone(
+          session.callId,
+          'stt_final_transcript',
+        );
+      }
+      void this.livekitRtcService.publishLiveTranscript(roomName, {
+        role: 'user',
+        text: event.transcript,
+        isFinal: event.type === 'final',
+      });
     }
 
-    if (event.type === 'final' && event.transcript) {
-      session.finalTranscript = event.transcript;
-      this.performanceService.recordMilestone(
-        session.callId,
-        'stt_final_transcript',
-      );
+    // Skip persisting every interim (high-frequency); keep finals + speech markers.
+    if (event.type !== 'interim') {
+      void this.callLogsService.appendLog(session.callId, 'stt_event', {
+        roomName: roomName,
+        participantId: session.participantId,
+        data: { event },
+      });
     }
 
     if (event.type === 'speech_start') {
-      this.performanceService.recordMilestone(session.callId, 'user_speech_start');
+      this.performanceService.recordMilestone(
+        session.callId,
+        'user_speech_start',
+      );
       if (!context.isAgentSpeaking) {
         session.status = 'listening';
       }
     }
 
     if (event.type === 'speech_end') {
-      this.performanceService.recordMilestone(session.callId, 'user_speech_end');
+      this.performanceService.recordMilestone(
+        session.callId,
+        'user_speech_end',
+      );
     }
 
     const turnDecision = this.turnDetectionService.detectFromSttEvent(
@@ -912,7 +979,7 @@ export class VoiceAgentService {
     if (turnDecision) {
       // stt_turn_signal carries low-level speech_start / speech_end markers from STT.
       // The user's full turn completing is logged as user_turn_end in onUserTurnComplete.
-      await this.callLogsService.appendLog(session.callId, 'stt_turn_signal', {
+      void this.callLogsService.appendLog(session.callId, 'stt_turn_signal', {
         roomName: roomName,
         data: { decision: turnDecision },
       });
@@ -1088,6 +1155,11 @@ export class VoiceAgentService {
       data: { textLength: orchestration.speakableText.length },
     });
 
+    void this.livekitRtcService.streamAssistantCaption(
+      roomName,
+      orchestration.speakableText,
+    );
+
     const ttsStart = Date.now();
     const speakResult = await this.speakToRoom(
       roomName,
@@ -1159,4 +1231,8 @@ export class VoiceAgentService {
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
+}
+
+function normalizeCaption(text: string): string {
+  return text.replace(/\s+/g, ' ').trim().toLowerCase();
 }

@@ -3,6 +3,7 @@ import { Space_Grotesk, JetBrains_Mono } from 'next/font/google';
 import { Particles } from '@/components/ui/Particles';
 import { FilmGrain } from '@/features/voice/components/ParticleOrb';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { DevAnnotator } from '@/components/DevAnnotator';
 import { APP_NAME } from '@/lib/env';
 import '@livekit/components-styles';
 import './globals.css';
@@ -54,6 +55,7 @@ export default function RootLayout({
           <Particles />
           <FilmGrain />
           {children}
+          <DevAnnotator />
         </ThemeProvider>
       </body>
     </html>

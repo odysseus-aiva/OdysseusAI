@@ -120,6 +120,26 @@ export class OmniEngineService {
     let audioBytesIn = 0;
     const seenTags = new Set<number>();
 
+    // ── 0x02 transcript accumulation ────────────────────────────────────────
+    // The server has been observed sending transcript two ways: structured JSON
+    // ({role,text,final}) OR bare token chunks with no role/finality. Raw tokens
+    // carry no speaker, so we attribute them to whoever is currently talking:
+    // if agent audio (0x01) flowed within the last 1.5s it's the assistant,
+    // otherwise the user. Tokens accumulate until a role switch or any control
+    // frame (turn boundary), then flush as one final transcript entry.
+    let lastAgentAudioAt = 0;
+    let pendingRole: 'user' | 'assistant' | null = null;
+    let pendingText = '';
+    const flushPending = () => {
+      const text = pendingText.trim();
+      const role = pendingRole;
+      pendingRole = null;
+      pendingText = '';
+      if (role && text) {
+        this.emitTranscript(role, text, true, roomName, callId, callbacks);
+      }
+    };
+
     const wireHandlers = (socket: WebSocket) => {
       socket.on('message', (data: WebSocket.RawData) => {
         const frame = toBuffer(data);
@@ -133,6 +153,8 @@ export class OmniEngineService {
           );
         }
         if (tag === CONTROL_TAG) {
+          // A control frame marks a turn boundary — flush any buffered tokens.
+          flushPending();
           void this.handleControl(
             payload.toString('utf8'),
             roomName,
@@ -142,10 +164,30 @@ export class OmniEngineService {
             callbacks,
           );
         } else if (tag === TRANSCRIPT_TAG) {
-          // 0x02 = streaming transcript tokens (raw UTF-8, NOT JSON).
-          // Each frame is a small text chunk; accumulate to log full sentences.
+          // 0x02 = transcript from the server. Two shapes seen in the wild:
+          // structured JSON, or bare token chunks. Handle both, always capture.
           const text = payload.toString('utf8');
-          this.logger.log(`[${callId}] Omni transcript token (0x02) ${payload.length}B: "${text}"`);
+          this.logger.log(
+            `[${callId}] Omni transcript frame (0x02) ${payload.length}B: ${text.slice(0, 120)}`,
+          );
+          const structured = tryParseTranscriptJson(text);
+          if (structured) {
+            flushPending(); // don't mix a raw run into a structured frame
+            this.emitTranscript(
+              structured.role,
+              structured.text,
+              structured.isFinal,
+              roomName,
+              callId,
+              callbacks,
+            );
+          } else {
+            const role: 'user' | 'assistant' =
+              Date.now() - lastAgentAudioAt < 1500 ? 'assistant' : 'user';
+            if (pendingRole && pendingRole !== role) flushPending();
+            pendingRole = role;
+            pendingText += text;
+          }
         } else if (tag === AGENT_AUDIO_TAG) {
           // 0x01 server→client = agent audio PCM16. But if Omni encounters an
           // error (e.g. unknown voice_id) it sends a JSON error on this tag.
@@ -163,6 +205,10 @@ export class OmniEngineService {
               callbacks,
             );
           } else {
+            // Agent audio started/continued. If the user was mid-utterance,
+            // their turn just ended — flush it before assistant tokens arrive.
+            if (pendingRole === 'user') flushPending();
+            lastAgentAudioAt = Date.now();
             audioFramesIn += 1;
             audioBytesIn += payload.length;
             if (audioFramesIn <= 5) {
@@ -262,6 +308,7 @@ export class OmniEngineService {
       },
       stop: async () => {
         closedByUs = true;
+        flushPending(); // persist any transcript tokens buffered at hang-up
         if (ws.readyState === WebSocket.OPEN) ws.close(1000, 'session stop');
       },
     };
@@ -286,6 +333,33 @@ export class OmniEngineService {
         reject(err);
       });
     });
+  }
+
+  /**
+   * Normalize a transcript fragment from any Omni source (0x02 tokens or a 0x03
+   * control frame) into the call log + onTranscript callback. Only finals reach
+   * the persisted transcriptHistory — the callback drops interims.
+   */
+  private emitTranscript(
+    role: 'user' | 'assistant',
+    text: string,
+    isFinal: boolean,
+    roomName: string,
+    callId: string,
+    callbacks: OmniCallbacks,
+  ): void {
+    if (!text) return;
+    this.logger.log(
+      `[${callId}] Omni transcript [${role}${isFinal ? '/final' : ''}]: ${text.slice(0, 100)}`,
+    );
+    void this.callLogsService.appendLog(callId, 'stt_event', {
+      roomName,
+      data: { source: 'omni', role, transcript: text, final: isFinal },
+    });
+    if (isFinal) {
+      callbacks.onStatus(role === 'user' ? 'processing' : 'listening');
+    }
+    callbacks.onTranscript?.({ role, text, isFinal, timestamp: Date.now() });
   }
 
   private buildConfigureFrame(config: AgentConfig): Record<string, unknown> {
@@ -370,25 +444,11 @@ export class OmniEngineService {
         break;
 
       case 'transcript': {
-        const role = msg.role ?? msg.speaker ?? 'unknown';
-        const isFinal = msg.final ?? msg.is_final ?? msg.kind === 'final';
-        this.logger.log(
-          `[${callId}] Omni transcript [${role}${isFinal ? '/final' : ''}]: ${(msg.text ?? '').slice(0, 100)}`,
-        );
-        await this.callLogsService.appendLog(callId, 'stt_event', {
-          roomName,
-          data: { source: 'omni', role, transcript: msg.text, final: isFinal },
-        });
-        if (role === 'user' && isFinal) callbacks.onStatus('processing');
-        if (role === 'assistant' && isFinal) callbacks.onStatus('listening');
-        if ((role === 'user' || role === 'assistant') && callbacks.onTranscript) {
-          callbacks.onTranscript({
-            role: role as 'user' | 'assistant',
-            text: msg.text ?? '',
-            isFinal,
-            timestamp: Date.now(),
-          });
-        }
+        const role: 'user' | 'assistant' =
+          (msg.role ?? msg.speaker) === 'user' ? 'user' : 'assistant';
+        const isFinal =
+          msg.final ?? msg.is_final ?? (msg.kind === undefined ? true : msg.kind === 'final');
+        this.emitTranscript(role, msg.text ?? '', isFinal, roomName, callId, callbacks);
         break;
       }
 
@@ -495,6 +555,39 @@ export class OmniEngineService {
       timestamp: executedAt,
     });
   }
+}
+
+/**
+ * Parse a 0x02 transcript frame when it is structured JSON ({role/speaker,
+ * text/transcript, final}). Returns null for bare token chunks so the caller
+ * falls back to role-attributed accumulation.
+ */
+function tryParseTranscriptJson(
+  raw: string,
+): { role: 'user' | 'assistant'; text: string; isFinal: boolean } | null {
+  const trimmed = raw.trimStart();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null;
+  let obj: {
+    role?: string;
+    speaker?: string;
+    text?: string;
+    transcript?: string;
+    final?: boolean;
+    is_final?: boolean;
+    kind?: string;
+  };
+  try {
+    obj = JSON.parse(trimmed) as typeof obj;
+  } catch {
+    return null;
+  }
+  const text = obj.text ?? obj.transcript;
+  if (typeof text !== 'string') return null;
+  const role: 'user' | 'assistant' =
+    (obj.role ?? obj.speaker) === 'user' ? 'user' : 'assistant';
+  const isFinal =
+    obj.final ?? obj.is_final ?? (obj.kind === undefined ? true : obj.kind === 'final');
+  return { role, text, isFinal };
 }
 
 /**

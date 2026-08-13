@@ -26,7 +26,11 @@ export interface ConversationStateRepository {
   findByCallId(callId: string): Promise<ConversationState | null>;
   save(state: ConversationState): Promise<void>;
   setStep(callId: string, step: OrchestrationStep): Promise<void>;
-  /** Memory: remove. MongoDB: archive (soft delete). */
+  /**
+   * End a conversation but retain it for historical transcript reads
+   * (findByCallId). MongoDB sets archivedAt; memory marks currentStep 'ended'.
+   * Neither removes the record — age-based cleanup is releaseOrphans' job.
+   */
   release(callId: string): Promise<void>;
   /**
    * Archive all conversations that have no archivedAt and whose startedAt is

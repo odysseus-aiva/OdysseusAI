@@ -58,7 +58,24 @@
       "Bash(curl -s -X POST localhost:3000/session/start -H 'Content-Type: application/json' -d '{\"agentConfig\":{\"agentId\":\"abcde\"}}')",
       "Bash(curl -s localhost:3000/agents)",
       "Bash(curl -s -X PATCH localhost:3000/agents/rohit-personal -H 'Content-Type: application/json' -d '{\"voiceId\":\"stock_sarah_style2\"}')",
-      "Bash(curl -s -X PUT localhost:3000/agents/rohit-personal -H 'Content-Type: application/json' -d '{\"voiceId\":\"stock_sarah_style2\",\"name\":\"Rohit Bot\",\"systemPrompt\":\"You are a helpful voice assistant. Keep answers short and natural for speech.\",\"greeting\":\"Hi there, how can I help today?\",\"engine\":\"omni\"}')"
+      "Bash(curl -s -X PUT localhost:3000/agents/rohit-personal -H 'Content-Type: application/json' -d '{\"voiceId\":\"stock_sarah_style2\",\"name\":\"Rohit Bot\",\"systemPrompt\":\"You are a helpful voice assistant. Keep answers short and natural for speech.\",\"greeting\":\"Hi there, how can I help today?\",\"engine\":\"omni\"}')",
+      "Bash(git check-ignore *)",
+      "Bash(xargs ls)",
+      "Bash(mongosh --quiet --eval 'db.getSiblingDB\\(\"odysseus_ai\"\\).conversations.find\\({}, {callId:1, currentStep:1, archivedAt:1, transcriptHistory:{$slice:2}}\\).limit\\(5\\).toArray\\(\\)')",
+      "Bash(mongosh --quiet --eval 'db.adminCommand\\(\"listDatabases\"\\).databases.forEach\\(d=>print\\(d.name\\)\\)')",
+      "Bash(mongosh --quiet --eval 'db.getSiblingDB\\(\"odysseus_ai\"\\).getCollectionNames\\(\\)')",
+      "Bash(mongosh --quiet --eval 'const d=db.getSiblingDB\\(\"odysseus_ai\"\\); print\\(\"calls=\"+d.calls.countDocuments\\(\\)\\); print\\(\"conversations=\"+d.conversations.countDocuments\\(\\)\\); print\\(\"callevents=\"+d.callevents.countDocuments\\(\\)\\)')",
+      "Bash(mongosh --quiet --eval 'db.getSiblingDB\\(\"livekit_voice_agent\"\\).getCollectionNames\\(\\)')",
+      "Bash(mongosh --quiet --eval 'const d=db.getSiblingDB\\(\"livekit_voice_agent\"\\); print\\(\"calls=\"+d.calls.countDocuments\\(\\)\\); print\\(\"conversations=\"+d.conversations.countDocuments\\(\\)\\)')",
+      "Bash(mongosh --quiet --eval 'const d=db.getSiblingDB\\(\"livekit_voice_agent\"\\); printjson\\(d.conversations.find\\({},{callId:1,currentStep:1,archivedAt:1,transcriptHistory:1}\\).sort\\({startedAt:-1}\\).limit\\(2\\).toArray\\(\\)\\)')",
+      "Bash(mongosh --quiet --eval ' *)",
+      "Bash(mongosh --quiet --eval 'print\\(db.getSiblingDB\\(\"livekit_voice_agent\"\\).conversations.findOne\\({\"transcriptHistory.0\":{$exists:true}},{callId:1}\\).callId\\)')",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" localhost:3000/call-logs?limit=1)",
+      "Bash(curl -s localhost:3000/call-logs/__TRACKED_VAR__/transcript)",
+      "Bash(mongosh --quiet --eval 'const c=db.getSiblingDB\\(\"livekit_voice_agent\"\\).conversations.findOne\\({callId:\"call-007\"},{archivedAt:1,currentStep:1,_id:0}\\); printjson\\(c\\)')",
+      "Bash(curl -s \"localhost:3001/api/calls/call-007/transcript\")",
+      "Bash(curl -s \"localhost:3001/api/calls?limit=200\")",
+      "Bash(echo \"BUILD_EXIT=$?\")"
     ]
   },
   "hooks": {

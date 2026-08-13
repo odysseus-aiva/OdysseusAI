@@ -64,8 +64,13 @@ export class MongoConversationStateRepository
   }
 
   async findByCallId(callId: string): Promise<ConversationState | null> {
+    // NB: no `archivedAt` filter here. This is the historical-read path used by
+    // the transcript endpoint; a call is archived (archivedAt set) the moment it
+    // ends, so filtering archived out would hide every finished call's
+    // transcript. `getOrCreate` still excludes archived so a new call never
+    // resumes an ended one — that separation is intentional.
     const doc = await this.conversationModel
-      .findOne({ callId, archivedAt: { $exists: false } })
+      .findOne({ callId })
       .lean()
       .exec();
     return doc ? this.toState(doc) : null;

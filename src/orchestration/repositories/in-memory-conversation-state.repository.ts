@@ -66,7 +66,14 @@ export class InMemoryConversationStateRepository
   }
 
   async release(callId: string): Promise<void> {
-    this.states.delete(callId);
+    // Soft-archive rather than delete: mark the conversation ended but retain it
+    // so findByCallId can still serve the transcript for a finished call (Call
+    // History). Mirrors the MongoDB repo, which sets archivedAt instead of
+    // removing the document. Orphan/age cleanup is handled by releaseOrphans.
+    const state = this.states.get(callId);
+    if (!state) return;
+    state.currentStep = 'ended';
+    state.updatedAt = Date.now();
   }
 
   async releaseOrphans(olderThanMs: number): Promise<number> {
@@ -81,7 +88,8 @@ export class InMemoryConversationStateRepository
   }
 
   async pruneArchivedMessages(_archivedBeforeMs: number): Promise<number> {
-    // In-memory repo deletes on release — nothing to prune.
+    // Ended conversations are retained in memory but bounded by releaseOrphans
+    // (age-based delete), so there is no long-lived message store to prune here.
     return 0;
   }
 

@@ -75,7 +75,13 @@
       "Bash(mongosh --quiet --eval 'const c=db.getSiblingDB\\(\"livekit_voice_agent\"\\).conversations.findOne\\({callId:\"call-007\"},{archivedAt:1,currentStep:1,_id:0}\\); printjson\\(c\\)')",
       "Bash(curl -s \"localhost:3001/api/calls/call-007/transcript\")",
       "Bash(curl -s \"localhost:3001/api/calls?limit=200\")",
-      "Bash(echo \"BUILD_EXIT=$?\")"
+      "Bash(echo \"BUILD_EXIT=$?\")",
+      "Bash(curl -s -o /dev/null -w \"backend:%{http_code}\\\\n\" \"localhost:3000/call-logs/call-007/transcript\")",
+      "Bash(curl -s -o /dev/null -w \"frontend:%{http_code}\\\\n\" \"localhost:3001/calls/call-007\")",
+      "Bash(curl -s \"localhost:3000/call-logs/80c64f6b-8cba-407f-b006-95186f961d7a/transcript\")",
+      "Bash(curl -s \"localhost:3000/call-logs/call-007/transcript\")",
+      "Bash(curl -s \"localhost:3000/agents/omni/voices\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"localhost:3001/api/agents/omni/voices\")"
     ]
   },
   "hooks": {

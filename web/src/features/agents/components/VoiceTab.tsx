@@ -18,6 +18,11 @@ import {
   type ProviderOption,
 } from '../providers';
 
+/** Base language code, dropping any locale suffix ('en-US' → 'en'). */
+function baseLang(lang: string): string {
+  return (lang || '').split('-')[0].toLowerCase();
+}
+
 /**
  * Voice pipeline configuration, ordered to match the actual signal path:
  * speech in (STT) → reasoning (LLM) → speech out (TTS) → voice + language.
@@ -47,9 +52,11 @@ export function VoiceTab({
 
   // Omni supported languages are hardcoded — no API for this list
   const omniLanguages = OMNI_LANGUAGES;
-  // Voices filtered to selected language (or all if none selected)
+  // Voices filtered to selected language (or all if none selected). Match on the
+  // base language code so locale variants (en-US, en-GB, en-CA…) surface under
+  // their base language ('en') instead of being filtered out.
   const omniVoicesForLang = isOmni && draft.language
-    ? omniVoices.filter((v) => v.language === draft.language)
+    ? omniVoices.filter((v) => baseLang(v.language) === baseLang(draft.language))
     : omniVoices;
 
   return (

@@ -140,16 +140,18 @@ export async function saveAgentTools(
 export interface OmniVoice {
   voice_id: string;
   name: string;
+  /** May be a bare code ('en') or a locale ('en-US', 'en-GB'). */
   language: string;
   gender: string;
   region: string;
   accent?: string;
   tone?: string;
   bio?: string;
+  age?: string;
   age_band?: string;
   use_cases?: string[];
+  search_tags?: string[];
   avatar_url?: string;
-  preview_url?: string;
   source?: string;
 }
 

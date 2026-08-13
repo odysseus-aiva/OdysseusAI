@@ -24,16 +24,18 @@ import {
 interface OmniVoice {
   voice_id: string;
   name: string;
+  /** May be a bare code ('en') or a locale ('en-US', 'en-GB'). */
   language: string;
   gender: string;
   region: string;
   accent?: string;
   tone?: string;
   bio?: string;
+  age?: string;
   age_band?: string;
   use_cases?: string[];
+  search_tags?: string[];
   avatar_url?: string;
-  preview_url?: string;
   source?: string;
 }
 
@@ -62,7 +64,12 @@ export class AgentsController {
     }
 
     const baseUrl = this.configService.get<string>('pyai.baseUrl') ?? 'https://api.pyai.com/v1';
-    const apiKey = this.configService.get<string>('pyai.apiKey') ?? '';
+    // Read the env var directly for consistency with the STT/TTS/Omni consumers
+    // (which all use PYAI_API_KEY); fall back to the loaded config namespace.
+    const apiKey =
+      this.configService.get<string>('PYAI_API_KEY') ??
+      this.configService.get<string>('pyai.apiKey') ??
+      '';
     try {
       const res = await fetch(`${baseUrl}/voices`, {
         headers: { Authorization: `Bearer ${apiKey}` },

@@ -459,9 +459,10 @@ export class OmniEngineService {
       case 'barge_in':
       case 'flush':
       case 'assistant_interrupted':
-        // assistant_interrupted carries the truncated reply text — log it.
-        if (msg.reply) {
-          this.logger.log(`[${callId}] Omni assistant interrupted, reply was: "${(msg.reply as string).slice(0, 100)}"`);
+        // assistant_interrupted carries the truncated reply text — capture what
+        // the agent had said before the caller cut in, so it is not lost.
+        if (typeof msg.reply === 'string' && msg.reply.trim()) {
+          this.emitTranscript('assistant', msg.reply, true, roomName, callId, callbacks);
         }
         callbacks.onBargeIn();
         callbacks.onStatus('listening');
@@ -481,10 +482,27 @@ export class OmniEngineService {
         callbacks.onSessionEnd();
         break;
 
-      default:
-        // Unknown frame — log at INFO so live traffic reveals any event we don't
-        // yet handle, without breaking the session.
-        this.logger.log(`[${callId}] Omni unknown frame: ${raw.slice(0, 200)}`);
+      default: {
+        // Unknown frame. PyAI sends the caller's ASR on the 0x02 tag but the
+        // agent's own words under assorted control events — so any unhandled
+        // control frame that carries text is treated as (assistant) transcript
+        // rather than dropped. Frames with no text are logged verbatim so live
+        // traffic still reveals the exact shape of anything we don't model yet.
+        const captured = extractControlTranscript(msg as Record<string, unknown>);
+        if (captured) {
+          this.emitTranscript(
+            captured.role,
+            captured.text,
+            captured.isFinal,
+            roomName,
+            callId,
+            callbacks,
+          );
+        } else {
+          this.logger.log(`[${callId}] Omni unknown frame: ${raw.slice(0, 200)}`);
+        }
+        break;
+      }
     }
   }
 
@@ -588,6 +606,32 @@ function tryParseTranscriptJson(
   const isFinal =
     obj.final ?? obj.is_final ?? (obj.kind === undefined ? true : obj.kind === 'final');
   return { role, text, isFinal };
+}
+
+/**
+ * Best-effort transcript extraction from a control frame whose event name we
+ * don't explicitly handle. Captures any frame carrying a text field so agent
+ * speech isn't lost when PyAI labels it with an event we haven't modelled.
+ * Role defaults to 'assistant' — the caller's ASR already arrives via 0x02.
+ */
+function extractControlTranscript(
+  msg: Record<string, unknown>,
+): { role: 'user' | 'assistant'; text: string; isFinal: boolean } | null {
+  const textField =
+    msg.text ??
+    msg.transcript ??
+    msg.content ??
+    msg.delta ??
+    msg.output_text ??
+    msg.reply ??
+    msg.message;
+  if (typeof textField !== 'string' || !textField.trim()) return null;
+  const hint = String(msg.role ?? msg.speaker ?? msg.event ?? msg.type ?? '').toLowerCase();
+  const role: 'user' | 'assistant' = /user|caller|input|human/.test(hint)
+    ? 'user'
+    : 'assistant';
+  const isFinal = (msg.final as boolean) ?? (msg.is_final as boolean) ?? true;
+  return { role, text: textField, isFinal };
 }
 
 /**

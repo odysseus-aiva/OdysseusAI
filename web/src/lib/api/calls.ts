@@ -97,9 +97,20 @@ export interface TranscriptEntry {
   toolCallNames?: string[];
 }
 
+export interface ToolCallRecord {
+  name: string;
+  input?: unknown;
+  output?: unknown;
+  error?: string;
+  success: boolean;
+  timestamp: number;
+}
+
 export interface TranscriptResponse {
   callId: string;
   transcript: TranscriptEntry[];
+  /** Tool executions with timestamps, for inline interleaving into the transcript. */
+  toolCalls?: ToolCallRecord[];
   lastUserUtterance?: string;
   lastAgentResponse?: string;
 }

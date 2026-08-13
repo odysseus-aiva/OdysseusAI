@@ -126,6 +126,10 @@ export class CallLogsController {
     return {
       callId,
       transcript: state.transcriptHistory,
+      // Tool executions with timestamps so the client can interleave them into
+      // the transcript at the exact point they occurred. Sourced from
+      // conversation state (populated for both pipeline and Omni engines).
+      toolCalls: state.toolCallHistory,
       lastUserUtterance: state.lastUserUtterance,
       lastAgentResponse: state.lastAgentResponse,
     };

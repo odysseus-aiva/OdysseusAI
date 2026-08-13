@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Space_Grotesk, JetBrains_Mono } from 'next/font/google';
 import { Particles } from '@/components/ui/Particles';
 import { FilmGrain } from '@/features/voice/components/ParticleOrb';
+import { ThemeProvider } from '@/components/ThemeProvider';
 import { APP_NAME } from '@/lib/env';
 import '@livekit/components-styles';
 import './globals.css';
@@ -38,11 +39,22 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+      <head>
+        {/* Runs before paint — reads localStorage and sets data-theme on <html>
+            so the correct theme is applied before React hydrates, preventing flash. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('odysseus-theme');if(t==='light'){document.documentElement.setAttribute('data-theme','light');}else if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');}else if(!window.matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.setAttribute('data-theme','light');}}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body>
-        <div className="ambient-backdrop" />
-        <Particles />
-        <FilmGrain />
-        {children}
+        <ThemeProvider>
+          <div className="ambient-backdrop" />
+          <Particles />
+          <FilmGrain />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

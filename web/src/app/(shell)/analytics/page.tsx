@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Field';
 import { BarChart } from '@/components/charts/BarChart';
 import { ChartCard, EmptyChart, SampleBadge } from '@/components/charts/ChartCard';
 import { Donut } from '@/components/charts/Donut';
@@ -614,7 +615,7 @@ function Notice({ tone, children }: { tone: 'warning'; children: React.ReactNode
   return (
     <div
       className="flex items-start gap-2.5 rounded-[10px] px-4 py-3"
-      style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)' }}
+      style={{ background: 'color-mix(in srgb, var(--color-state-warning) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--color-state-warning) 20%, transparent)' }}
     >
       <AlertCircle size={14} strokeWidth={2} style={{ color, flexShrink: 0, marginTop: 1 }} />
       <p className="text-[12.5px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
@@ -634,15 +635,13 @@ function AgentFilter({
   onChange: (agentId: string) => void;
 }) {
   return (
-    <select
+    <Select
       value={value}
       onChange={(e) => onChange(e.target.value)}
       aria-label="Filter analytics by agent"
-      className="rounded-[8px] px-2.5 py-1.5 text-[12px] font-[500] outline-none"
+      className="!w-auto text-[12px] font-[500] !py-1.5 !px-2.5"
       style={{
         background: 'var(--color-surface-raised)',
-        border: '1px solid var(--color-border)',
-        color: value ? 'var(--color-text)' : 'var(--color-text-faint)',
       }}
     >
       <option value="">All agents</option>
@@ -651,7 +650,7 @@ function AgentFilter({
           {agent.name}
         </option>
       ))}
-    </select>
+    </Select>
   );
 }
 

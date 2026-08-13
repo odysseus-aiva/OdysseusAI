@@ -13,7 +13,10 @@ import {
   BarChart3,
   Settings,
   ChevronRight,
+  Sun,
+  Moon,
 } from 'lucide-react';
+import { useTheme } from '@/components/ThemeProvider';
 
 const NAV_SECTIONS = [
   { href: '/', icon: Mic2, label: 'Voice', exact: true },
@@ -60,8 +63,8 @@ function NavItem({
             layoutId="nav-pill"
             className="absolute inset-0 rounded-[8px]"
             style={{
-              background: 'rgb(56 232 255 / 0.06)',
-              border: '1px solid rgb(56 232 255 / 0.13)',
+              background: 'var(--color-nav-active-bg)',
+              border: '1px solid var(--color-accent-hairline)',
               boxShadow: 'inset 0 1px 0 rgb(255 255 255 / 0.04)',
             }}
             transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
@@ -98,7 +101,7 @@ function NavItem({
               width: 2.5,
               height: 16,
               background: 'var(--color-accent)',
-              boxShadow: '0 0 8px var(--color-accent)',
+              boxShadow: '0 0 6px var(--color-accent-ring)',
             }}
             transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
           />
@@ -109,6 +112,7 @@ function NavItem({
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const { theme, toggle } = useTheme();
   return (
     <div
       className="fixed inset-0 z-10 flex [--sidebar-w:var(--width-sidebar-rail)] lg:[--sidebar-w:var(--width-sidebar-full)]"
@@ -131,7 +135,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div
           className="absolute top-0 left-4 right-4 h-px pointer-events-none"
           style={{
-            background: 'linear-gradient(90deg, transparent, rgb(56 232 255 / 0.25) 40%, rgb(56 232 255 / 0.25) 60%, transparent)',
+            background: 'linear-gradient(90deg, transparent, var(--color-accent-border) 40%, var(--color-accent-border) 60%, transparent)',
           }}
         />
 
@@ -140,7 +144,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              'radial-gradient(ellipse 110% 35% at 50% 0%, rgb(56 232 255 / 0.045), transparent 65%)',
+              'radial-gradient(ellipse 110% 35% at 50% 0%, var(--color-accent-subtle), transparent 65%)',
           }}
         />
 
@@ -156,9 +160,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             style={{
               width: 30,
               height: 30,
-              background: 'linear-gradient(145deg, rgb(56 232 255 / 0.12), rgb(56 232 255 / 0.04))',
-              border: '1px solid rgb(56 232 255 / 0.22)',
-              boxShadow: '0 0 12px rgb(56 232 255 / 0.15)',
+              background: 'linear-gradient(145deg, var(--color-accent-soft), var(--color-accent-trace))',
+              border: '1px solid var(--color-accent-ring)',
+              boxShadow: '0 0 12px var(--color-accent-soft)',
             }}
           >
             <Mic2 size={13} color="var(--color-accent)" strokeWidth={2.2} />
@@ -223,11 +227,45 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               v1
             </div>
             <span
-              className="text-[11.5px] font-[450] max-lg:hidden"
+              className="text-[11.5px] font-[450] max-lg:hidden flex-1"
               style={{ color: 'var(--color-text-faint)' }}
             >
               v0.1.0
             </span>
+
+            {/* Theme toggle */}
+            <button
+              type="button"
+              onClick={toggle}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              className="max-lg:hidden flex-shrink-0 flex items-center justify-center rounded-[7px] transition-colors duration-[140ms]"
+              style={{ width: 26, height: 26, color: 'var(--color-text-faint)' }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--color-surface-raised)';
+                e.currentTarget.style.color = 'var(--color-text-muted)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = 'var(--color-text-faint)';
+              }}
+            >
+              {theme === 'dark'
+                ? <Sun size={13} strokeWidth={2} />
+                : <Moon size={13} strokeWidth={2} />}
+            </button>
+
+            {/* Compact toggle for the icon-rail (narrow screens) */}
+            <button
+              type="button"
+              onClick={toggle}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              className="lg:hidden flex items-center justify-center rounded-[7px] transition-colors duration-[140ms]"
+              style={{ width: 26, height: 26, color: 'var(--color-text-faint)' }}
+            >
+              {theme === 'dark'
+                ? <Sun size={13} strokeWidth={2} />
+                : <Moon size={13} strokeWidth={2} />}
+            </button>
           </div>
         </motion.div>
       </motion.aside>

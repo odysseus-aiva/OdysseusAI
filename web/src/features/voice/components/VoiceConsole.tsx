@@ -1,8 +1,9 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronDown, Mic } from 'lucide-react';
+import { Mic } from 'lucide-react';
+import { Select } from '@/components/ui/Field';
 import type { Agent } from '@/lib/api/agents';
 
 interface VoiceConsoleProps {
@@ -37,7 +38,6 @@ export function VoiceConsole({
   const [pressed, setPressed] = useState(false);
   const [selectFocused, setSelectFocused] = useState(false);
   const [actionFocused, setActionFocused] = useState(false);
-  const selectRef = useRef<HTMLSelectElement>(null);
 
   const hasAgents = agents.length > 0;
   const isBusy = loading || disabled;
@@ -84,16 +84,23 @@ export function VoiceConsole({
       >
         {/* ── Agent selector half ── */}
         {hasAgents && (
-          <div className="relative flex min-w-0 items-center">
-            <select
-              ref={selectRef}
+          <div
+            className="relative flex min-w-0 items-center"
+            onFocusCapture={() => setSelectFocused(true)}
+            onBlurCapture={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node))
+                setSelectFocused(false);
+            }}
+          >
+            <Select
               value={selectedAgentId}
               onChange={(e) => onSelectAgent(e.target.value)}
-              onFocus={() => setSelectFocused(true)}
-              onBlur={() => setSelectFocused(false)}
               aria-label="Choose which agent to talk to"
-              className="h-[54px] w-[132px] cursor-pointer appearance-none truncate bg-transparent pl-5 pr-9 text-[13px] font-[500] outline-none sm:w-[168px]"
+              className="!w-[132px] sm:!w-[168px] !h-[54px] !py-0 !pl-5 !pr-9 !rounded-none leading-[54px] !text-[13px] !font-[500]"
               style={{
+                background: 'transparent',
+                border: 'none',
+                boxShadow: 'none',
                 color: selectFocused ? 'var(--color-text)' : 'var(--color-text-muted)',
                 transition: 'color 180ms var(--ease-fluid)',
               }}
@@ -104,20 +111,9 @@ export function VoiceConsole({
                   {agent.name}
                 </option>
               ))}
-            </select>
-            <ChevronDown
-              size={12}
-              strokeWidth={2}
-              aria-hidden
-              className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2"
-              style={{
-                color: selectFocused ? 'var(--color-accent)' : 'var(--color-text-faint)',
-                transition: 'color 180ms var(--ease-fluid)',
-              }}
-            />
+            </Select>
 
-            {/* Hairline seam between the halves — runs along whichever edge
-                they meet on (bottom when stacked, right when side by side). */}
+            {/* Hairline seam between the halves */}
             <span
               aria-hidden
               className="absolute right-0 top-1/2 h-[22px] w-px -translate-y-1/2"

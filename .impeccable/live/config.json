@@ -1,0 +1,8 @@
+{
+  "framework": "next",
+  "files": ["web/src/app/layout.tsx"],
+  "insertBefore": "</head>",
+  "commentSyntax": "//",
+  "devUrl": "http://localhost:3001",
+  "cspChecked": true
+}

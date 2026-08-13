@@ -106,6 +106,13 @@ export async function updateAgent(
   return agentSchema.parse(await res.json());
 }
 
+export async function deleteAgent(agentId: string): Promise<void> {
+  const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to delete agent');
+}
+
 export async function fetchAgentTools(
   agentId: string,
 ): Promise<AgentToolAssignment[]> {

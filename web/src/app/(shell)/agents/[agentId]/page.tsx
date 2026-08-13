@@ -15,11 +15,13 @@ import {
   SlidersHorizontal,
   Check,
   AlertCircle,
+  Trash2,
 } from 'lucide-react';
 import { PageBreadcrumb } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Tabs, type TabDef } from '@/components/ui/Tabs';
 import { useAgentConfig } from '@/features/agents/useAgentConfig';
+import { deleteAgent } from '@/lib/api/agents';
 import { OverviewTab } from '@/features/agents/components/OverviewTab';
 import { PromptTab } from '@/features/agents/components/PromptTab';
 import { VoiceTab } from '@/features/agents/components/VoiceTab';
@@ -93,6 +95,20 @@ export default function AgentDetailPage() {
     },
     [router, searchParams],
   );
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = useCallback(async () => {
+    setDeleting(true);
+    try {
+      await deleteAgent(agentId);
+      router.push('/agents');
+    } catch {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }, [agentId, router]);
 
   const [openToolName, setOpenToolName] = useState<string | null>(null);
   const openTool = useMemo(
@@ -227,6 +243,15 @@ export default function AgentDetailPage() {
                 Start voice
               </Button>
             </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setConfirmDelete(true)}
+              aria-label="Delete agent"
+              style={{ color: 'var(--color-text-faint)' }}
+            >
+              <Trash2 size={13} strokeWidth={2} />
+            </Button>
           </div>
         </div>
 
@@ -290,6 +315,55 @@ export default function AgentDetailPage() {
         testing={testing === openToolName}
         testResult={openToolName ? testResults[openToolName] : undefined}
       />
+
+      {/* ── Delete confirm modal ── */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            aria-label="Close"
+            className="absolute inset-0 cursor-default"
+            style={{ background: 'rgb(3 4 8 / 0.62)', backdropFilter: 'blur(2px)' }}
+            onClick={() => !deleting && setConfirmDelete(false)}
+          />
+          <div
+            className="relative flex w-full max-w-[380px] flex-col gap-4 rounded-[14px] p-6"
+            style={{
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border-strong)',
+              boxShadow: '0 24px 60px rgb(0 0 0 / 0.5)',
+            }}
+          >
+            <div className="flex flex-col gap-1.5">
+              <h2 className="text-[15px] font-[600] tracking-[-0.02em]" style={{ color: 'var(--color-text)' }}>
+                Delete {agent.name}?
+              </h2>
+              <p className="text-[12.5px] leading-[1.55]" style={{ color: 'var(--color-text-muted)' }}>
+                This will permanently remove the agent and all its configuration. This cannot be undone.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                loading={deleting}
+                onClick={() => void handleDelete()}
+                style={{ background: 'var(--color-state-error)', borderColor: 'var(--color-state-error)' }}
+              >
+                Delete agent
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setConfirmDelete(false)}
+                disabled={deleting}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

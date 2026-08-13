@@ -77,9 +77,11 @@ export class DeepgramSttProvider implements SttProvider {
         sample_rate: String(sampleRate),
         channels: '1',
         interim_results: 'true',
+        punctuate: 'true',
+        // Faster end-of-speech + more frequent partials for live captions.
         utterance_end_ms: '1000',
         vad_events: 'true',
-        endpointing: '300',
+        endpointing: '200',
         model: 'nova-2',
         language: options.language ?? 'en',
       });

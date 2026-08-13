@@ -55,6 +55,8 @@ interface AgentRoomConnection {
 export class LivekitRtcService {
   private readonly logger = new Logger(LivekitRtcService.name);
   private readonly connections = new Map<string, AgentRoomConnection>();
+  /** In-flight word-by-word agent caption reveals, keyed by room. */
+  private readonly assistantCaptionAbort = new Map<string, AbortController>();
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -82,6 +84,119 @@ export class LivekitRtcService {
         `Failed to publish agent state "${state}" for room "${roomName}": ${(error as Error).message}`,
       );
     }
+  }
+
+  /**
+   * Push a live caption to browsers in the room over the LiveKit data channel.
+   */
+  async publishLiveTranscript(
+    roomName: string,
+    payload: {
+      role: 'user' | 'assistant';
+      text: string;
+      isFinal: boolean;
+    },
+  ): Promise<void> {
+    const connection = this.connections.get(roomName);
+    const localParticipant = connection?.room.localParticipant;
+    const text = payload.text?.trim();
+    if (!localParticipant || !text) return;
+
+    const packet = {
+      v: 1 as const,
+      role: payload.role,
+      text: text.slice(0, 4000),
+      isFinal: payload.isFinal,
+      ts: Date.now(),
+    };
+
+    try {
+      await localParticipant.publishData(
+        Buffer.from(JSON.stringify(packet), 'utf8'),
+        {
+          // Always reliable — lossy drops interim captions under load, which
+          // made the UI feel like it only updated on finals.
+          reliable: true,
+          topic: 'odysseus.transcript',
+        },
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Failed to publish live transcript for room "${roomName}": ${(error as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Omni often delivers the agent's full reply in one shot. Reveal it
+   * word-by-word so the Agent line types while audio is playing.
+   * Always commits the full text at the end — even if barge-in / replace
+   * aborts the reveal mid-way (unless a newer stream took over).
+   */
+  async streamAssistantCaption(
+    roomName: string,
+    fullText: string,
+  ): Promise<void> {
+    const text = fullText.trim();
+    if (!text) return;
+
+    this.assistantCaptionAbort.get(roomName)?.abort();
+    const ac = new AbortController();
+    this.assistantCaptionAbort.set(roomName, ac);
+
+    const words = text.split(/\s+/).filter(Boolean);
+    let built = '';
+
+    try {
+      for (let i = 0; i < words.length; i += 1) {
+        if (ac.signal.aborted) break;
+        built = built ? `${built} ${words[i]}` : words[i]!;
+        // Keep every progressive update interim — the finally-block owns the final.
+        await this.publishLiveTranscript(roomName, {
+          role: 'assistant',
+          text: built,
+          isFinal: false,
+        });
+        if (i >= words.length - 1) break;
+        const word = words[i]!;
+        const delayMs = Math.min(140, Math.max(45, 30 + word.length * 20));
+        await new Promise<void>((resolve) => {
+          const t = setTimeout(resolve, delayMs);
+          ac.signal.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(t);
+              resolve();
+            },
+            { once: true },
+          );
+        });
+      }
+    } finally {
+      // If a newer stream replaced us, leave the commit to that stream.
+      if (this.assistantCaptionAbort.get(roomName) === ac) {
+        await this.publishLiveTranscript(roomName, {
+          role: 'assistant',
+          text,
+          isFinal: true,
+        });
+        this.assistantCaptionAbort.delete(roomName);
+      } else if (!this.assistantCaptionAbort.has(roomName)) {
+        // Cancelled with no replacement (barge-in) — still land the text.
+        await this.publishLiveTranscript(roomName, {
+          role: 'assistant',
+          text,
+          isFinal: true,
+        });
+      }
+    }
+  }
+
+  /** Stop an in-flight agent caption reveal (barge-in). */
+  cancelAssistantCaption(roomName: string): void {
+    const ac = this.assistantCaptionAbort.get(roomName);
+    this.assistantCaptionAbort.delete(roomName);
+    ac?.abort();
   }
 
   async connectAgent(
@@ -423,6 +538,7 @@ export class LivekitRtcService {
     const connection = this.connections.get(roomName);
     if (!connection) return;
 
+    this.cancelAssistantCaption(roomName);
     this.stopPlayback(roomName);
     connection.abortController.abort();
     connection.activeTrackReaders.clear();

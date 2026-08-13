@@ -122,12 +122,10 @@ export class OmniEngineService {
 
     // ── 0x02 transcript accumulation ────────────────────────────────────────
     // The server has been observed sending transcript two ways: structured JSON
-    // ({role,text,final}) OR bare token chunks with no role/finality. Raw tokens
-    // carry no speaker, so we attribute them to whoever is currently talking:
-    // if agent audio (0x01) flowed within the last 1.5s it's the assistant,
-    // otherwise the user. Tokens accumulate until a role switch or any control
-    // frame (turn boundary), then flush as one final transcript entry.
-    let lastAgentAudioAt = 0;
+    // ({role,text,final}) OR bare token chunks with no role/finality. Raw 0x02
+    // tokens are caller ASR — agent words arrive on control frames. Tokens
+    // accumulate until a role switch or any control frame (turn boundary), then
+    // flush as one final transcript entry.
     let pendingRole: 'user' | 'assistant' | null = null;
     let pendingText = '';
     const flushPending = () => {
@@ -208,11 +206,22 @@ export class OmniEngineService {
               callbacks,
             );
           } else {
-            const role: 'user' | 'assistant' =
-              Date.now() - lastAgentAudioAt < 1500 ? 'assistant' : 'user';
-            if (pendingRole && pendingRole !== role) flushPending();
-            pendingRole = role;
+            // PyAI: bare 0x02 tokens are caller ASR only. Agent words arrive on
+            // control frames — never attribute mic tokens to the assistant.
+            if (pendingRole && pendingRole !== 'user') flushPending();
+            pendingRole = 'user';
             pendingText += text;
+            const live = pendingText.trim();
+            if (live) {
+              this.emitTranscript(
+                'user',
+                live,
+                false,
+                roomName,
+                callId,
+                callbacks,
+              );
+            }
           }
         } else if (tag === AGENT_AUDIO_TAG) {
           // 0x01 server→client = agent audio PCM16. But if Omni encounters an
@@ -232,9 +241,8 @@ export class OmniEngineService {
             );
           } else {
             // Agent audio started/continued. If the user was mid-utterance,
-            // their turn just ended — flush it before assistant tokens arrive.
+            // their turn just ended — flush it before assistant audio plays.
             if (pendingRole === 'user') flushPending();
-            lastAgentAudioAt = Date.now();
             agentAudioFrames += 1;
             if (agentAudioFrames === 1) {
               void this.callLogsService.appendLog(callId, 'omni_frame', {
@@ -370,8 +378,8 @@ export class OmniEngineService {
 
   /**
    * Normalize a transcript fragment from any Omni source (0x02 tokens or a 0x03
-   * control frame) into the call log + onTranscript callback. Only finals reach
-   * the persisted transcriptHistory — the callback drops interims.
+   * control frame) into onTranscript. Interims are live-caption only; finals
+   * are logged and drive status transitions.
    */
   private emitTranscript(
     role: 'user' | 'assistant',
@@ -382,14 +390,14 @@ export class OmniEngineService {
     callbacks: OmniCallbacks,
   ): void {
     if (!text) return;
-    this.logger.log(
-      `[${callId}] Omni transcript [${role}${isFinal ? '/final' : ''}]: ${text.slice(0, 100)}`,
-    );
-    void this.callLogsService.appendLog(callId, 'stt_event', {
-      roomName,
-      data: { source: 'omni', role, transcript: text, final: isFinal },
-    });
     if (isFinal) {
+      this.logger.log(
+        `[${callId}] Omni transcript [${role}/final]: ${text.slice(0, 100)}`,
+      );
+      void this.callLogsService.appendLog(callId, 'stt_event', {
+        roomName,
+        data: { source: 'omni', role, transcript: text, final: true },
+      });
       callbacks.onStatus(role === 'user' ? 'processing' : 'listening');
     }
     callbacks.onTranscript?.({ role, text, isFinal, timestamp: Date.now() });
@@ -485,9 +493,23 @@ export class OmniEngineService {
         break;
       }
 
-      case 'turn':
-        // Turn boundary — no direct UI effect; audio frames drive speaking.
+      case 'turn': {
+        // Some Omni builds attach the assistant reply on the turn boundary.
+        const fromTurn = extractControlTranscript(
+          msg as Record<string, unknown>,
+        );
+        if (fromTurn) {
+          this.emitTranscript(
+            fromTurn.role,
+            fromTurn.text,
+            fromTurn.isFinal,
+            roomName,
+            callId,
+            callbacks,
+          );
+        }
         break;
+      }
 
       case 'barge_in':
       case 'flush':
@@ -687,7 +709,11 @@ function extractControlTranscript(
   const role: 'user' | 'assistant' = /user|caller|input|human/.test(hint)
     ? 'user'
     : 'assistant';
-  const isFinal = (msg.final as boolean) ?? (msg.is_final as boolean) ?? true;
+  const isFinal =
+    (msg.final as boolean) ??
+    (msg.is_final as boolean) ??
+    // Streaming deltas are interim until marked final.
+    (typeof msg.delta === 'string' ? false : true);
   return { role, text: textField, isFinal };
 }
 

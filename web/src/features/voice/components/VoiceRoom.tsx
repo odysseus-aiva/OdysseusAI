@@ -12,13 +12,17 @@ import { GlassPanel } from '@/components/ui/GlassPanel';
 import type { Agent } from '@/lib/api/agents';
 import { useAgentVoiceState } from '../hooks/useAgentVoiceState';
 import { useAudioLevel } from '../hooks/useAudioLevel';
+import { useLiveTranscript } from '../hooks/useLiveTranscript';
 import { ParticleOrb } from './ParticleOrb';
 import { StatusIndicator, type StatusDetail } from './StatusIndicator';
 import { AudioControls } from './AudioControls';
+import { LiveTranscriptPanel } from './LiveTranscriptPanel';
 
 interface VoiceRoomProps {
   /** Resolved agent for the session — drives the diagnostics rail. */
   agent?: Agent | null;
+  /** Call id from session start — resets the live transcript on reconnect. */
+  callId: string;
   onDisconnect: () => void;
   onReconnect: () => void;
 }
@@ -42,10 +46,11 @@ function providerName(id: string | undefined, fallback: string): string {
  * presentational components. RoomAudioRenderer transparently plays the agent's
  * audio track — the user hears the agent with zero manual wiring.
  */
-export function VoiceRoom({ agent, onDisconnect, onReconnect }: VoiceRoomProps) {
+export function VoiceRoom({ agent, callId, onDisconnect, onReconnect }: VoiceRoomProps) {
   const voiceState = useAgentVoiceState();
   const { audioTrack } = useVoiceAssistant();
   const { microphoneTrack } = useLocalParticipant();
+  const { lines, ready } = useLiveTranscript(callId);
 
   // Listening reads the user's mic; speaking reads the agent's output. Sampling
   // only the relevant track keeps one AnalyserNode alive at a time.
@@ -67,35 +72,53 @@ export function VoiceRoom({ agent, onDisconnect, onReconnect }: VoiceRoomProps) 
   }, [agent]);
 
   return (
-    <div className="relative z-10 flex min-h-dvh flex-col items-center justify-center gap-10 px-6">
+    <div className="relative z-10 flex min-h-dvh flex-col items-center justify-center px-6 py-8">
       {/* Plays all remote (agent) audio automatically */}
       <RoomAudioRenderer />
 
-      <div className="flex w-full max-w-[320px] justify-center">
-        <ParticleOrb size={320} state={voiceState} audioLevel={audioLevel} />
-      </div>
+      <div className="flex w-full max-w-6xl flex-col items-center gap-8 lg:flex-row lg:items-center lg:justify-center lg:gap-12">
+        {/* Orb column */}
+        <div className="flex w-full max-w-[360px] flex-col items-center gap-10">
+          <div className="flex w-full max-w-[320px] justify-center">
+            <ParticleOrb size={320} state={voiceState} audioLevel={audioLevel} />
+          </div>
 
-      {/* State readout + live level, coupled directly under the orb */}
-      <div className="flex flex-col items-center gap-4">
-        <StatusIndicator state={voiceState} details={details} />
-        <LevelMeter level={audioLevel} active={voiceState === 'listening' || isSpeaking} />
-      </div>
+          <div className="flex flex-col items-center gap-4">
+            <StatusIndicator state={voiceState} details={details} />
+            <LevelMeter level={audioLevel} active={voiceState === 'listening' || isSpeaking} />
+          </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <GlassPanel className="flex flex-col items-center gap-2.5 px-5 py-3.5">
-          <span
-            className="text-[9.5px] font-[600] uppercase tracking-[0.22em]"
-            style={{ color: 'var(--color-text-faint)' }}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           >
-            Session
-          </span>
-          <AudioControls onDisconnect={onDisconnect} onReconnect={onReconnect} />
-        </GlassPanel>
-      </motion.div>
+            <GlassPanel className="flex flex-col items-center gap-2.5 px-5 py-3.5">
+              <span
+                className="text-[9.5px] font-[600] uppercase tracking-[0.22em]"
+                style={{ color: 'var(--color-text-faint)' }}
+              >
+                Session
+              </span>
+              <AudioControls onDisconnect={onDisconnect} onReconnect={onReconnect} />
+            </GlassPanel>
+          </motion.div>
+        </div>
+
+        {/* Live captions — beside orb on desktop, under controls on mobile */}
+        <motion.div
+          className="w-full max-w-md lg:max-w-[380px]"
+          initial={{ opacity: 0, x: 16 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.28, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <LiveTranscriptPanel
+            lines={lines}
+            ready={ready}
+            agentName={agent?.name ?? 'Agent'}
+          />
+        </motion.div>
+      </div>
     </div>
   );
 }

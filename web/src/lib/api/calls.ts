@@ -121,6 +121,16 @@ export async function fetchTranscript(callId: string): Promise<TranscriptRespons
   return res.json() as Promise<TranscriptResponse>;
 }
 
+/** Soft 404 for live polling — conversation state may lag behind session start. */
+export async function fetchLiveTranscript(callId: string): Promise<TranscriptResponse> {
+  const res = await fetch(`/api/calls/${encodeURIComponent(callId)}/transcript`, { cache: 'no-store' });
+  if (res.status === 404) {
+    return { callId, transcript: [], toolCalls: [] };
+  }
+  if (!res.ok) throw new Error(`Failed to load transcript (${res.status})`);
+  return res.json() as Promise<TranscriptResponse>;
+}
+
 export interface CallEvent {
   id: string;
   callId: string;

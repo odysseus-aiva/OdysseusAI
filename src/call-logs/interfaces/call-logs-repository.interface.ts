@@ -29,6 +29,7 @@ export interface CallSummary {
   turnCount: number;
   analysis?: CallAnalysis;
   cost?: CallCost;
+  recordingUrl?: string;
   createdAt: number;
   updatedAt: number;
   latencyMetrics: LatencyMetrics;
@@ -66,6 +67,7 @@ export interface CallLogsRepository {
       finalCost?: CallCost;
       /** Replaces the stored snapshot — used to backfill the runtime LLM model. */
       agentSnapshot?: AgentSnapshot;
+      recordingUrl?: string;
     },
   ): Promise<void>;
   /**

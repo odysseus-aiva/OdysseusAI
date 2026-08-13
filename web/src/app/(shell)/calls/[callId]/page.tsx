@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   Phone,
@@ -18,6 +18,11 @@ import {
   DollarSign,
   User,
   AudioLines,
+  Mic,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
@@ -89,6 +94,13 @@ export default function CallDetailPage() {
 
           {/* ── Summary header ─────────────────────────────────── */}
           <SummaryCard call={call} />
+
+          {/* ── Recording ──────────────────────────────────────── */}
+          {call.recordingUrl && (
+            <Section title="Recording" icon={<Mic size={14} strokeWidth={2} />}>
+              <RecordingPlayer callId={callId} />
+            </Section>
+          )}
 
           {/* ── AI Summary ─────────────────────────────────────── */}
           {call.analysis && (call.analysis.summary || call.analysis.sentiment) && (
@@ -747,6 +759,144 @@ function EmptyConversation({ status }: { status: CallStatus }) {
       <p className="max-w-[36ch] text-[12.5px] leading-[1.5]" style={{ color: 'var(--color-text-muted)' }}>
         {message}
       </p>
+    </div>
+  );
+}
+
+// ─── Recording player ─────────────────────────────────────────────────────────
+
+function RecordingPlayer({ callId }: { callId: string }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [muted, setMuted] = useState(false);
+
+  const toggle = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (isPlaying) { audio.pause(); } else { void audio.play(); }
+  };
+
+  const seek = (e: React.MouseEvent<HTMLDivElement>) => {
+    const audio = audioRef.current;
+    const track = trackRef.current;
+    if (!audio || !track || !knownDuration) return;
+    const rect = track.getBoundingClientRect();
+    audio.currentTime = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * duration;
+  };
+
+  const fmt = (s: number) => {
+    if (!Number.isFinite(s) || s < 0) return '--:--';
+    const m = Math.floor(s / 60);
+    return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  };
+
+  const knownDuration = Number.isFinite(duration) && duration > 0;
+  const pct = knownDuration ? (currentTime / duration) * 100 : 0;
+
+  return (
+    <div
+      className="flex items-center gap-3 rounded-[10px] px-4 py-3"
+      style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
+    >
+      <audio
+        ref={audioRef}
+        src={`/api/calls/${encodeURIComponent(callId)}/recording`}
+        preload="metadata"
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => { setIsPlaying(false); setCurrentTime(0); }}
+        onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
+        onDurationChange={() => {
+          const d = audioRef.current?.duration ?? 0;
+          if (Number.isFinite(d) && d > 0) setDuration(d);
+        }}
+        onLoadedMetadata={() => {
+          const audio = audioRef.current;
+          if (!audio) return;
+          if (Number.isFinite(audio.duration) && audio.duration > 0) {
+            setDuration(audio.duration);
+          } else {
+            // Streaming response without Content-Length: seek to end so the
+            // browser determines the real duration, then reset to start.
+            audio.currentTime = 1e9;
+          }
+        }}
+        onSeeked={() => {
+          const audio = audioRef.current;
+          if (!audio) return;
+          if (Number.isFinite(audio.duration) && audio.duration > 0) {
+            setDuration(audio.duration);
+            if (audio.currentTime >= audio.duration - 0.1) {
+              audio.currentTime = 0;
+            }
+          }
+        }}
+      />
+
+      {/* Play / Pause */}
+      <button
+        onClick={toggle}
+        aria-label={isPlaying ? 'Pause' : 'Play'}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-opacity hover:opacity-80"
+        style={{ background: 'var(--color-accent)' }}
+      >
+        {isPlaying
+          ? <Pause  size={12} strokeWidth={2.5} style={{ color: 'var(--color-void)' }} />
+          : <Play   size={12} strokeWidth={2.5} style={{ color: 'var(--color-void)', marginLeft: 1 }} />}
+      </button>
+
+      {/* Elapsed */}
+      <span className="w-9 shrink-0 font-mono text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
+        {fmt(currentTime)}
+      </span>
+
+      {/* Progress track */}
+      <div
+        ref={trackRef}
+        onClick={seek}
+        className="relative h-1 flex-1 cursor-pointer rounded-full"
+        style={{ background: 'var(--color-surface-elevated)' }}
+      >
+        <div
+          className="absolute inset-y-0 left-0 rounded-full"
+          style={{ width: `${pct}%`, background: 'var(--color-accent)', opacity: 0.85 }}
+        />
+        {/* Scrubber dot */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-2.5 w-2.5 rounded-full transition-opacity"
+          style={{
+            left: `${pct}%`,
+            background: 'var(--color-accent)',
+            opacity: knownDuration ? 1 : 0,
+            boxShadow: '0 0 0 2px var(--color-surface-raised)',
+          }}
+        />
+      </div>
+
+      {/* Duration */}
+      <span className="w-9 shrink-0 text-right font-mono text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
+        {fmt(duration)}
+      </span>
+
+      {/* Mute */}
+      <button
+        onClick={() => {
+          const audio = audioRef.current;
+          if (!audio) return;
+          audio.muted = !muted;
+          setMuted(!muted);
+        }}
+        aria-label={muted ? 'Unmute' : 'Mute'}
+        className="shrink-0 transition-opacity hover:opacity-70"
+        style={{ color: 'var(--color-text-faint)' }}
+      >
+        {muted
+          ? <VolumeX size={13} strokeWidth={2} />
+          : <Volume2 size={13} strokeWidth={2} />}
+      </button>
     </div>
   );
 }

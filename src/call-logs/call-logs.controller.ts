@@ -2,16 +2,20 @@ import {
   Controller,
   DefaultValuePipe,
   Get,
+  Header,
   Inject,
   NotFoundException,
   Param,
   ParseIntPipe,
   Query,
+  StreamableFile,
 } from '@nestjs/common';
+import { createReadStream, statSync } from 'fs';
 import { CONVERSATION_STATE_REPOSITORY } from '../orchestration/interfaces/conversation-state-repository.interface';
 import type { ConversationStateRepository } from '../orchestration/interfaces/conversation-state-repository.interface';
 import { AnalyticsService } from './analytics.service';
 import { CallLogsService } from './call-logs.service';
+import { RecordingService } from '../recording/recording.service';
 import type { CallStatus } from '../common/types/call-log.types';
 
 @Controller('call-logs')
@@ -19,6 +23,7 @@ export class CallLogsController {
   constructor(
     private readonly callLogsService: CallLogsService,
     private readonly analyticsService: AnalyticsService,
+    private readonly recordingService: RecordingService,
     @Inject(CONVERSATION_STATE_REPOSITORY)
     private readonly conversationStateRepository: ConversationStateRepository,
   ) {}
@@ -116,6 +121,7 @@ export class CallLogsController {
       turnCount: record.turnCount,
       analysis: record.analysis,
       cost: record.cost,
+      recordingUrl: record.recordingUrl,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
       logs: record.logs,
@@ -169,6 +175,24 @@ export class CallLogsController {
       lastUserUtterance: state.lastUserUtterance,
       lastAgentResponse: state.lastAgentResponse,
     };
+  }
+
+  /**
+   * Stream the mixed WAV recording for a completed call.
+   * GET /call-logs/:callId/recording
+   */
+  @Get(':callId/recording')
+  @Header('Accept-Ranges', 'none')
+  getRecording(@Param('callId') callId: string): StreamableFile {
+    const filePath = this.recordingService.getRecordingPath(callId);
+    if (!filePath) {
+      throw new NotFoundException(`Recording not found for call: ${callId}`);
+    }
+    const { size } = statSync(filePath);
+    return new StreamableFile(createReadStream(filePath), {
+      type: 'audio/wav',
+      length: size,
+    });
   }
 }
 

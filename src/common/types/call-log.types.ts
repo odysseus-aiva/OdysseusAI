@@ -126,6 +126,8 @@ export interface CallRecord {
   agentSnapshot?: AgentSnapshot;
   /** Arbitrary key-value pairs supplied by the caller at session start. */
   metadata?: Record<string, string | number | boolean>;
+  /** Backend URL path of the mixed WAV recording, set after the call ends. */
+  recordingUrl?: string;
   status: CallStatus;
   endedBy?: CallEndedBy;
   /** Epoch ms when the session was finalized (stopSession called). */

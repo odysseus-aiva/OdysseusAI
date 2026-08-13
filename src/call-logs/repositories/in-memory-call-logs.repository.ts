@@ -87,6 +87,7 @@ export class InMemoryCallLogsRepository implements CallLogsRepository {
       finalLatencyMetrics?: import('../../common/types/performance.types').LatencyMetrics;
       finalCost?: import('../../common/types/cost.types').CallCost;
       agentSnapshot?: AgentSnapshot;
+      recordingUrl?: string;
     },
   ): Promise<void> {
     const record = this.byCallId.get(callId);
@@ -104,6 +105,9 @@ export class InMemoryCallLogsRepository implements CallLogsRepository {
     }
     if (outcome.agentSnapshot) {
       record.agentSnapshot = { ...outcome.agentSnapshot };
+    }
+    if (outcome.recordingUrl) {
+      record.recordingUrl = outcome.recordingUrl;
     }
     record.updatedAt = Date.now();
   }
@@ -216,6 +220,7 @@ function toSummary(record: CallRecord): CallSummary {
     turnCount: record.turnCount ?? 0,
     analysis: record.analysis,
     cost: record.cost,
+    recordingUrl: record.recordingUrl,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     latencyMetrics: { ...record.latencyMetrics },

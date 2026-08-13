@@ -61,6 +61,9 @@ export class CallEntity {
   @Prop({ type: [String], default: [] })
   callErrors!: string[];
 
+  @Prop()
+  recordingUrl?: string;
+
   @Prop({ required: true })
   createdAt!: number;
 

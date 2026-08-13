@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { RecordingService } from '../recording/recording.service';
 import {
   AudioFrame,
   AudioResampler,
@@ -58,7 +59,10 @@ export class LivekitRtcService {
   /** In-flight word-by-word agent caption reveals, keyed by room. */
   private readonly assistantCaptionAbort = new Map<string, AbortController>();
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    @Optional() private readonly recordingService?: RecordingService,
+  ) {}
 
   isConnected(roomName: string): boolean {
     return this.connections.get(roomName)?.room.isConnected ?? false;
@@ -429,6 +433,12 @@ export class LivekitRtcService {
           frameCopy.length,
         );
         await connection.audioSource.captureFrame(frame);
+        if (this.recordingService) {
+          this.recordingService.appendAgentAudio(
+            roomName,
+            Buffer.from(frameCopy.buffer, frameCopy.byteOffset, frameCopy.byteLength),
+          );
+        }
         offset += frameSampleCount;
       }
 
@@ -527,6 +537,12 @@ export class LivekitRtcService {
         );
       }
       await connection.audioSource.captureFrame(frame);
+      if (this.recordingService) {
+        this.recordingService.appendAgentAudio(
+          roomName,
+          Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength),
+        );
+      }
     } catch (error) {
       this.logger.warn(
         `[omni-audio] captureFrame failed for room "${roomName}": ${(error as Error).message}`,
@@ -634,6 +650,7 @@ export class LivekitRtcService {
           value.data.byteLength,
         );
         onAudioChunk(chunk, participant.identity);
+        this.recordingService?.appendUserAudio(roomName, chunk);
       }
 
       reader.releaseLock();

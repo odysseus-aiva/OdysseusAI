@@ -45,6 +45,7 @@ export interface CallSummary {
   turnCount: number;
   analysis?: CallAnalysis;
   cost?: CallCost;
+  recordingUrl?: string;
   createdAt: number;
   updatedAt: number;
   latencyMetrics: {

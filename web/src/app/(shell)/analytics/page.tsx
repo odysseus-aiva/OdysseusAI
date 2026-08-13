@@ -218,13 +218,12 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
         <HeroKPI
           label="Avg duration"
           value={formatDuration(stats.avgDurationMs)}
-          valueColor={latencyColor(stats.avgDurationMs)}
           icon={Clock}
-          iconColor={latencyColor(stats.avgDurationMs)}
+          iconColor="var(--color-text-faint)"
           delta={stats.deltas.avgDurationMs}
           lowerIsBetter
           formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${Math.round(d)}ms`}
-          sub={stats.avgTurnCount != null ? `${stats.avgTurnCount.toFixed(1)} turns avg` : undefined}
+          sub={stats.avgTurnCount != null ? `Avg turns: ${stats.avgTurnCount.toFixed(1)}` : undefined}
         />
         <HeroKPI
           label="P50 latency"
@@ -235,7 +234,7 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
           delta={stats.deltas.p50LatencyMs}
           lowerIsBetter
           formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${Math.round(d)}ms`}
-          sub={stats.p95LatencyMs != null ? `p95 ${formatMs(stats.p95LatencyMs)}` : undefined}
+          sub={stats.p95LatencyMs != null ? `p95: ${formatMs(stats.p95LatencyMs)}` : undefined}
         />
       </div>
 
@@ -271,7 +270,7 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
             centerLabel="calls"
             segments={outcomeMix}
             stacked
-            size={100}
+            size={130}
           />
         </ChartCard>
       </div>
@@ -286,7 +285,7 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
             centerLabel="calls"
             segments={endedBySegments}
             stacked
-            size={100}
+            size={130}
           />
         </ChartCard>
         <ChartCard
@@ -298,7 +297,7 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
               centerLabel="analyzed"
               segments={sentimentSegments}
               stacked
-              size={100}
+              size={130}
             />
           ) : (
             <EmptyChart height={120} label="No calls have been scored yet" />
@@ -311,9 +310,10 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
           {costSegments.length > 0 ? (
             <Donut
               centerLabel="cost"
+              centerValue={formatUsd(stats.totalCostUsd)}
               segments={costSegments}
               stacked
-              size={100}
+              size={130}
             />
           ) : (
             <EmptyChart height={120} label="No cost data yet" />

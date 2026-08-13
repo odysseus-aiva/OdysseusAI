@@ -74,7 +74,7 @@ export function HeroKPI({
             </span>
           )}
           {sub && (
-            <span className="text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
+            <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
               {sub}
             </span>
           )}

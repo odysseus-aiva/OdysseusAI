@@ -11,11 +11,13 @@ export interface DonutSegment {
 export function Donut({
   segments,
   centerLabel,
+  centerValue,
   size = 120,
   stacked = false,
 }: {
   segments: DonutSegment[];
   centerLabel: string;
+  centerValue?: string;
   size?: number;
   stacked?: boolean;
 }) {
@@ -62,12 +64,12 @@ export function Donut({
       <text
         x={c} y={c - 4}
         textAnchor="middle"
-        fontSize={stacked ? 16 : 18}
+        fontSize={centerValue ? (centerValue.length > 4 ? 11 : 14) : (stacked ? 16 : 18)}
         fontWeight={600}
         fill="var(--color-text)"
         fontFamily="var(--font-display, sans-serif)"
       >
-        {total}
+        {centerValue ?? total}
       </text>
       <text
         x={c} y={c + 12}
@@ -97,7 +99,7 @@ export function Donut({
                 <span className="font-mono text-[12px] font-[600]" style={{ color: 'var(--color-text)' }}>
                   {count}
                 </span>
-                <span className="font-mono text-[10px]" style={{ color: 'var(--color-text-faint)' }}>
+                <span className="font-mono text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
                   {Math.round((count / total) * 100)}%
                 </span>
               </span>
@@ -119,7 +121,7 @@ export function Donut({
             <span className="truncate text-[12.5px]" style={{ color: 'var(--color-text-muted)' }}>{label}</span>
             <span className="ml-auto flex items-baseline gap-1.5 pl-3">
               <span className="font-mono text-[12.5px] font-[600]" style={{ color: 'var(--color-text)' }}>{count}</span>
-              <span className="font-mono text-[10.5px]" style={{ color: 'var(--color-text-faint)' }}>
+              <span className="font-mono text-[10.5px]" style={{ color: 'var(--color-text-muted)' }}>
                 {Math.round((count / total) * 100)}%
               </span>
             </span>

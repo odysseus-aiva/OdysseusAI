@@ -34,7 +34,7 @@ export function ChartCard({
             {title}
           </p>
           {sub && (
-            <p className="mt-0.5 text-[12px]" style={{ color: 'var(--color-text-faint)' }}>
+            <p className="mt-0.5 text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
               {sub}
             </p>
           )}

@@ -1,12 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Phone, Plus, Loader2, AlertCircle, LinkIcon, Unlink, RefreshCw, ShoppingCart } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { Phone, Plus, Loader2, AlertCircle, LinkIcon, Unlink, RefreshCw, ShoppingCart, ChevronDown, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PageHeader } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { fetchAgents, updateAgent, type Agent } from '@/lib/api/agents';
-import { listOwnedNumbers, releaseNumber, type OwnedNumber } from '@/lib/api/twilio';
+import type { OwnedNumber } from '@/lib/api/twilio';
 
 import { BuyNumberModal } from '@/features/agents/components/BuyNumberModal';
 
@@ -30,33 +30,34 @@ export default function PhoneNumbersPage() {
   const [error, setError] = useState<string | null>(null);
   const [showBuy, setShowBuy] = useState(false);
   const [actionTarget, setActionTarget] = useState<string | null>(null);
+  // Track phone numbers bought this session so they show as unattached rows.
+  const recentlyBought = useRef(new Set<string>());
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // Agents are the source of truth — a number "exists" only if an agent has it.
-      // Twilio data is fetched for enrichment (SID for release) but failures are non-fatal.
-      const [agentList, ownedNumbers] = await Promise.all([
-        fetchAgents(),
-        listOwnedNumbers().catch(() => [] as OwnedNumber[]),
-      ]);
+      const agentList = await fetchAgents();
       setAgents(agentList);
 
-      // SID lookup: Twilio phone number → OwnedNumber
-      const byPhone = new Map<string, OwnedNumber>(
-        ownedNumbers.map((n) => [n.phoneNumber, n]),
+      const assignedPhones = new Set(
+        agentList.filter((a) => a.phoneNumber).map((a) => a.phoneNumber!),
       );
 
-      // Only show numbers that have a DB entry (agent.phoneNumber set)
-      setRows(
-        agentList
-          .filter((a) => a.phoneNumber)
-          .map((agent) => ({
-            number: byPhone.get(agent.phoneNumber!) ?? EMPTY_NUMBER(agent.phoneNumber!),
-            attachedAgent: agent,
-          })),
-      );
+      // Rows for agents that already have a number assigned
+      const agentRows = agentList
+        .filter((a) => a.phoneNumber)
+        .map((agent) => ({
+          number: EMPTY_NUMBER(agent.phoneNumber!),
+          attachedAgent: agent,
+        }));
+
+      // Numbers bought this session that haven't been assigned yet
+      const sessionRows = Array.from(recentlyBought.current)
+        .filter((phone) => !assignedPhones.has(phone))
+        .map((phone) => ({ number: EMPTY_NUMBER(phone), attachedAgent: null }));
+
+      setRows([...agentRows, ...sessionRows]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load phone numbers');
     } finally {
@@ -72,9 +73,10 @@ export default function PhoneNumbersPage() {
     setActionTarget(agent.agentId);
     try {
       await updateAgent(agent.agentId, { phoneNumber: null });
+      if (agent.phoneNumber) recentlyBought.current.add(agent.phoneNumber);
       await load();
-    } catch {
-      // ignore — row will stay as-is
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to detach number');
     } finally {
       setActionTarget(null);
     }
@@ -85,20 +87,8 @@ export default function PhoneNumbersPage() {
     try {
       await updateAgent(agentId, { phoneNumber });
       await load();
-    } catch {
-      // ignore
-    } finally {
-      setActionTarget(null);
-    }
-  };
-
-  const handleRelease = async (sid: string) => {
-    setActionTarget(sid);
-    try {
-      await releaseNumber(sid);
-      await load();
-    } catch {
-      // ignore
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to attach number');
     } finally {
       setActionTarget(null);
     }
@@ -108,7 +98,7 @@ export default function PhoneNumbersPage() {
     <div className="flex h-full flex-col">
       <PageHeader
         title="Phone Numbers"
-        description="Twilio numbers owned by your account. Attach each to an agent so inbound calls are answered automatically."
+        description="Buy a Twilio number and attach it to an agent so inbound calls are answered automatically."
         actions={
           <Button variant="primary" size="sm" onClick={() => setShowBuy(true)}>
             <ShoppingCart size={13} strokeWidth={2.3} />
@@ -168,7 +158,6 @@ export default function PhoneNumbersPage() {
                     actionTarget={actionTarget}
                     onDetach={handleDetach}
                     onAttach={handleAttach}
-                    onRelease={handleRelease}
                   />
                 </motion.div>
               ))}
@@ -180,7 +169,8 @@ export default function PhoneNumbersPage() {
       {showBuy && (
         <BuyNumberModal
           onClose={() => setShowBuy(false)}
-          onPurchased={async () => {
+          onPurchased={async (phoneNumber) => {
+            recentlyBought.current.add(phoneNumber);
             setShowBuy(false);
             await load();
           }}
@@ -196,26 +186,24 @@ function NumberCard({
   actionTarget,
   onDetach,
   onAttach,
-  onRelease,
 }: {
   row: NumberRow;
   agents: Agent[];
   actionTarget: string | null;
   onDetach: (agent: Agent) => Promise<void>;
   onAttach: (phoneNumber: string, agentId: string) => Promise<void>;
-  onRelease: (sid: string) => Promise<void>;
 }) {
   const { number, attachedAgent } = row;
   const [attachTo, setAttachTo] = useState('');
 
+  // Only mark busy for this card's in-flight action — never treat actionTarget===null as busy
   const busy =
-    actionTarget === (attachedAgent?.agentId ?? null) ||
-    actionTarget === number.sid ||
-    actionTarget === attachTo;
+    (attachedAgent !== null && actionTarget === attachedAgent.agentId) ||
+    (attachTo !== '' && actionTarget === attachTo);
 
   return (
     <div
-      className="flex flex-col gap-0 rounded-[12px] overflow-hidden"
+      className="flex flex-col gap-0 overflow-hidden rounded-[12px]"
       style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface-raised)' }}
     >
       {/* Top row */}
@@ -224,9 +212,7 @@ function NumberCard({
         <div
           className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[9px]"
           style={{
-            background: attachedAgent
-              ? 'var(--color-accent-subtle)'
-              : 'var(--color-surface-elevated)',
+            background: attachedAgent ? 'var(--color-accent-subtle)' : 'var(--color-surface-elevated)',
             border: `1px solid ${attachedAgent ? 'var(--color-accent-border)' : 'var(--color-border)'}`,
           }}
         >
@@ -242,12 +228,11 @@ function NumberCard({
           <span className="font-mono text-[14px] font-[600]" style={{ color: 'var(--color-text)' }}>
             {number.phoneNumber}
           </span>
-          <div className="flex items-center gap-2">
+          {number.dateCreated && (
             <span className="text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
-              {number.friendlyName}
-              {number.dateCreated ? ` · added ${new Date(number.dateCreated).toLocaleDateString()}` : ''}
+              Added {new Date(number.dateCreated).toLocaleDateString()}
             </span>
-          </div>
+          )}
         </div>
 
         {/* Agent badge or "unassigned" */}
@@ -291,10 +276,7 @@ function NumberCard({
             onClick={() => void onDetach(attachedAgent)}
             disabled={busy}
             className="flex items-center gap-1.5 rounded-[7px] px-2.5 py-1.5 text-[12px] font-[500] transition-colors duration-[140ms] disabled:opacity-40"
-            style={{
-              border: '1px solid var(--color-border)',
-              color: 'var(--color-text-muted)',
-            }}
+            style={{ border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = 'rgba(239,68,68,0.4)';
               e.currentTarget.style.color = '#ef4444';
@@ -308,26 +290,13 @@ function NumberCard({
             Detach
           </button>
         ) : (
-          /* Attach dropdown + button */
+          /* Agent picker + Attach button */
           <>
-            <select
+            <AgentSelect
               value={attachTo}
-              onChange={(e) => setAttachTo(e.target.value)}
-              className="rounded-[7px] px-2.5 py-1.5 text-[12px] outline-none transition-all duration-[140ms]"
-              style={{
-                background: 'var(--color-surface-raised)',
-                border: '1px solid var(--color-border)',
-                color: attachTo ? 'var(--color-text)' : 'var(--color-text-faint)',
-              }}
-            >
-              <option value="">Select agent to attach…</option>
-              {agents.map((a) => (
-                <option key={a.agentId} value={a.agentId}>
-                  {a.name} ({a.agentId})
-                  {a.phoneNumber && a.phoneNumber !== number.phoneNumber ? ` — replaces ${a.phoneNumber}` : ''}
-                </option>
-              ))}
-            </select>
+              onChange={setAttachTo}
+              agents={agents}
+            />
             <button
               type="button"
               disabled={!attachTo || busy}
@@ -344,23 +313,127 @@ function NumberCard({
             </button>
           </>
         )}
-
-        {/* Release number from Twilio account — disabled if not in Twilio (no SID) */}
-        <button
-          type="button"
-          onClick={() => void onRelease(number.sid)}
-          disabled={busy || !number.sid}
-          className="ml-auto flex items-center gap-1.5 rounded-[7px] px-2.5 py-1.5 text-[12px] transition-colors duration-[140ms] disabled:opacity-40"
-          style={{ color: 'var(--color-text-faint)' }}
-          onMouseEnter={(e) => { if (number.sid) e.currentTarget.style.color = '#ef4444'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-faint)'; }}
-          title={number.sid ? 'Release this number from your Twilio account' : 'Not found in Twilio account'}
-        >
-          {busy ? <Loader2 size={11} strokeWidth={2} className="animate-spin" /> : null}
-          Release number
-        </button>
       </div>
     </div>
+  );
+}
+
+function AgentSelect({
+  value,
+  onChange,
+  agents,
+}: {
+  value: string;
+  onChange: (id: string) => void;
+  agents: Agent[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const available = agents.filter((a) => !a.phoneNumber);
+  const selected = available.find((a) => a.agentId === value);
+
+  const openDropdown = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setDropdownStyle({
+      position: 'fixed',
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: Math.max(rect.width, 240),
+      zIndex: 9999,
+    });
+    setOpen(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleMousedown = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleMousedown);
+    return () => document.removeEventListener('mousedown', handleMousedown);
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={open ? () => setOpen(false) : openDropdown}
+        className="flex items-center gap-2 rounded-[7px] px-2.5 py-1.5 text-[12px] transition-all duration-[140ms]"
+        style={{
+          background: 'var(--color-surface-raised)',
+          border: '1px solid var(--color-border)',
+          color: selected ? 'var(--color-text)' : 'var(--color-text-faint)',
+          minWidth: 200,
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--color-border-strong)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.borderColor = open ? 'var(--color-accent-border)' : 'var(--color-border)'; }}
+      >
+        <span className="flex-1 truncate text-left">
+          {selected ? `${selected.name} (${selected.agentId})` : 'Select agent to attach…'}
+        </span>
+        <ChevronDown
+          size={11}
+          strokeWidth={2}
+          className="flex-shrink-0 transition-transform duration-[140ms]"
+          style={{
+            color: 'var(--color-text-faint)',
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+          }}
+        />
+      </button>
+
+      {open && (
+        <div
+          ref={panelRef}
+          onMouseDown={(e) => e.stopPropagation()}
+          className="flex flex-col overflow-hidden rounded-[10px] py-1"
+          style={{
+            ...dropdownStyle,
+            background: 'var(--color-surface-raised)',
+            border: '1px solid var(--color-border-strong)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          }}
+        >
+          {available.length === 0 ? (
+            <p className="px-3 py-2 text-[12px]" style={{ color: 'var(--color-text-faint)' }}>
+              All agents already have a number
+            </p>
+          ) : (
+            available.map((a) => {
+              const isSelected = a.agentId === value;
+              return (
+                <button
+                  key={a.agentId}
+                  type="button"
+                  onClick={() => { onChange(a.agentId); setOpen(false); }}
+                  className="flex items-center gap-2.5 px-3 py-2 text-left text-[12px] transition-colors duration-[100ms]"
+                  style={{ color: isSelected ? 'var(--color-accent)' : 'var(--color-text)', background: 'transparent' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-surface-elevated)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  {isSelected ? (
+                    <Check size={11} strokeWidth={2.5} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
+                  ) : (
+                    <span style={{ width: 11, flexShrink: 0 }} />
+                  )}
+                  <span className="flex-1 truncate">
+                    <span className="font-[500]">{a.name}</span>
+                    <span style={{ color: 'var(--color-text-faint)' }}> ({a.agentId})</span>
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -374,8 +447,7 @@ function EmptyNumbers({ onBuy }: { onBuy: () => void }) {
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-40"
         style={{
-          background:
-            'radial-gradient(ellipse 60% 100% at 50% 0%, var(--color-accent-subtle), transparent 70%)',
+          background: 'radial-gradient(ellipse 60% 100% at 50% 0%, var(--color-accent-subtle), transparent 70%)',
         }}
       />
 

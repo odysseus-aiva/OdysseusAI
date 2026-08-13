@@ -7,10 +7,30 @@ import { join } from 'path';
 const AGENT_RATE = 24_000;
 const OUTPUT_RATE = 16_000;
 
+/**
+ * Time gap (ms) between consecutive agent frames that signals a new speaking
+ * segment. Frames within the same utterance arrive every ~20ms; silence
+ * between turns is typically > 500ms.
+ */
+const SEGMENT_GAP_MS = 400;
+
+interface AgentSegment {
+  /** Milliseconds from recording start when this utterance began. */
+  startOffsetMs: number;
+  /** PCM chunks belonging to this utterance, to be concatenated in order. */
+  chunks: Buffer[];
+}
+
 interface RecordingSession {
   callId: string;
+  startMs: number;
   userChunks: Buffer[];
-  agentChunks: Buffer[];
+  /** Completed agent utterances. */
+  agentSegments: AgentSegment[];
+  /** The utterance currently being assembled (null between turns). */
+  currentAgentSegment: AgentSegment | null;
+  /** offsetMs of the last agent chunk, for gap detection. */
+  lastAgentChunkMs: number;
 }
 
 @Injectable()
@@ -28,7 +48,14 @@ export class RecordingService {
 
   startRecording(roomName: string, callId: string): void {
     if (this.sessions.has(roomName)) return;
-    this.sessions.set(roomName, { callId, userChunks: [], agentChunks: [] });
+    this.sessions.set(roomName, {
+      callId,
+      startMs: Date.now(),
+      userChunks: [],
+      agentSegments: [],
+      currentAgentSegment: null,
+      lastAgentChunkMs: -SEGMENT_GAP_MS,
+    });
     this.logger.log(`Recording started: room=${roomName} call=${callId}`);
   }
 
@@ -37,9 +64,31 @@ export class RecordingService {
     this.sessions.get(roomName)?.userChunks.push(pcm);
   }
 
-  /** Called with every agent audio frame (raw Int16 LE PCM, 24 kHz mono). */
+  /**
+   * Called with every agent audio frame (raw Int16 LE PCM, 24 kHz mono).
+   *
+   * captureFrame() returns almost immediately, so all frames in one utterance
+   * arrive within milliseconds of each other. We cannot rely on per-frame
+   * timestamps for within-utterance positioning — instead we track the
+   * real start-time of each utterance and concatenate its frames in order.
+   */
   appendAgentAudio(roomName: string, pcm: Buffer): void {
-    this.sessions.get(roomName)?.agentChunks.push(pcm);
+    const session = this.sessions.get(roomName);
+    if (!session) return;
+
+    const offsetMs = Date.now() - session.startMs;
+    const gapMs = offsetMs - session.lastAgentChunkMs;
+
+    if (!session.currentAgentSegment || gapMs > SEGMENT_GAP_MS) {
+      // Flush the completed utterance before starting the next one.
+      if (session.currentAgentSegment) {
+        session.agentSegments.push(session.currentAgentSegment);
+      }
+      session.currentAgentSegment = { startOffsetMs: offsetMs, chunks: [] };
+    }
+
+    session.currentAgentSegment.chunks.push(pcm);
+    session.lastAgentChunkMs = offsetMs;
   }
 
   /**
@@ -51,22 +100,28 @@ export class RecordingService {
     if (!session) return null;
     this.sessions.delete(roomName);
 
-    const { callId, userChunks, agentChunks } = session;
+    const { callId, userChunks, agentSegments, currentAgentSegment } = session;
+
+    // Flush any in-progress utterance.
+    const allSegments = currentAgentSegment
+      ? [...agentSegments, currentAgentSegment]
+      : agentSegments;
 
     const userRaw = concat(userChunks);
-    const agentRaw = concat(agentChunks);
-
-    if (userRaw.length === 0 && agentRaw.length === 0) {
+    if (userRaw.length === 0 && allSegments.length === 0) {
       this.logger.log(`No audio captured for call: ${callId}`);
       return null;
     }
 
+    // User track: continuous Int16 at OUTPUT_RATE — use as-is.
     const userSamples = toInt16Array(userRaw);
-    const agentResampled = resample(
-      toInt16Array(agentRaw),
-      AGENT_RATE,
-      OUTPUT_RATE,
-    );
+
+    // Agent track: reconstruct at AGENT_RATE with each utterance placed at
+    // its real start-time and samples packed sequentially within the utterance.
+    const totalMs = (userSamples.length / OUTPUT_RATE) * 1000;
+    const agentTrack = buildAgentTrack(allSegments, totalMs, AGENT_RATE);
+    const agentResampled = resample(agentTrack, AGENT_RATE, OUTPUT_RATE);
+
     const mixed = mix(userSamples, agentResampled);
 
     const wav = encodeWav(mixed, OUTPUT_RATE);
@@ -101,6 +156,31 @@ function toInt16Array(buf: Buffer): Int16Array {
     arr[i] = buf.readInt16LE(i * 2);
   }
   return arr;
+}
+
+/**
+ * Build a full-duration agent track at the given sample rate.
+ * Each utterance is placed at its real start-time; silence fills the gaps.
+ */
+function buildAgentTrack(
+  segments: AgentSegment[],
+  totalMs: number,
+  rate: number,
+): Int16Array {
+  const totalSamples = Math.ceil((totalMs * rate) / 1000);
+  const track = new Int16Array(totalSamples); // zero = silence
+
+  for (const segment of segments) {
+    const segmentData = concat(segment.chunks);
+    const samples = toInt16Array(segmentData);
+    const offsetSamples = Math.floor((segment.startOffsetMs * rate) / 1000);
+    const writeLen = Math.min(samples.length, totalSamples - offsetSamples);
+    if (offsetSamples >= 0 && writeLen > 0) {
+      track.set(samples.subarray(0, writeLen), offsetSamples);
+    }
+  }
+
+  return track;
 }
 
 /** Linear interpolation resampler (good enough for speech playback). */
@@ -143,18 +223,18 @@ function encodeWav(samples: Int16Array, sampleRate: number): Buffer {
   buf.writeUInt32LE(36 + dataBytes, 4);
   buf.write('WAVE', 8);
   buf.write('fmt ', 12);
-  buf.writeUInt32LE(16, 16); // PCM subchunk size
-  buf.writeUInt16LE(1, 20); // AudioFormat: PCM
-  buf.writeUInt16LE(1, 22); // NumChannels: mono
+  buf.writeUInt32LE(16, 16);
+  buf.writeUInt16LE(1, 20); // PCM
+  buf.writeUInt16LE(1, 22); // mono
   buf.writeUInt32LE(sampleRate, 24);
-  buf.writeUInt32LE(sampleRate * 2, 28); // ByteRate
-  buf.writeUInt16LE(2, 32); // BlockAlign
-  buf.writeUInt16LE(16, 34); // BitsPerSample
+  buf.writeUInt32LE(sampleRate * 2, 28);
+  buf.writeUInt16LE(2, 32);
+  buf.writeUInt16LE(16, 34);
   buf.write('data', 36);
   buf.writeUInt32LE(dataBytes, 40);
 
   for (let i = 0; i < samples.length; i++) {
-    buf.writeInt16LE(samples[i], 44 + i * 2);
+    buf.writeInt16LE(samples[i] ?? 0, 44 + i * 2);
   }
   return buf;
 }

@@ -5,10 +5,7 @@ import { X, Search, Phone, Check, Loader2, AlertCircle, ChevronDown } from 'luci
 import {
   searchAvailableNumbers,
   purchaseNumber,
-  listOwnedNumbers,
-  releaseNumber,
   type AvailableNumber,
-  type OwnedNumber,
 } from '@/lib/api/twilio';
 
 const COUNTRY_OPTIONS = [
@@ -103,12 +100,8 @@ function CountrySelect({
                 color: c.code === value ? 'var(--color-accent)' : 'var(--color-text)',
                 background: 'transparent',
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--color-surface-elevated)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-surface-elevated)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
             >
               {c.label}
               {c.code === value && (
@@ -134,28 +127,12 @@ export function BuyNumberModal({ onClose, onPurchased }: BuyNumberModalProps) {
   const [country, setCountry] = useState('US');
   const [areaCode, setAreaCode] = useState('');
   const [results, setResults] = useState<AvailableNumber[]>([]);
-  const [owned, setOwned] = useState<OwnedNumber[]>([]);
   const [selected, setSelected] = useState<AvailableNumber | null>(null);
   const [searching, setSearching] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
-  const [releasing, setReleasing] = useState<string | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'buy' | 'owned'>('buy');
   const overlayRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    void loadOwned();
-  }, []);
-
-  const loadOwned = async () => {
-    try {
-      const numbers = await listOwnedNumbers();
-      setOwned(numbers);
-    } catch {
-      // Non-critical — owned list may be unavailable if creds not set
-    }
-  };
 
   const handleSearch = async () => {
     setSearching(true);
@@ -186,23 +163,10 @@ export function BuyNumberModal({ onClose, onPurchased }: BuyNumberModalProps) {
       const result = await purchaseNumber(selected.phoneNumber);
       onPurchased(result.phoneNumber);
       setStep('success');
-      await loadOwned();
     } catch (err) {
       setPurchaseError(err instanceof Error ? err.message : 'Purchase failed');
     } finally {
       setPurchasing(false);
-    }
-  };
-
-  const handleRelease = async (sid: string) => {
-    setReleasing(sid);
-    try {
-      await releaseNumber(sid);
-      setOwned((prev) => prev.filter((n) => n.sid !== sid));
-    } catch {
-      // Silently ignore — user can retry
-    } finally {
-      setReleasing(null);
     }
   };
 
@@ -232,10 +196,10 @@ export function BuyNumberModal({ onClose, onPurchased }: BuyNumberModalProps) {
         >
           <div className="flex flex-col gap-0.5">
             <span className="text-[14px] font-[600]" style={{ color: 'var(--color-text)' }}>
-              Phone Numbers
+              Buy a number
             </span>
             <span className="text-[11.5px]" style={{ color: 'var(--color-text-faint)' }}>
-              Buy a Twilio number and attach it to this agent
+              Search available Twilio numbers and purchase one
             </span>
           </div>
           <button
@@ -250,42 +214,19 @@ export function BuyNumberModal({ onClose, onPurchased }: BuyNumberModalProps) {
           </button>
         </div>
 
-        {/* Tabs */}
-        {step === 'search' && (
-          <div
-            className="flex"
-            style={{ borderBottom: '1px solid var(--color-border)' }}
-          >
-            {(['buy', 'owned'] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTab(t)}
-                className="px-5 py-2.5 text-[12px] font-[500] transition-colors duration-[120ms]"
-                style={{
-                  color: tab === t ? 'var(--color-accent)' : 'var(--color-text-muted)',
-                  borderBottom: tab === t ? '2px solid var(--color-accent)' : '2px solid transparent',
-                }}
-              >
-                {t === 'buy' ? 'Buy a number' : `My numbers (${owned.length})`}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Body */}
         <div className="flex flex-col gap-4 overflow-y-auto p-5">
-          {step === 'search' && tab === 'buy' && (
+          {step === 'search' && (
             <>
               {/* Search controls */}
               <div className="flex gap-2.5">
-                <div className="flex flex-col gap-1.5 flex-1">
+                <div className="flex flex-1 flex-col gap-1.5">
                   <label className="text-[11px] font-[600] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>
                     Country
                   </label>
                   <CountrySelect value={country} onChange={setCountry} />
                 </div>
-                <div className="flex flex-col gap-1.5 w-[120px]">
+                <div className="flex w-[120px] flex-col gap-1.5">
                   <label className="text-[11px] font-[600] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>
                     Area code
                   </label>
@@ -383,67 +324,6 @@ export function BuyNumberModal({ onClose, onPurchased }: BuyNumberModalProps) {
             </>
           )}
 
-          {step === 'search' && tab === 'owned' && (
-            <div className="flex flex-col gap-2">
-              {owned.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-8" style={{ color: 'var(--color-text-faint)' }}>
-                  <Phone size={24} strokeWidth={1.4} />
-                  <p className="text-[12.5px]">No numbers in your Twilio account yet.</p>
-                </div>
-              ) : (
-                owned.map((n) => (
-                  <div
-                    key={n.sid}
-                    className="flex items-center justify-between rounded-[9px] px-3.5 py-2.5"
-                    style={{
-                      background: 'var(--color-surface-raised)',
-                      border: '1px solid var(--color-border)',
-                    }}
-                  >
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-mono text-[13px] font-[550]" style={{ color: 'var(--color-text)' }}>
-                        {n.phoneNumber}
-                      </span>
-                      <span className="text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
-                        {n.friendlyName}
-                      </span>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onPurchased(n.phoneNumber);
-                          onClose();
-                        }}
-                        className="rounded-[7px] px-2.5 py-1 text-[11.5px] font-[500] transition-colors duration-[120ms]"
-                        style={{
-                          background: 'var(--color-accent-subtle)',
-                          border: '1px solid var(--color-accent-border)',
-                          color: 'var(--color-accent)',
-                        }}
-                      >
-                        Attach
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleRelease(n.sid)}
-                        disabled={releasing === n.sid}
-                        className="rounded-[7px] px-2.5 py-1 text-[11.5px] font-[500] transition-colors duration-[120ms] disabled:opacity-40"
-                        style={{
-                          background: 'var(--color-surface-elevated)',
-                          border: '1px solid var(--color-border)',
-                          color: 'var(--color-text-muted)',
-                        }}
-                      >
-                        {releasing === n.sid ? <Loader2 size={11} className="animate-spin" /> : 'Release'}
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
           {step === 'confirm' && selected && (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-2 rounded-[10px] px-4 py-4"
@@ -460,7 +340,7 @@ export function BuyNumberModal({ onClose, onPurchased }: BuyNumberModalProps) {
               </div>
 
               <p className="text-[12.5px] leading-[1.55]" style={{ color: 'var(--color-text-muted)' }}>
-                This will purchase the number on your Twilio account and attach it to your SIP trunk. The number will then be assigned to this agent.
+                This will purchase the number on your Twilio account and attach it to your SIP trunk.
               </p>
 
               {purchaseError && (
@@ -513,7 +393,7 @@ export function BuyNumberModal({ onClose, onPurchased }: BuyNumberModalProps) {
                 <span className="font-mono text-[13px]" style={{ color: 'var(--color-text-muted)' }}>{selected.phoneNumber}</span>
               </div>
               <p className="text-center text-[12px]" style={{ color: 'var(--color-text-faint)' }}>
-                The number has been saved to this agent. Hit Save to persist the change.
+                The number has been added to your phone numbers. Go to Phone Numbers to attach it to an agent.
               </p>
               <button
                 type="button"

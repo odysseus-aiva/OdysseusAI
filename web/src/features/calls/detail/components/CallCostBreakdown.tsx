@@ -9,21 +9,29 @@ export function CallCostBreakdown({ cost }: { cost: CallCost }) {
     <Section
       title="Cost"
       action={
-        cost.estimated ? (
-          <span
-            className="rounded-[5px] px-1.5 py-0.5 text-[10.5px] font-[500]"
-            style={{
-              background: 'rgb(251 191 36 / 0.08)',
-              color: 'var(--color-state-warning)',
-            }}
-          >
-            Estimated
-          </span>
-        ) : undefined
+        /* "Estimated" qualifies a number; it is not a state the user has to act
+           on, so it stays a neutral badge rather than a warning pill. */
+        cost.estimated ? <span className="badge">Estimated</span> : undefined
       }
     >
       {cost.pricingModel === 'omni' ? <OmniCost cost={cost} /> : <PipelineCost cost={cost} />}
     </Section>
+  );
+}
+
+function CostTotal({ usd }: { usd: number }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-caption" style={{ color: 'var(--fg-muted)' }}>
+        Total
+      </span>
+      <span
+        className="num text-title-md font-medium tracking-wordmark"
+        style={{ color: 'var(--fg-ink)' }}
+      >
+        {formatUsd(usd)}
+      </span>
+    </div>
   );
 }
 
@@ -33,21 +41,12 @@ function PipelineCost({ cost }: { cost: CallCost }) {
   return (
     <Panel>
       <div className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
-            Total
-          </span>
-          <span
-            className="font-mono text-[18px] font-[600] tracking-[-0.02em] tabular-nums"
-            style={{ color: 'var(--color-text)' }}
-          >
-            {formatUsd(cost.totalUsd)}
-          </span>
-        </div>
+        <CostTotal usd={cost.totalUsd} />
 
         <div
-          className="flex h-1.5 overflow-hidden rounded-full"
-          style={{ background: 'var(--color-surface-elevated)' }}
+          aria-hidden
+          className="flex h-1.5 overflow-hidden rounded-pill"
+          style={{ background: 'var(--surface-recessed)' }}
         >
           {rows.map((r) =>
             r.usd > 0 ? (
@@ -56,7 +55,6 @@ function PipelineCost({ cost }: { cost: CallCost }) {
                 style={{
                   width: `${(r.usd / (cost.totalUsd || 1)) * 100}%`,
                   background: r.color,
-                  opacity: 0.8,
                 }}
               />
             ) : null,
@@ -67,25 +65,29 @@ function PipelineCost({ cost }: { cost: CallCost }) {
           {rows.map((r) => (
             <div key={r.label} className="flex items-center gap-3">
               <span
-                className="flex w-10 shrink-0 items-center gap-1.5 text-[11.5px]"
-                style={{ color: 'var(--color-text-muted)' }}
+                className="flex w-10 shrink-0 items-center gap-2 text-caption"
+                style={{ color: 'var(--fg-body)' }}
               >
                 <span
                   aria-hidden
-                  className="rounded-full"
-                  style={{ width: 6, height: 6, background: r.color }}
+                  className="rounded-pill"
+                  style={{
+                    width: 'var(--dot-size)',
+                    height: 'var(--dot-size)',
+                    background: r.color,
+                  }}
                 />
                 {r.label}
               </span>
               <span
-                className="min-w-0 flex-1 truncate text-[11px]"
-                style={{ color: 'var(--color-text-faint)' }}
+                className="min-w-0 flex-1 truncate text-micro"
+                style={{ color: 'var(--fg-muted)' }}
               >
                 {r.detail || '—'}
               </span>
               <span
-                className="w-20 shrink-0 text-right font-mono text-[11.5px] tabular-nums"
-                style={{ color: 'var(--color-text)' }}
+                className="w-20 shrink-0 text-right text-caption tabular-nums"
+                style={{ color: 'var(--fg-ink)' }}
               >
                 {formatUsd(r.usd)}
               </span>
@@ -102,44 +104,38 @@ function OmniCost({ cost }: { cost: CallCost }) {
   return (
     <Panel>
       <div className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
-            Total
-          </span>
-          <span
-            className="font-mono text-[18px] font-[600] tracking-[-0.02em] tabular-nums"
-            style={{ color: 'var(--color-text)' }}
-          >
-            {formatUsd(cost.totalUsd)}
-          </span>
-        </div>
+        <CostTotal usd={cost.totalUsd} />
         <div className="flex items-center gap-3">
           <span
-            className="flex w-16 shrink-0 items-center gap-1.5 text-[11.5px]"
-            style={{ color: 'var(--color-text-muted)' }}
+            className="flex w-16 shrink-0 items-center gap-2 text-caption"
+            style={{ color: 'var(--fg-body)' }}
           >
             <span
               aria-hidden
-              className="rounded-full"
-              style={{ width: 6, height: 6, background: 'var(--color-accent)' }}
+              className="rounded-pill"
+              style={{
+                width: 'var(--dot-size)',
+                height: 'var(--dot-size)',
+                background: 'var(--fg-ink)',
+              }}
             />
             Omni
           </span>
-          <span className="min-w-0 flex-1 text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
+          <span className="min-w-0 flex-1 text-micro" style={{ color: 'var(--fg-muted)' }}>
             PyAI Omni · {durationSec}s · $0.05/min flat rate
           </span>
           <span
-            className="w-20 shrink-0 text-right font-mono text-[11.5px] tabular-nums"
-            style={{ color: 'var(--color-text)' }}
+            className="w-20 shrink-0 text-right text-caption tabular-nums"
+            style={{ color: 'var(--fg-ink)' }}
           >
             {formatUsd(cost.totalUsd)}
           </span>
         </div>
         <p
-          className="pt-2 text-[10.5px] leading-[1.4]"
+          className="pt-3 text-micro leading-body"
           style={{
-            color: 'var(--color-text-faint)',
-            borderTop: '1px solid var(--color-border)',
+            color: 'var(--fg-muted)',
+            borderTop: '1px solid var(--line-hairline)',
           }}
         >
           Single all-in rate covering hearing, reasoning, retrieval, and speech. No separate

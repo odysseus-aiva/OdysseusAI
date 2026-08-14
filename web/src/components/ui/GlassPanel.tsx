@@ -1,5 +1,14 @@
 import type { HTMLAttributes } from 'react';
 
+/**
+ * Surface container.
+ *
+ * The name is a holdover: there is no glass in this language. Hairlines
+ * separate, and elevation is rationed to things that genuinely float — so
+ * only `elevated` casts a shadow, and it casts the softest one in the system.
+ * A hairline *and* a shadow on the same element is a smell; `elevated` carries
+ * both only because a floating panel needs to detach from what it covers.
+ */
 type GlassPanelVariant = 'default' | 'raised' | 'elevated' | 'inset';
 
 interface GlassPanelProps extends HTMLAttributes<HTMLDivElement> {
@@ -8,24 +17,23 @@ interface GlassPanelProps extends HTMLAttributes<HTMLDivElement> {
 
 const VARIANT_STYLES: Record<GlassPanelVariant, React.CSSProperties> = {
   default: {
-    background: 'var(--color-glass)',
-    border: '1px solid var(--color-glass-border)',
-    boxShadow: '0 4px 24px rgb(0 0 0 / 0.35)',
+    background: 'var(--surface-card)',
+    border: '1px solid var(--line-hairline)',
   },
   raised: {
-    background: 'var(--color-surface-raised)',
-    border: '1px solid var(--color-border)',
-    boxShadow: '0 8px 40px rgb(0 0 0 / 0.4)',
+    background: 'var(--surface-card)',
+    border: '1px solid var(--line-hairline)',
   },
   elevated: {
-    background: 'var(--color-surface-elevated)',
-    border: '1px solid var(--color-border-strong)',
-    boxShadow: '0 12px 48px rgb(0 0 0 / 0.5)',
+    background: 'var(--surface-card)',
+    border: '1px solid var(--line-hairline)',
+    boxShadow: 'var(--shadow-soft)',
   },
+  /* Recessed rather than tinted black: on light the fill has to go *down* a
+     step, and a black alpha would grey the whole surface instead. */
   inset: {
-    background: 'rgb(0 0 0 / 0.15)',
-    border: '1px solid var(--color-border)',
-    boxShadow: 'inset 0 1px 0 rgb(255 255 255 / 0.04)',
+    background: 'var(--surface-recessed)',
+    border: '1px solid var(--line-hairline)',
   },
 };
 
@@ -38,7 +46,7 @@ export function GlassPanel({
 }: GlassPanelProps) {
   return (
     <div
-      className={`rounded-2xl backdrop-blur-xl ${className}`}
+      className={`rounded-[8px] ${className}`}
       style={{ ...VARIANT_STYLES[variant], ...style }}
       {...props}
     >

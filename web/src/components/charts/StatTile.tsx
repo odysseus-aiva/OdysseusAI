@@ -29,33 +29,22 @@ export function StatTile({
   formatDelta?: (absolute: number) => string;
 }) {
   return (
-    <div
-      className="flex flex-col gap-3 rounded-[10px] p-4"
-      style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
-    >
+    /* Never tint the fill or the border by status: colour in a stat tile is
+       confined to the delta arrow. `iconColor` is accepted for call-site
+       compatibility and deliberately ignored — a coloured glyph in the corner
+       of a metric is decoration, and the label already names the metric. */
+    <div className="stat flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <span
-          className="text-[11px] font-[500] uppercase tracking-[0.07em]"
-          style={{ color: 'var(--color-text-faint)' }}
-        >
-          {label}
-        </span>
-        <Icon size={13} strokeWidth={1.75} style={{ color: iconColor }} />
+        {/* Sentence case, not uppercase and tracked out: the tracked-out
+            all-caps label belongs to the marketing system. */}
+        <span className="stat__label">{label}</span>
+        <Icon size={16} strokeWidth={1.75} aria-hidden="true" style={{ color: 'var(--fg-muted)' }} />
       </div>
 
       <div>
-        <span
-          className="text-[24px] font-[600] leading-none tracking-[-0.04em]"
-          style={{ color: 'var(--color-text)' }}
-        >
-          {value}
-        </span>
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-          {sub && (
-            <span className="text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
-              {sub}
-            </span>
-          )}
+        <div className="stat__value mt-0">{value}</div>
+        <div className="stat__foot flex-wrap gap-x-2 gap-y-1">
+          {sub && <span>{sub}</span>}
           {delta && <DeltaChip delta={delta} lowerIsBetter={lowerIsBetter} format={formatDelta} />}
         </div>
       </div>
@@ -76,12 +65,6 @@ function DeltaChip({
   const flat = Math.abs(absolute) < 1e-9;
   const improved = lowerIsBetter ? absolute < 0 : absolute > 0;
 
-  const color = flat
-    ? 'var(--color-text-faint)'
-    : improved
-      ? 'var(--color-state-speaking)'
-      : 'var(--color-state-error)';
-
   const Icon = flat ? Minus : absolute > 0 ? ArrowUpRight : ArrowDownRight;
   const text = format
     ? format(absolute)
@@ -89,13 +72,21 @@ function DeltaChip({
       ? `${absolute > 0 ? '+' : ''}${delta.pct}%`
       : `${absolute > 0 ? '+' : ''}${Math.round(absolute * 100) / 100}`;
 
+  /* Colour lives only in the glyph — never a tinted pill fill or border. The
+     direction is also carried by the arrow shape and the signed text, so it is
+     never conveyed by colour alone. */
   return (
     <span
-      className="inline-flex items-center gap-0.5 font-mono text-[10.5px] font-[600]"
-      style={{ color }}
+      className="inline-flex items-center gap-1 text-[13px]"
       title="Change vs. the previous period of equal length"
     >
-      <Icon size={11} strokeWidth={2.25} />
+      <Icon
+        size={12}
+        strokeWidth={2.2}
+        aria-hidden="true"
+        className="stat__delta"
+        data-direction={flat ? undefined : improved ? 'up' : 'down'}
+      />
       {flat ? 'flat' : text}
     </span>
   );

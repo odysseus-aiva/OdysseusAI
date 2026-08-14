@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Copy, Check, Webhook, FlaskConical, BarChart3, Phone, ShoppingCart } from 'lucide-react';
+import { Copy, Check, Webhook, FlaskConical, BarChart3, ShoppingCart } from 'lucide-react';
 import { Section, Panel, Collapsible, DataRow } from '@/components/ui/Section';
+import { Button } from '@/components/ui/Button';
 import { Field, Input } from '@/components/ui/Field';
 import type { Agent } from '@/lib/api/agents';
 import type { AgentDraft, ToolDraft } from '../useAgentConfig';
@@ -58,27 +59,14 @@ export function AdvancedTab({
                   placeholder="+15551234567"
                   className="flex-1 font-mono"
                 />
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  className="flex-shrink-0"
                   onClick={() => setShowBuyModal(true)}
-                  className="flex flex-shrink-0 items-center gap-1.5 rounded-[8px] px-3 py-2 text-[12.5px] font-[500] transition-colors duration-[140ms]"
-                  style={{
-                    background: 'var(--color-surface-raised)',
-                    border: '1px solid var(--color-border)',
-                    color: 'var(--color-text-muted)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--color-accent-border)';
-                    e.currentTarget.style.color = 'var(--color-accent)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--color-border)';
-                    e.currentTarget.style.color = 'var(--color-text-muted)';
-                  }}
                 >
-                  <ShoppingCart size={12} strokeWidth={2} />
+                  <ShoppingCart size={16} strokeWidth={2} aria-hidden="true" />
                   Buy a number
-                </button>
+                </Button>
               </div>
             </Field>
           </div>
@@ -90,12 +78,12 @@ export function AdvancedTab({
           <DataRow label="Agent ID" mono>
             <CopyableValue value={agent.agentId} />
           </DataRow>
-          <div style={{ borderTop: '1px solid var(--color-border)' }}>
+          <div style={{ borderTop: '1px solid var(--line-hairline)' }}>
             <DataRow label="Created" >
               {new Date(agent.createdAt).toLocaleString()}
             </DataRow>
           </div>
-          <div style={{ borderTop: '1px solid var(--color-border)' }}>
+          <div style={{ borderTop: '1px solid var(--line-hairline)' }}>
             <DataRow label="Last updated">
               {new Date(agent.updatedAt).toLocaleString()}
             </DataRow>
@@ -105,14 +93,7 @@ export function AdvancedTab({
 
       <Section title="Start a session via API" description="Equivalent request for the current configuration.">
         <Panel>
-          <pre
-            className="overflow-x-auto rounded-[8px] px-3 py-2.5 font-mono text-[11.5px] leading-[1.6]"
-            style={{
-              background: 'var(--color-abyss)',
-              border: '1px solid var(--color-border)',
-              color: 'var(--color-text-muted)',
-            }}
-          >
+          <pre className="code-block">
 {`POST /session/start
 {
   "agentConfig": { "agentId": "${agent.agentId}" }
@@ -126,18 +107,11 @@ export function AdvancedTab({
         description={`${enabledTools.length} enabled — the exact payload sent on save`}
       >
         {enabledTools.length === 0 ? (
-          <p className="text-[12.5px]" style={{ color: 'var(--color-text-faint)' }}>
+          <p className="text-caption" style={{ color: 'var(--fg-muted)' }}>
             No tools enabled. The agent will rely entirely on its prompt.
           </p>
         ) : (
-          <pre
-            className="max-h-[320px] overflow-auto rounded-[8px] px-3 py-2.5 font-mono text-[11.5px] leading-[1.6]"
-            style={{
-              background: 'var(--color-abyss)',
-              border: '1px solid var(--color-border)',
-              color: 'var(--color-text-muted)',
-            }}
-          >
+          <pre className="code-block max-h-[320px]">
             {JSON.stringify(
               enabledTools.map((name) => ({
                 toolName: name,
@@ -152,7 +126,7 @@ export function AdvancedTab({
       </Collapsible>
 
       <Section title="Reserved" description="Planned capabilities that will live in this tab.">
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-3">
           <ReservedRow
             icon={Webhook}
             title="Webhooks"
@@ -185,24 +159,19 @@ function ReservedRow({
   body: string;
 }) {
   return (
-    <div
-      className="flex items-start gap-3 rounded-[10px] px-3.5 py-3"
-      style={{
-        background: 'var(--color-surface-raised)',
-        border: '1px solid var(--color-border)',
-      }}
-    >
+    <div className="card flex items-start gap-3">
       <Icon
-        size={13.5}
-        strokeWidth={1.9}
-        className="mt-0.5 flex-shrink-0"
-        style={{ color: 'var(--color-text-faint)' }}
+        size={16}
+        strokeWidth={1.8}
+        aria-hidden="true"
+        className="mt-px flex-shrink-0"
+        style={{ color: 'var(--fg-muted)' }}
       />
       <div className="flex min-w-0 flex-col gap-1">
-        <span className="text-[12.5px] font-[500]" style={{ color: 'var(--color-text)' }}>
+        <span className="text-nav font-medium" style={{ color: 'var(--fg-ink)' }}>
           {title}
         </span>
-        <p className="text-[11.5px] leading-[1.55]" style={{ color: 'var(--color-text-faint)' }}>
+        <p className="text-caption leading-body" style={{ color: 'var(--fg-muted)' }}>
           {body}
         </p>
       </div>
@@ -228,19 +197,20 @@ function CopyableValue({ value }: { value: string }) {
     <button
       type="button"
       onClick={() => void copy()}
-      className="group inline-flex cursor-pointer items-center gap-1.5 rounded-[5px] px-1 py-0.5 transition-colors duration-[140ms]"
-      style={{ color: 'var(--color-text)' }}
+      className="group focus-inset inline-flex max-w-full cursor-pointer items-center gap-2 rounded-xs transition-colors duration-[var(--duration-hover)] hover:text-[var(--fg-ink-hover)]"
+      style={{ color: 'var(--fg-ink)' }}
       aria-label={copied ? 'Copied' : `Copy ${value}`}
     >
-      <span className="font-mono">{value}</span>
+      <span className="truncate font-mono">{value}</span>
       {copied ? (
-        <Check size={11} strokeWidth={2.5} style={{ color: 'var(--color-state-speaking)' }} />
+        <Check size={14} strokeWidth={2.2} aria-hidden="true" style={{ color: 'var(--status-success)' }} />
       ) : (
         <Copy
-          size={11}
+          size={14}
           strokeWidth={2}
-          className="opacity-0 transition-opacity duration-[140ms] group-hover:opacity-100"
-          style={{ color: 'var(--color-text-faint)' }}
+          aria-hidden="true"
+          className="opacity-0 transition-opacity duration-[var(--duration-hover)] group-hover:opacity-100 group-focus-visible:opacity-100"
+          style={{ color: 'var(--fg-muted)' }}
         />
       )}
     </button>

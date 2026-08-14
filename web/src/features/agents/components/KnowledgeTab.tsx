@@ -23,7 +23,7 @@ export function KnowledgeTab() {
       </Section>
 
       <Section title="What this will support" description="Planned capabilities for this tab.">
-        <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(212px, 1fr))' }}>
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(212px, 1fr))' }}>
           <PlannedCard
             icon={FileStack}
             title="Documents & FAQs"
@@ -55,20 +55,14 @@ function PlannedCard({
   body: string;
 }) {
   return (
-    <div
-      className="flex flex-col gap-2 rounded-[10px] px-3.5 py-3"
-      style={{
-        background: 'var(--color-surface-raised)',
-        border: '1px solid var(--color-border)',
-      }}
-    >
+    <div className="card flex flex-col gap-2">
       <span className="flex items-center gap-2">
-        <Icon size={13} strokeWidth={1.9} style={{ color: 'var(--color-text-faint)' }} />
-        <span className="text-[12.5px] font-[500]" style={{ color: 'var(--color-text)' }}>
+        <Icon size={16} strokeWidth={1.8} aria-hidden="true" style={{ color: 'var(--fg-muted)' }} />
+        <span className="text-nav font-medium" style={{ color: 'var(--fg-ink)' }}>
           {title}
         </span>
       </span>
-      <p className="text-[11.5px] leading-[1.55]" style={{ color: 'var(--color-text-faint)' }}>
+      <p className="text-caption leading-body" style={{ color: 'var(--fg-muted)' }}>
         {body}
       </p>
     </div>

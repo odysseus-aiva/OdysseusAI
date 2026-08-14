@@ -1,67 +1,42 @@
-type BadgeVariant = 'default' | 'accent' | 'success' | 'warning' | 'error' | 'muted';
+/**
+ * The in-table status label.
+ *
+ * One box, five tones: a washed fill of the status hue under a deep ink of the
+ * same hue. Four things this deliberately is not, all of them corrections to
+ * the previous implementation:
+ *
+ *   - not a pill (6px radius; pills are reserved for chips and dots)
+ *   - not bordered (fill and label are the whole component)
+ *   - never dotted (the dot belongs to the header chip, a different object)
+ *   - never a saturated fill (the measured washes are ~18% veils of the hue)
+ *
+ * A badge is a label, so it has no interactive states at all. The label text is
+ * always the accessible name, so the fill is never the sole carrier of meaning
+ * — which is what licenses colour here in the first place.
+ */
+type BadgeVariant = 'default' | 'accent' | 'success' | 'warning' | 'error' | 'muted' | 'running';
 
 interface BadgeProps {
   variant?: BadgeVariant;
-  dot?: boolean;
   children: React.ReactNode;
   className?: string;
 }
 
-const VARIANT_STYLES: Record<BadgeVariant, React.CSSProperties> = {
-  default: {
-    background: 'var(--color-surface-elevated)',
-    color: 'var(--color-text-muted)',
-    border: '1px solid var(--color-border)',
-  },
-  accent: {
-    background: 'var(--color-accent-subtle)',
-    color: 'var(--color-accent)',
-    border: '1px solid rgb(56 232 255 / 0.18)',
-  },
-  success: {
-    background: 'rgb(74 222 128 / 0.07)',
-    color: 'var(--color-state-speaking)',
-    border: '1px solid rgb(74 222 128 / 0.18)',
-  },
-  warning: {
-    background: 'rgb(251 191 36 / 0.07)',
-    color: 'var(--color-state-warning)',
-    border: '1px solid rgb(251 191 36 / 0.18)',
-  },
-  error: {
-    background: 'rgb(251 113 133 / 0.07)',
-    color: 'var(--color-state-error)',
-    border: '1px solid rgb(251 113 133 / 0.18)',
-  },
-  muted: {
-    background: 'transparent',
-    color: 'var(--color-text-faint)',
-    border: 'none',
-  },
+/* `accent`, `default` and `muted` all resolve to the neutral base: "highlighted"
+   is not a status, and colour is never chrome. Neutral is the base rule rather
+   than a modifier, so these three carry no class of their own. */
+const VARIANT_CLASS: Record<BadgeVariant, string> = {
+  default: '',
+  accent: '',
+  muted: '',
+  success: 'status-pill--success',
+  warning: 'status-pill--warning',
+  error: 'status-pill--error',
+  running: 'status-pill--running',
 };
 
-const DOT_COLORS: Record<BadgeVariant, string> = {
-  default: 'var(--color-text-faint)',
-  accent: 'var(--color-accent)',
-  success: 'var(--color-state-speaking)',
-  warning: 'var(--color-state-warning)',
-  error: 'var(--color-state-error)',
-  muted: 'var(--color-text-faint)',
-};
-
-export function Badge({ variant = 'default', dot, children, className = '' }: BadgeProps) {
+export function Badge({ variant = 'default', children, className = '' }: BadgeProps) {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[6px] text-[11px] font-[500] tracking-[0.01em] ${className}`}
-      style={VARIANT_STYLES[variant]}
-    >
-      {dot && (
-        <span
-          className="flex-shrink-0 rounded-full"
-          style={{ width: 5, height: 5, background: DOT_COLORS[variant] }}
-        />
-      )}
-      {children}
-    </span>
+    <span className={`status-pill ${VARIANT_CLASS[variant]} ${className}`.trim()}>{children}</span>
   );
 }

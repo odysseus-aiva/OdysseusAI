@@ -24,10 +24,10 @@ export interface OrbVisualState {
   ripple: number;
   /** How much live audio level feeds energy/scale. 0 = ignore audio entirely. */
   audioReactive: number;
-  /** Core particle hue. */
-  colorBase: string;
-  /** Tint hue applied to the ~15% accent particles. */
-  colorAccent: string;
+  /** Ramp slot for the core particles. */
+  colorBase: OrbRampKey;
+  /** Ramp slot for the ~15% highlight particles. */
+  colorAccent: OrbRampKey;
   /** Overall particle opacity. */
   opacity: number;
   /** Outer energy-ring intensity 0..1 — rendered as a DOM layer. */
@@ -36,18 +36,77 @@ export interface OrbVisualState {
   enterRate?: number;
 }
 
-/** Cyan → violet is the platform's resting identity (dark theme). */
-const CYAN = '#00c8e8';
-const VIOLET = '#7b2fff';
-const GREEN = '#34d97e';
-const ROSE = '#fb7185';
-const AMBER = '#fbbf24';
+/**
+ * The orb's palette, expressed as slots on the product-accent ramp instead of
+ * literal colours. Every entry is a CSS custom property derived from
+ * `--product-accent`, so recolouring the app's one product visual is a single
+ * edit and the light/dark flip is honoured for free. A hex literal here would
+ * break both.
+ *
+ * States are told apart by their position on the ramp and by motion, never by a
+ * second hue — a violet "thinking" orb and a green "speaking" orb are five
+ * palettes pretending to be one. The two non-accent slots are deliberate:
+ * `muted` because an inert orb carries no product colour, and `error` because a
+ * failed session is a status, which is the other place hue is licensed.
+ */
+export const ORB_RAMP = {
+  tint1: '--accent-tint-1',
+  tint2: '--accent-tint-2',
+  tint3: '--accent-tint-3',
+  accent: '--product-accent',
+  shade1: '--accent-shade-1',
+  shade2: '--accent-shade-2',
+  muted: '--fg-muted',
+  error: '--status-error',
+} as const;
 
-/** Light theme: near-black shell so the orb reads on a white field. */
-const INK = '#000000';
-const INK_SOFT = '#1a1a1a';
-const INK_MID = '#0d0d0d';
-const INK_GREEN = '#0a140c';
+export type OrbRampKey = keyof typeof ORB_RAMP;
+
+/**
+ * Parser guard, not a design decision — deliberately achromatic so it can never
+ * be mistaken for the accent or drift out of sync with it. Reached only without
+ * a document, or on a browser that cannot resolve `color-mix()`.
+ */
+const RAMP_GUARD = 'rgb(255, 255, 255)';
+
+/**
+ * Resolve the ramp to concrete `rgb()` strings.
+ *
+ * A custom property's computed value is an unresolved token stream, so reading
+ * `--accent-tint-1` back gives the literal `color-mix(…)` text, which no colour
+ * parser accepts. Assigning it to a real colour property and reading *that* back
+ * hands over a value the browser has already resolved — which keeps the mix
+ * ratios in globals.css as their single definition rather than duplicating them
+ * in JS.
+ *
+ * Reads the live cascade, so the answer follows the active theme. Called once per
+ * mount and once per theme flip; never from a render loop.
+ */
+export function resolveOrbRamp(): Record<OrbRampKey, string> {
+  const keys = Object.keys(ORB_RAMP) as OrbRampKey[];
+  const out = {} as Record<OrbRampKey, string>;
+
+  if (typeof document === 'undefined') {
+    for (const key of keys) out[key] = RAMP_GUARD;
+    return out;
+  }
+
+  const probe = document.createElement('span');
+  probe.setAttribute('aria-hidden', 'true');
+  probe.style.position = 'fixed';
+  probe.style.width = '0';
+  probe.style.height = '0';
+  probe.style.pointerEvents = 'none';
+  document.body.appendChild(probe);
+
+  for (const key of keys) {
+    probe.style.color = `var(${ORB_RAMP[key]})`;
+    out[key] = getComputedStyle(probe).color || RAMP_GUARD;
+  }
+
+  probe.remove();
+  return out;
+}
 
 export const ORB_STATES: Record<VoiceState, OrbVisualState> = {
   /** Slow breathing, subtle drift, ambient glow. The resting signature. */
@@ -60,8 +119,8 @@ export const ORB_STATES: Record<VoiceState, OrbVisualState> = {
     converge: 0,
     ripple: 0,
     audioReactive: 0,
-    colorBase: CYAN,
-    colorAccent: VIOLET,
+    colorBase: 'accent',
+    colorAccent: 'tint2',
     opacity: 0.92,
     ring: 0.18,
   },
@@ -76,8 +135,8 @@ export const ORB_STATES: Record<VoiceState, OrbVisualState> = {
     converge: 0.20,
     ripple: 0,
     audioReactive: 0,
-    colorBase: CYAN,
-    colorAccent: CYAN,
+    colorBase: 'accent',
+    colorAccent: 'tint1',
     opacity: 0.96,
     ring: 0.55,
     enterRate: 0.11,
@@ -93,13 +152,16 @@ export const ORB_STATES: Record<VoiceState, OrbVisualState> = {
     converge: 0,
     ripple: 0.20,
     audioReactive: 1.0,
-    colorBase: CYAN,
-    colorAccent: VIOLET,
+    colorBase: 'accent',
+    colorAccent: 'tint2',
     opacity: 0.94,
     ring: 0.32,
   },
 
-  /** Internal turbulence — energetic but controlled, never chaotic. */
+  /**
+   * Internal turbulence — energetic but controlled, never chaotic. A deeper core
+   * under hot flecks: the work reads as happening inside the shell.
+   */
   thinking: {
     noiseAmp: 0.205,
     rotSpeed: 0.058,
@@ -109,8 +171,8 @@ export const ORB_STATES: Record<VoiceState, OrbVisualState> = {
     converge: 0,
     ripple: 0,
     audioReactive: 0,
-    colorBase: VIOLET,
-    colorAccent: CYAN,
+    colorBase: 'shade1',
+    colorAccent: 'tint1',
     opacity: 0.95,
     ring: 0.42,
   },
@@ -125,16 +187,17 @@ export const ORB_STATES: Record<VoiceState, OrbVisualState> = {
     converge: 0,
     ripple: 0.13,
     audioReactive: 1.0,
-    colorBase: GREEN,
-    colorAccent: CYAN,
+    colorBase: 'accent',
+    colorAccent: 'tint1',
     opacity: 0.97,
     ring: 0.75,
   },
 
   /**
-   * Brief acknowledgement that the caller cut in: a quick warm ripple that
-   * settles straight back toward listening. Shape/size held — only hue + a
-   * short pulse change, so it reads as a flash, not a transformation.
+   * Brief acknowledgement that the caller cut in: a quick ripple that settles
+   * straight back toward listening. Shape and size are held and the hue does not
+   * move — the whole shell lifts a few rungs up the ramp instead, so it reads as
+   * a flash of brightness rather than a transformation into something else.
    */
   interrupted: {
     noiseAmp: 0.092,
@@ -145,14 +208,14 @@ export const ORB_STATES: Record<VoiceState, OrbVisualState> = {
     converge: 0,
     ripple: 0.16,
     audioReactive: 0.7,
-    colorBase: AMBER,
-    colorAccent: CYAN,
+    colorBase: 'tint3',
+    colorAccent: 'tint1',
     opacity: 0.95,
     ring: 0.5,
     enterRate: 0.2,
   },
 
-  /** Dimmed and slowed — present but inert. */
+  /** Dimmed and slowed — present but inert, so it carries no product colour. */
   disconnected: {
     noiseAmp: 0.06,
     rotSpeed: 0.008,
@@ -162,13 +225,17 @@ export const ORB_STATES: Record<VoiceState, OrbVisualState> = {
     converge: 0.10,
     ripple: 0,
     audioReactive: 0,
-    colorBase: '#4a5568',
-    colorAccent: '#4a5568',
+    colorBase: 'muted',
+    colorAccent: 'muted',
     opacity: 0.40,
     ring: 0.05,
   },
 
-  /** Unmistakably different: rose, expanded, agitated, barely rotating. */
+  /**
+   * Unmistakably different: expanded, agitated, barely rotating. The one state
+   * that leaves the accent ramp, because a failed session is a status and should
+   * stay red whatever the product accent is set to.
+   */
   error: {
     noiseAmp: 0.235,
     rotSpeed: 0.006,
@@ -178,25 +245,32 @@ export const ORB_STATES: Record<VoiceState, OrbVisualState> = {
     converge: -0.08,
     ripple: 0,
     audioReactive: 0,
-    colorBase: ROSE,
-    colorAccent: AMBER,
+    colorBase: 'error',
+    colorAccent: 'error',
     opacity: 0.90,
     ring: 0.60,
     enterRate: 0.16,
   },
 };
 
-/** Light-theme color overrides — black/charcoal on white (error stays rose). */
+/**
+ * Light theme walks *down* the same ramp rather than switching palette. Dark
+ * composites the particles additively, so a mid-ramp shell glows; light uses
+ * normal blending on a white canvas, where the same value would wash out. Both
+ * themes are the one accent — this only picks the rung that survives the
+ * background.
+ */
 const LIGHT_COLORS: Partial<
   Record<VoiceState, Pick<OrbVisualState, 'colorBase' | 'colorAccent' | 'opacity'>>
 > = {
-  idle:         { colorBase: INK, colorAccent: INK_SOFT, opacity: 0.88 },
-  connecting:   { colorBase: INK_MID, colorAccent: INK_MID, opacity: 0.92 },
-  listening:    { colorBase: INK, colorAccent: INK_SOFT, opacity: 0.90 },
-  thinking:     { colorBase: INK_MID, colorAccent: INK_SOFT, opacity: 0.92 },
-  speaking:     { colorBase: INK_GREEN, colorAccent: INK, opacity: 0.94 },
-  disconnected: { colorBase: '#6b7280', colorAccent: '#6b7280', opacity: 0.45 },
-  error:        { colorBase: ROSE, colorAccent: AMBER, opacity: 0.90 },
+  idle:         { colorBase: 'shade1', colorAccent: 'accent', opacity: 0.88 },
+  connecting:   { colorBase: 'shade1', colorAccent: 'accent', opacity: 0.92 },
+  listening:    { colorBase: 'shade1', colorAccent: 'accent', opacity: 0.90 },
+  thinking:     { colorBase: 'shade2', colorAccent: 'accent', opacity: 0.92 },
+  speaking:     { colorBase: 'shade1', colorAccent: 'accent', opacity: 0.94 },
+  interrupted:  { colorBase: 'accent', colorAccent: 'shade1', opacity: 0.93 },
+  disconnected: { colorBase: 'muted',  colorAccent: 'muted',  opacity: 0.45 },
+  error:        { colorBase: 'error',  colorAccent: 'error',  opacity: 0.90 },
 };
 
 /** Resolve orb visuals for the active color theme. */

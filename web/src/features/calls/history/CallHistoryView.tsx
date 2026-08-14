@@ -6,12 +6,24 @@ import { Button } from '@/components/ui/Button';
 import { useCallHistory } from './useCallHistory';
 import { CallHistoryFiltersBar } from './components/CallHistoryFiltersBar';
 import {
+  CALL_TABLE_COLUMNS,
+  CALL_TABLE_MIN_WIDTH,
+} from './components/CallRow';
+import {
   CallHistoryEmpty,
   CallHistoryError,
   CallHistorySkeleton,
   CallPagination,
   CallTable,
 } from './components/CallTable';
+
+/* Column tracks and row pitch are this screen's own geometry, so they ride on
+   the page root rather than the shared listing primitive. */
+const LISTING_GEOMETRY = {
+  '--listing-columns': CALL_TABLE_COLUMNS,
+  '--listing-min-width': CALL_TABLE_MIN_WIDTH,
+  '--row-height': '56px',
+} as React.CSSProperties;
 
 export function CallHistoryView() {
   const {
@@ -49,7 +61,7 @@ export function CallHistoryView() {
         : `${total} ${total === 1 ? 'call' : 'calls'} total`;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col" style={LISTING_GEOMETRY}>
       <PageHeader
         title="Call History"
         description={description}
@@ -62,7 +74,7 @@ export function CallHistoryView() {
             aria-label="Refresh call list"
           >
             <RefreshCw
-              size={13}
+              size={14}
               strokeWidth={2}
               className={loading ? 'animate-spin' : undefined}
             />
@@ -75,8 +87,8 @@ export function CallHistoryView() {
       <div
         className="flex-shrink-0 px-8 py-3"
         style={{
-          background: 'var(--color-void)',
-          borderBottom: '1px solid var(--color-border)',
+          background: 'var(--bg-app)',
+          borderBottom: '1px solid var(--line-hairline)',
         }}
       >
         <CallHistoryFiltersBar
@@ -111,8 +123,8 @@ export function CallHistoryView() {
         style={{
           height: 48,
           boxSizing: 'border-box',
-          borderTop: '1px solid var(--color-border)',
-          background: 'var(--color-void)',
+          borderTop: '1px solid var(--line-hairline)',
+          background: 'var(--bg-app)',
         }}
       >
         <CallPagination

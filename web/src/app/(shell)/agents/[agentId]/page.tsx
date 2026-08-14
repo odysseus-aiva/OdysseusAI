@@ -16,8 +16,8 @@ import {
   Check,
   AlertCircle,
   Trash2,
+  ChevronRight,
 } from 'lucide-react';
-import { PageBreadcrumb } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { Tabs, type TabDef } from '@/components/ui/Tabs';
 import { useAgentConfig } from '@/features/agents/useAgentConfig';
@@ -141,6 +141,16 @@ export default function AgentDetailPage() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [isDirty]);
 
+  // Escape dismisses the delete confirmation, but never mid-request.
+  useEffect(() => {
+    if (!confirmDelete || deleting) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setConfirmDelete(false);
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [confirmDelete, deleting]);
+
   const tabs: TabDef<TabId>[] = useMemo(
     () => [
       { id: 'overview', label: 'Overview', icon: LayoutList },
@@ -158,31 +168,23 @@ export default function AgentDetailPage() {
 
   if (!agent) {
     return (
-      <div className="flex h-full flex-col">
-        <header
-          className="flex flex-col gap-2 px-8 pb-5 pt-7"
-          style={{ borderBottom: '1px solid var(--color-border)' }}
-        >
-          <PageBreadcrumb items={[{ label: 'Agents', href: '/agents' }, { label: agentId }]} />
-          <h1
-            className="text-[21px] font-[600] tracking-[-0.035em]"
-            style={{ color: 'var(--color-text)' }}
-          >
-            Agent not found
-          </h1>
+      <div>
+        <header className="page__header">
+          <div className="flex min-w-0 flex-col gap-2">
+            <Crumbs current={agentId} />
+            <h1 className="page__title">Agent not found</h1>
+          </div>
         </header>
-        <div className="flex flex-col items-start gap-4 px-8 py-6">
-          <p className="text-[13px]" style={{ color: 'var(--color-state-error)' }}>
+        <div className="page__body flex flex-col items-start gap-4">
+          <p className="field__error">
             {error ?? 'This agent does not exist, or it was deleted.'}
           </p>
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={() => void reload()}>
               Try again
             </Button>
-            <Link href="/agents">
-              <Button variant="ghost" size="sm">
-                Back to agents
-              </Button>
+            <Link href="/agents" className="btn btn--ghost btn--sm">
+              Back to agents
             </Link>
           </div>
         </div>
@@ -192,41 +194,18 @@ export default function AgentDetailPage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* ── Sticky header: identity, actions, tabs ── */}
-      <header
-        className="flex flex-shrink-0 flex-col gap-4 px-8 pt-6"
-        style={{
-          borderBottom: '1px solid var(--color-border)',
-          background: 'var(--color-void)',
-        }}
-      >
-        {/* Stacks below `md` so the title, ID, and actions never collide. */}
-        <div className="flex flex-col items-start justify-between gap-3 md:flex-row md:items-start md:gap-6">
-          <div className="flex min-w-0 max-w-full flex-col gap-1.5">
-            <PageBreadcrumb
-              items={[{ label: 'Agents', href: '/agents' }, { label: agent.name }]}
-            />
-            <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
-              <h1
-                className="min-w-0 truncate text-[21px] font-[600] tracking-[-0.035em]"
-                style={{ color: 'var(--color-text)' }}
-              >
-                {draft.name || agent.name}
-              </h1>
-              <code
-                className="flex-shrink-0 rounded-[5px] px-1.5 py-0.5 font-mono text-[11px]"
-                style={{
-                  background: 'var(--color-surface-raised)',
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text-faint)',
-                }}
-              >
-                {agent.agentId}
-              </code>
+      {/* The tab strip closes this block with its own rule, so the header carries
+          none: two hairlines 20px apart read as an empty form section. */}
+      <div className="flex-shrink-0">
+        <header className="page__header">
+          <div className="flex min-w-0 flex-col gap-2">
+            <Crumbs current={agent.name} />
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h1 className="page__title min-w-0 truncate">{draft.name || agent.name}</h1>
+              <code className="badge font-mono">{agent.agentId}</code>
             </div>
           </div>
-
-          <div className="flex w-full flex-shrink-0 flex-wrap items-center gap-2 md:w-auto md:pt-1">
+          <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
             <SaveState dirty={isDirty} saving={saving} savedAt={savedAt} error={error} />
             {isDirty && (
               <Button variant="ghost" size="sm" onClick={discard} disabled={saving}>
@@ -242,35 +221,37 @@ export default function AgentDetailPage() {
             >
               Save changes
             </Button>
-            <Link href={`/?agentId=${encodeURIComponent(agentId)}`}>
-              <Button variant="secondary" size="sm">
-                <Mic2 size={13} strokeWidth={2.4} />
-                Start voice
-              </Button>
+            <Link
+              href={`/?agentId=${encodeURIComponent(agentId)}`}
+              className="btn btn--secondary btn--sm"
+            >
+              <Mic2 size={16} strokeWidth={2} aria-hidden="true" />
+              Start voice
             </Link>
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
+              type="button"
+              className="icon-btn"
               onClick={() => setConfirmDelete(true)}
               aria-label="Delete agent"
-              style={{ color: 'var(--color-text-faint)' }}
             >
-              <Trash2 size={13} strokeWidth={2} />
-            </Button>
+              <Trash2 size={16} strokeWidth={2} aria-hidden="true" />
+            </button>
           </div>
-        </div>
+        </header>
 
-        <Tabs tabs={tabs} value={tab} onChange={goToTab} label="Agent configuration sections" />
-      </header>
+        <div className="px-6">
+          <Tabs tabs={tabs} value={tab} onChange={goToTab} label="Agent configuration sections" />
+        </div>
+      </div>
 
       {/* ── Tab body ── */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-8 py-7">
+      <div className="page__body min-h-0 flex-1 overflow-y-auto pt-6">
         <AnimatePresence mode="wait">
           <motion.div
             key={tab}
             id={`panel-${tab}`}
             role="tabpanel"
-            className="max-w-4xl pb-16"
+            className="max-w-4xl"
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
@@ -337,47 +318,38 @@ export default function AgentDetailPage() {
 
       {/* ── Delete confirm modal ── */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" role="dialog" aria-modal="true">
+        <div className="scrim" role="dialog" aria-modal="true" aria-labelledby="delete-agent-title">
           <button
             type="button"
             aria-label="Close"
             className="absolute inset-0 cursor-default"
-            style={{ background: 'rgb(3 4 8 / 0.62)', backdropFilter: 'blur(2px)' }}
             onClick={() => !deleting && setConfirmDelete(false)}
           />
-          <div
-            className="relative flex w-full max-w-[380px] flex-col gap-4 rounded-[14px] p-6"
-            style={{
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-border-strong)',
-              boxShadow: '0 24px 60px rgb(0 0 0 / 0.5)',
-            }}
-          >
-            <div className="flex flex-col gap-1.5">
-              <h2 className="text-[15px] font-[600] tracking-[-0.02em]" style={{ color: 'var(--color-text)' }}>
+          <div className="modal relative">
+            <div className="modal__head">
+              <h2 className="modal__title" id="delete-agent-title">
                 Delete {agent.name}?
               </h2>
-              <p className="text-[12.5px] leading-[1.55]" style={{ color: 'var(--color-text-muted)' }}>
-                This will permanently remove the agent and all its configuration. This cannot be undone.
-              </p>
             </div>
-            <div className="flex items-center gap-2">
+            <p className="modal__hint">
+              This permanently removes the agent and all its configuration. This cannot be undone.
+            </p>
+            <div className="modal__actions">
               <Button
-                variant="primary"
-                size="sm"
-                loading={deleting}
-                onClick={() => void handleDelete()}
-                style={{ background: 'var(--color-state-error)', borderColor: 'var(--color-state-error)' }}
-              >
-                Delete agent
-              </Button>
-              <Button
-                variant="ghost"
+                variant="secondary"
                 size="sm"
                 onClick={() => setConfirmDelete(false)}
                 disabled={deleting}
               >
                 Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                loading={deleting}
+                onClick={() => void handleDelete()}
+              >
+                Delete agent
               </Button>
             </div>
           </div>
@@ -387,7 +359,31 @@ export default function AgentDetailPage() {
   );
 }
 
-/** Inline save status. Replaces the old floating success/error paragraphs. */
+function Crumbs({ current }: { current: string }) {
+  return (
+    <nav className="crumbs" aria-label="Breadcrumb">
+      <ol>
+        <li>
+          <Link href="/agents" className="crumbs__link">
+            Agents
+          </Link>
+          <ChevronRight size={14} strokeWidth={2} className="crumbs__sep" aria-hidden="true" />
+        </li>
+        <li>
+          <span className="crumbs__current" aria-current="page">
+            {current}
+          </span>
+        </li>
+      </ol>
+    </nav>
+  );
+}
+
+/**
+ * Inline save status. The dirty and saved states are a coloured dot in a neutral
+ * shell — the only shape status is allowed to take outside a pill. Only a real
+ * failure gets coloured text, which is the `.field__error` idiom.
+ */
 function SaveState({
   dirty,
   saving,
@@ -402,11 +398,11 @@ function SaveState({
   if (error) {
     return (
       <span
-        className="flex items-center gap-1.5 text-[11.5px] font-[450]"
-        style={{ color: 'var(--color-state-error)' }}
+        className="flex items-center gap-2"
+        style={{ color: 'var(--status-error)', fontSize: 'var(--text-caption)' }}
         role="status"
       >
-        <AlertCircle size={11.5} strokeWidth={2.2} />
+        <AlertCircle size={16} strokeWidth={2} aria-hidden="true" />
         {error}
       </span>
     );
@@ -416,16 +412,8 @@ function SaveState({
 
   if (dirty) {
     return (
-      <span
-        className="flex items-center gap-1.5 text-[11.5px] font-[450]"
-        style={{ color: 'var(--color-state-warning)' }}
-        role="status"
-      >
-        <span
-          aria-hidden
-          className="rounded-full"
-          style={{ width: 5, height: 5, background: 'var(--color-state-warning)' }}
-        />
+      <span className="chip" role="status">
+        <span className="chip__dot chip__dot--warning" aria-hidden="true" />
         Unsaved changes
       </span>
     );
@@ -433,12 +421,13 @@ function SaveState({
 
   if (savedAt) {
     return (
-      <span
-        className="flex items-center gap-1.5 text-[11.5px] font-[450]"
-        style={{ color: 'var(--color-state-speaking)' }}
-        role="status"
-      >
-        <Check size={11.5} strokeWidth={2.4} />
+      <span className="chip" role="status">
+        <Check
+          size={16}
+          strokeWidth={2}
+          aria-hidden="true"
+          style={{ color: 'var(--status-success)' }}
+        />
         Saved
       </span>
     );
@@ -447,72 +436,56 @@ function SaveState({
   return null;
 }
 
+/* Reserves the header and first band. No shimmer: nothing in this language
+   animates a gradient. */
 function AgentDetailSkeleton() {
   return (
-    <div className="flex h-full flex-col">
-      <div
-        className="flex flex-col gap-5 px-8 pb-0 pt-7"
-        style={{ borderBottom: '1px solid var(--color-border)' }}
-      >
+    <div className="flex h-full flex-col" aria-hidden="true">
+      <div className="flex flex-col gap-5 px-6 pt-6">
         <div className="flex items-start justify-between gap-6">
           <div className="flex flex-col gap-2">
-            <div
-              className="h-3 w-28 animate-pulse rounded-[4px]"
-              style={{ background: 'var(--color-surface-raised)' }}
-            />
-            <div
-              className="h-6 w-52 animate-pulse rounded-[6px]"
-              style={{ background: 'var(--color-surface-raised)' }}
-            />
+            <SkeletonBar width={112} height={14} />
+            <SkeletonBar width={208} height={28} />
           </div>
           <div className="flex gap-2">
-            {[72, 96].map((w) => (
-              <div
-                key={w}
-                className="h-7 animate-pulse rounded-[8px]"
-                style={{ width: w, background: 'var(--color-surface-raised)' }}
-              />
-            ))}
+            <SkeletonBar width={72} height={28} />
+            <SkeletonBar width={96} height={28} />
           </div>
         </div>
-        <div className="flex gap-4 pb-3">
-          {[64, 56, 52, 50, 74, 68, 70].map((w, i) => (
-            <div
-              key={i}
-              className="h-3.5 animate-pulse rounded-[4px]"
-              style={{ width: w, background: 'var(--color-surface-raised)' }}
-            />
+        <div
+          className="flex gap-4 pb-3"
+          style={{ borderBottom: '1px solid var(--line-hairline)' }}
+        >
+          {[64, 56, 52, 50, 74, 68, 70].map((w) => (
+            <SkeletonBar key={w} width={w} height={14} />
           ))}
         </div>
       </div>
 
-      <div className="flex-1 px-8 py-7">
+      <div className="page__body pt-6">
         <div className="flex max-w-4xl flex-col gap-6">
-          <div
-            className="h-4 w-32 animate-pulse rounded-[4px]"
-            style={{ background: 'var(--color-surface-raised)' }}
-          />
-          <div
-            className="h-[148px] animate-pulse rounded-[11px]"
-            style={{
-              background: 'var(--color-surface-raised)',
-              border: '1px solid var(--color-border)',
-            }}
-          />
-          <div className="grid grid-cols-3 gap-2.5">
+          <SkeletonBar width={128} height={16} />
+          <div className="card" style={{ height: 148 }} />
+          <div className="stat-row">
             {[...Array(3)].map((_, i) => (
-              <div
-                key={i}
-                className="h-[76px] animate-pulse rounded-[10px]"
-                style={{
-                  background: 'var(--color-surface-raised)',
-                  border: '1px solid var(--color-border)',
-                }}
-              />
+              <div key={i} className="stat" style={{ height: 88 }} />
             ))}
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function SkeletonBar({ width, height }: { width: number; height: number }) {
+  return (
+    <div
+      style={{
+        width,
+        height,
+        background: 'var(--surface-hover)',
+        borderRadius: 'var(--radius-xs)',
+      }}
+    />
   );
 }

@@ -2,39 +2,35 @@
 
 import { motion } from 'motion/react';
 import type { VoiceState } from '../types';
-import { VOICE_STATE_META } from '../types';
 
 /**
- * The platform's signature element. Pure/presentational — takes VoiceState and level.
+ * A CSS-gradient orb: the same product visual as ParticleOrb, built out of
+ * layered gradients rather than a point cloud. Pure/presentational — takes
+ * VoiceState and level.
  *
- * Architecture: five stacked layers inside an overflow:hidden sphere container.
- * Each layer runs at a different frequency so their emergent interference reads
- * as organic motion rather than a programmed loop. A specular highlight translates
+ * Architecture: stacked layers inside an overflow:hidden sphere container. Each
+ * layer runs at a different frequency so their emergent interference reads as
+ * organic motion rather than a programmed loop. A specular highlight translates
  * between state-specific positions, implying the sphere is a 3D object whose
  * orientation (or the light source) is shifting.
  *
  * live `level` is applied only via CSS transform on the outer sphere div so it
  * never restarts any Framer Motion loop — the loops run forever, undisturbed.
+ *
+ * Every colour here comes off the `--product-accent` ramp, so this recolours with
+ * the rest of the product visual and flips with the theme. States are told apart
+ * by rhythm and by depth on the ramp, never by a second hue.
+ *
+ * Not currently mounted. If it is ever put on screen, note that its rotating
+ * layers are composited: Chrome will not repaint them when only a custom
+ * property feeding their gradients changes, so a runtime accent swap needs the
+ * animation restarted the way ParticleOrb does it.
  */
 
 interface AiCoreProps {
   state: VoiceState;
   level?: number;
 }
-
-const stateColor = (state: VoiceState) => `var(${VOICE_STATE_META[state].colorVar})`;
-
-// Hex values for use in conic-gradient where var() is not reliable cross-browser
-const STATE_HEX: Record<VoiceState, string> = {
-  idle: '#38e8ff',
-  connecting: '#38e8ff',
-  listening: '#38e8ff',
-  thinking: '#8b5cf6',
-  speaking: '#38e8ff',
-  interrupted: '#fbbf24',
-  disconnected: '#4a5568',
-  error: '#fb7185',
-};
 
 const coreAnimation: Record<VoiceState, { scale: number[]; duration: number }> = {
   idle: { scale: [1, 1.03, 1], duration: 6 },
@@ -80,14 +76,17 @@ const loop = (duration: number) => ({
 });
 
 export function AiCore({ state, level = 0 }: AiCoreProps) {
-  const color = stateColor(state);
-  const hex = STATE_HEX[state];
   const anim = coreAnimation[state];
   const isActive = state !== 'idle' && state !== 'disconnected';
   const isSpeaking = state === 'speaking';
   const isThinking = state === 'thinking';
   const nebulaSpeed = NEBULA_SPEED[state];
   const specular = SPECULAR[state];
+
+  // Thinking sits one rung deeper on the ramp so the turbulence reads as
+  // internal — the same trick the particle orb uses, and not a second hue.
+  const core = isThinking ? 'var(--accent-shade-1)' : 'var(--product-accent)';
+  const coreDeep = isThinking ? 'var(--accent-shade-2)' : 'var(--accent-shade-1)';
 
   // Live audio level applied via CSS only — never restarts loop
   const levelScale = isSpeaking ? 1 + Math.min(level, 0.85) * 0.12 : 1;
@@ -101,9 +100,7 @@ export function AiCore({ state, level = 0 }: AiCoreProps) {
         style={{
           width: 520,
           height: 520,
-          background: isThinking
-            ? 'radial-gradient(circle, rgb(139 92 246 / 0.28) 0%, transparent 58%)'
-            : `radial-gradient(circle, rgb(56 232 255 / 0.28) 0%, transparent 58%)`,
+          background: 'radial-gradient(circle, var(--accent-glow) 0%, transparent 58%)',
           filter: 'blur(40px)',
         }}
         animate={{
@@ -121,9 +118,7 @@ export function AiCore({ state, level = 0 }: AiCoreProps) {
           height: 300,
           top: 70,
           left: 20,
-          background: isThinking
-            ? 'radial-gradient(circle, rgb(139 92 246 / 0.22) 0%, transparent 65%)'
-            : 'radial-gradient(circle, rgb(56 232 255 / 0.2) 0%, transparent 65%)',
+          background: 'radial-gradient(circle, var(--accent-veil) 0%, transparent 65%)',
           filter: 'blur(28px)',
         }}
         animate={{ opacity: isActive ? [0.35, 0.58, 0.35] : [0.22, 0.38, 0.22] }}
@@ -136,7 +131,7 @@ export function AiCore({ state, level = 0 }: AiCoreProps) {
         style={{
           width: 318,
           height: 318,
-          boxShadow: `0 0 0 1px ${hex}38, 0 0 28px ${hex}14`,
+          boxShadow: '0 0 0 1px var(--accent-veil), 0 0 28px var(--accent-wash)',
         }}
         animate={{
           opacity: isSpeaking ? [0.38, 0.82, 0.38] : isActive ? [0.18, 0.48, 0.18] : 0.1,
@@ -151,7 +146,7 @@ export function AiCore({ state, level = 0 }: AiCoreProps) {
         style={{
           width: 258,
           height: 258,
-          boxShadow: `0 0 0 1px ${hex}4a`,
+          boxShadow: '0 0 0 1px var(--accent-veil)',
         }}
         animate={{
           opacity: isActive ? [0.22, 0.58, 0.22] : 0.1,
@@ -166,7 +161,8 @@ export function AiCore({ state, level = 0 }: AiCoreProps) {
         style={{
           width: 290,
           height: 290,
-          background: `conic-gradient(from 0deg, transparent 0%, ${hex}58 22%, ${isThinking ? '#8b5cf650' : `${hex}38`} 42%, transparent 55%)`,
+          background:
+            'conic-gradient(from 0deg, transparent 0%, var(--accent-veil) 22%, var(--accent-wash) 42%, transparent 55%)',
           maskImage: 'radial-gradient(circle, transparent 54%, black 58%, black 68%, transparent 72%)',
           WebkitMaskImage: 'radial-gradient(circle, transparent 54%, black 58%, black 68%, transparent 72%)',
         }}
@@ -189,7 +185,7 @@ export function AiCore({ state, level = 0 }: AiCoreProps) {
             style={{
               width: 218,
               height: 218,
-              border: `1px solid ${hex}30`,
+              border: '1px solid var(--accent-veil)',
             }}
             initial={{ scale: 1, opacity: 0.5 }}
             animate={{ scale: 1.9, opacity: 0 }}
@@ -210,7 +206,8 @@ export function AiCore({ state, level = 0 }: AiCoreProps) {
       >
         {/*
          * Two-div structure:
-         *   Outer: holds box-shadow (outer glow) + level-scale transform
+         *   Outer: holds the orb's shadow (bloom + shadowed hemisphere) and the
+         *          level-scale transform
          *   Inner: overflow:hidden clips all rotating gradient layers
          */}
         <div
@@ -221,28 +218,25 @@ export function AiCore({ state, level = 0 }: AiCoreProps) {
             transform: `scale(${levelScale})`,
             transformOrigin: 'center',
             willChange: 'transform',
-            boxShadow: `0 0 80px ${hex}55, 0 0 140px ${hex}28, 0 0 220px ${hex}12`,
+            boxShadow: 'var(--shadow-orb)',
           }}
         >
           {/* Inner clipping sphere — no blend modes, direct layered gradients */}
           <div className="absolute inset-0 rounded-full overflow-hidden">
-            {/* Layer 1: Base — rich deep ocean blue, not pure black */}
+            {/* Layer 1: Base — bottoms out in the canvas rather than pure black,
+                which would dissolve the sphere into the page on dark */}
             <div
               className="absolute inset-0"
               style={{
-                background: isThinking
-                  ? 'radial-gradient(circle at 48% 52%, #1a1040 0%, #0d0920 55%, #05060a 100%)'
-                  : 'radial-gradient(circle at 48% 52%, #061828 0%, #041018 55%, #030810 100%)',
+                background: `radial-gradient(circle at 48% 52%, ${coreDeep} 0%, var(--accent-shade-2) 55%, var(--bg-app) 100%)`,
               }}
             />
 
-            {/* Layer 2: Core color bloom — uses hex (not var()) so alpha suffix is valid */}
+            {/* Layer 2: Core color bloom */}
             <motion.div
               className="absolute inset-0"
               style={{
-                background: isThinking
-                  ? 'radial-gradient(circle at 50% 60%, #8b5cf6cc 0%, #6d28d980 28%, #2d1b6900 55%)'
-                  : `radial-gradient(circle at 50% 60%, ${hex}cc 0%, ${hex}70 28%, transparent 55%)`,
+                background: `radial-gradient(circle at 50% 60%, var(--accent-tint-3) 0%, ${core} 28%, transparent 55%)`,
               }}
               animate={{ opacity: isActive ? [0.75, 1, 0.75] : [0.68, 0.92, 0.68] }}
               transition={loop(anim.duration)}
@@ -258,9 +252,8 @@ export function AiCore({ state, level = 0 }: AiCoreProps) {
               <div
                 className="absolute inset-0 rounded-full"
                 style={{
-                  background: isThinking
-                    ? 'conic-gradient(from 0deg at 44% 40%, transparent 0%, #8b5cf640 18%, transparent 38%, #7c3aed28 58%, transparent 75%)'
-                    : `conic-gradient(from 0deg at 44% 40%, transparent 0%, ${hex}48 18%, transparent 38%, ${hex}28 58%, transparent 75%)`,
+                  background:
+                    'conic-gradient(from 0deg at 44% 40%, transparent 0%, var(--accent-veil) 18%, transparent 38%, var(--accent-wash) 58%, transparent 75%)',
                 }}
               />
             </motion.div>
@@ -275,9 +268,8 @@ export function AiCore({ state, level = 0 }: AiCoreProps) {
               <div
                 className="absolute inset-0 rounded-full"
                 style={{
-                  background: isThinking
-                    ? 'conic-gradient(from 90deg at 56% 58%, transparent 0%, #8b5cf630 25%, transparent 48%)'
-                    : `conic-gradient(from 90deg at 56% 58%, transparent 0%, ${hex}30 25%, transparent 48%)`,
+                  background:
+                    'conic-gradient(from 90deg at 56% 58%, transparent 0%, var(--accent-wash) 25%, transparent 48%)',
                 }}
               />
             </motion.div>
@@ -286,9 +278,8 @@ export function AiCore({ state, level = 0 }: AiCoreProps) {
             <motion.div
               className="absolute inset-0"
               style={{
-                background: isThinking
-                  ? 'radial-gradient(ellipse 90% 50% at 50% 100%, #8b5cf660, transparent 62%)'
-                  : `radial-gradient(ellipse 90% 50% at 50% 100%, ${hex}60, transparent 62%)`,
+                background:
+                  'radial-gradient(ellipse 90% 50% at 50% 100%, var(--accent-glow), transparent 62%)',
               }}
               animate={{ opacity: isActive ? [0.4, 0.72, 0.4] : [0.32, 0.55, 0.32] }}
               transition={loop(anim.duration * 0.72)}
@@ -300,7 +291,8 @@ export function AiCore({ state, level = 0 }: AiCoreProps) {
               style={{
                 width: 104,
                 height: 104,
-                background: 'radial-gradient(circle, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.12) 40%, transparent 70%)',
+                background:
+                  'radial-gradient(circle, var(--orb-ring) 0%, var(--accent-tint-1) 40%, transparent 70%)',
                 top: -22,
                 left: -16,
                 filter: 'blur(2px)',
@@ -319,9 +311,8 @@ export function AiCore({ state, level = 0 }: AiCoreProps) {
             <div
               className="absolute inset-0"
               style={{
-                background: isThinking
-                  ? 'radial-gradient(circle at 70% 72%, #8b5cf628, transparent 52%)'
-                  : `radial-gradient(circle at 70% 72%, ${hex}22, transparent 52%)`,
+                background:
+                  'radial-gradient(circle at 70% 72%, var(--accent-veil), transparent 52%)',
               }}
             />
 
@@ -333,7 +324,7 @@ export function AiCore({ state, level = 0 }: AiCoreProps) {
                 style={{
                   width: 12,
                   height: 12,
-                  background: 'rgba(255,255,255,0.65)',
+                  background: 'var(--orb-ring)',
                   top: 48 + i * 72,
                   left: 32 + i * 98,
                   filter: 'blur(5px)',

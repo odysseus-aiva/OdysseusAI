@@ -8,9 +8,9 @@ import {
   RefreshCw,
   TrendingUp,
 } from 'lucide-react';
-import { PageHeader } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Field';
+import { SegmentedControl, Select } from '@/components/ui/Field';
+import { EmptyState } from '@/components/ui/Section';
 import { AreaChart } from '@/components/charts/AreaChart';
 import { ChartCard, EmptyChart, SampleBadge } from '@/components/charts/ChartCard';
 import { HeroKPI } from '@/components/charts/HeroKPI';
@@ -21,7 +21,8 @@ import {
   formatMs,
   formatPct,
   formatUsd,
-  latencyColor,
+  LINE_COMPARE,
+  LINE_STROKE,
   OUTCOME_COLORS,
   OUTCOME_LABELS,
   SENTIMENT_COLORS,
@@ -37,11 +38,13 @@ import {
   type ToolAnalytics,
 } from '@/lib/api/calls';
 
-const PERIODS = [
-  { label: '7d', value: 7 },
-  { label: '30d', value: 30 },
-  { label: '90d', value: 90 },
-] as const;
+type PeriodKey = '7' | '30' | '90';
+
+const PERIOD_OPTIONS: { value: PeriodKey; label: string }[] = [
+  { value: '7', label: '7d' },
+  { value: '30', label: '30d' },
+  { value: '90', label: '90d' },
+];
 
 const ENDED_BY_LABELS: Record<string, string> = {
   participant: 'User hung up',
@@ -51,12 +54,17 @@ const ENDED_BY_LABELS: Record<string, string> = {
   unknown: 'Unknown',
 };
 
-const DISCONNECT_COLORS = [
-  'var(--color-accent)',
-  'var(--color-state-speaking)',
-  'var(--color-state-warning)',
-  'var(--color-state-error)',
-  'var(--color-accent-2)',
+/**
+ * Disconnection reasons are categories, not statuses, so they run the ink ladder
+ * rather than a hue per slice. A multi-hue categorical palette would be a second
+ * colour system with nothing tying it to the product accent.
+ */
+const NEUTRAL_RAMP = [
+  'var(--fg-ink)',
+  'var(--fg-strong)',
+  'var(--fg-body)',
+  'var(--fg-muted)',
+  'var(--line-strong)',
 ];
 
 interface AnalyticsData {
@@ -103,30 +111,43 @@ export default function AnalyticsPage() {
   }, []);
 
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader
-        title="Analytics"
-        description="Conversation outcomes, latency decomposition, cost and tool usage."
-        actions={
-          <div className="flex items-center gap-2">
-            {agents.length > 0 && (
-              <AgentFilter agents={agents} value={agentId} onChange={setAgentId} />
-            )}
-            <PeriodSelector value={period} onChange={setPeriod} />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void load(period, agentId)}
-              disabled={loading}
-            >
-              <RefreshCw size={13} strokeWidth={2} className={loading ? 'animate-spin' : ''} />
-            </Button>
-          </div>
-        }
-      />
+    <div>
+      <header className="page__header">
+        <div className="min-w-0">
+          <h1 className="page__title">Analytics</h1>
+          <p className="page__meta mt-1">
+            Conversation outcomes, latency decomposition, cost and tool usage.
+          </p>
+        </div>
+        <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
+          {agents.length > 0 && (
+            <AgentFilter agents={agents} value={agentId} onChange={setAgentId} />
+          )}
+          <SegmentedControl
+            value={String(period) as PeriodKey}
+            options={PERIOD_OPTIONS}
+            onChange={(next) => setPeriod(Number(next) as 7 | 30 | 90)}
+            label="Time period"
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void load(period, agentId)}
+            disabled={loading}
+            aria-label="Reload analytics"
+          >
+            <RefreshCw
+              size={16}
+              strokeWidth={2}
+              aria-hidden="true"
+              className={loading ? 'animate-spin' : ''}
+            />
+          </Button>
+        </div>
+      </header>
 
-      <div className="flex-1 overflow-y-auto px-8 py-6">
-        <div className="flex max-w-5xl flex-col gap-5">
+      <div className="page__body">
+        <div className="flex max-w-5xl flex-col gap-6" aria-live="polite" aria-busy={loading}>
           {loading ? (
             <AnalyticsSkeleton />
           ) : error ? (
@@ -164,9 +185,10 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
     return { date: p.date, values: { rate: total > 0 ? (p.failed / total) * 100 : null } };
   });
 
+  // p95 is the comparison series, so it is a neutral ghost behind the accent.
   const latencySeries = [
-    { key: 'p50', label: 'p50', color: 'var(--color-accent)' },
-    { key: 'p95', label: 'p95', color: 'var(--color-state-warning)' },
+    { key: 'p50', label: 'p50', color: LINE_STROKE },
+    { key: 'p95', label: 'p95', color: LINE_COMPARE },
   ];
   const latencyPoints = latency.overTime.map((p) => ({
     date: p.date,
@@ -177,19 +199,19 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
   const outcomeMix = stats.outcomeMix.map((o) => ({
     label: OUTCOME_LABELS[o.outcome] ?? o.outcome,
     count: o.count,
-    color: OUTCOME_COLORS[o.outcome] ?? 'var(--color-text-muted)',
+    color: OUTCOME_COLORS[o.outcome] ?? 'var(--fg-muted)',
   }));
 
   const endedBySegments = stats.endedByMix.map((m, i) => ({
     label: ENDED_BY_LABELS[m.key] ?? m.key,
     count: m.count,
-    color: DISCONNECT_COLORS[i % DISCONNECT_COLORS.length],
+    color: NEUTRAL_RAMP[i % NEUTRAL_RAMP.length],
   }));
 
   const sentimentSegments = stats.sentimentMix.map((m) => ({
     label: m.key.charAt(0).toUpperCase() + m.key.slice(1),
     count: m.count,
-    color: SENTIMENT_COLORS[m.key] ?? 'var(--color-text-muted)',
+    color: SENTIMENT_COLORS[m.key] ?? 'var(--fg-muted)',
   }));
 
   const costSegments = [
@@ -200,43 +222,36 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
 
   return (
     <motion.div
-      className="flex flex-col gap-5"
+      className="flex flex-col gap-6"
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
     >
-      {/* Row 1: Hero KPI strip */}
-      <div
-        className="flex overflow-hidden rounded-[10px]"
-        style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface-raised)' }}
-      >
+      {/* Row 1: KPI tiles */}
+      <div className="stat-row">
         <HeroKPI
-          bare
           label="Total calls"
           value={stats.totalCalls}
           icon={TrendingUp}
-          iconColor="var(--color-accent)"
+          iconColor="var(--fg-muted)"
           delta={stats.deltas.totalCalls}
           formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${d}`}
         />
         <HeroKPI
-          bare
           label="Avg duration"
           value={formatDuration(stats.avgDurationMs)}
           icon={Clock}
-          iconColor="var(--color-text-faint)"
+          iconColor="var(--fg-muted)"
           delta={stats.deltas.avgDurationMs}
           lowerIsBetter
           formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${Math.round(d)}ms`}
           sub={stats.avgTurnCount != null ? `Avg turns: ${stats.avgTurnCount.toFixed(1)}` : undefined}
         />
         <HeroKPI
-          bare
           label="P50 latency"
           value={formatMs(stats.p50LatencyMs)}
-          valueColor={latencyColor(stats.p50LatencyMs)}
           icon={Clock}
-          iconColor={latencyColor(stats.p50LatencyMs)}
+          iconColor="var(--fg-muted)"
           delta={stats.deltas.p50LatencyMs}
           lowerIsBetter
           formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${Math.round(d)}ms`}
@@ -246,7 +261,7 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
 
       {/* Latency reliability warning */}
       {!stats.samples.latencyReliable && stats.samples.latencyTurns > 0 && (
-        <Notice tone="warning">
+        <Notice>
           Latency percentiles are computed from{' '}
           <strong>
             {stats.samples.latencyTurns} turn{stats.samples.latencyTurns === 1 ? '' : 's'}
@@ -257,14 +272,14 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
       )}
 
       {/* Row 2: Area chart + outcomes donut */}
-      <div className="grid grid-cols-[2fr_1fr] gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
         <ChartCard
           title="Call volume"
           sub={`Calls per ${stats.series.bucket} — ${window}`}
         >
           <AreaChart
             points={volumePoints}
-            series={[{ key: 'total', label: 'Total calls', color: 'var(--color-accent)' }]}
+            series={[{ key: 'total', label: 'Total calls', color: LINE_STROKE }]}
             height={180}
           />
         </ChartCard>
@@ -282,7 +297,7 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
       </div>
 
       {/* Row 3: Three stacked donuts */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <ChartCard
           title="Disconnection reason"
           sub="How calls ended"
@@ -327,8 +342,8 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
         </ChartCard>
       </div>
 
-      {/* Row 4: Three area/line charts */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* Row 4: Three trend charts */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <ChartCard
           title="Response latency"
           sub={`p50 and p95 — ${window}`}
@@ -347,7 +362,7 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
         >
           <AreaChart
             points={engagementRatePoints}
-            series={[{ key: 'rate', label: 'Engagement %', color: 'var(--color-state-speaking)' }]}
+            series={[{ key: 'rate', label: 'Engagement %', color: LINE_STROKE }]}
             height={160}
             format={(v) => v == null ? '—' : `${v.toFixed(0)}%`}
           />
@@ -356,9 +371,12 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
           title="Error rate"
           sub={`% calls that failed — ${window}`}
         >
+          {/* The only series on this page allowed a status hue: a failure rate is
+              a number the reader is expected to act on. Its neighbour, the
+              engagement rate, is just a trend and stays on the accent. */}
           <AreaChart
             points={errorRatePoints}
-            series={[{ key: 'rate', label: 'Error %', color: 'var(--color-state-error)' }]}
+            series={[{ key: 'rate', label: 'Error %', color: 'var(--status-error)' }]}
             height={160}
             format={(v) => v == null ? '—' : `${v.toFixed(0)}%`}
           />
@@ -366,7 +384,11 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
       </div>
 
       {/* Row 5: Tool table + agent comparison */}
-      <div className={`grid gap-4 ${tools.tools.length > 0 && stats.topAgents.length > 0 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      <div
+        className={`grid gap-4 ${
+          tools.tools.length > 0 && stats.topAgents.length > 0 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'
+        }`}
+      >
         {tools.tools.length > 0 && (
           <ChartCard
             title="Tool usage"
@@ -377,8 +399,10 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
             }
             trailing={
               tools.totals.adoptionRate != null && tools.totals.invocations > 0 ? (
-                <span className="font-mono text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
-                  {formatPct(tools.totals.adoptionRate)} of calls used a tool
+                /* A sentence is not a badge — .badge is for one-word markers. */
+                <span className="page__meta whitespace-nowrap">
+                  <span className="num">{formatPct(tools.totals.adoptionRate)}</span> of calls used
+                  a tool
                 </span>
               ) : undefined
             }
@@ -403,135 +427,98 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
 
 function ToolTable({ tools }: { tools: ToolAnalytics }) {
   return (
-    <div className="flex flex-col">
-      <div
-        className="grid grid-cols-[1fr_70px_80px_80px] gap-2 border-b pb-2 text-[10.5px] font-[500] uppercase tracking-[0.07em]"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-faint)' }}
-      >
-        <span>Tool</span>
-        <span className="text-right">Calls</span>
-        <span className="text-right">Success</span>
-        <span className="text-right">p95</span>
-      </div>
-      {tools.tools.map((tool) => (
-        <div
-          key={tool.name}
-          className="grid grid-cols-[1fr_70px_80px_80px] items-center gap-2 border-b py-2.5 text-[12.5px] last:border-b-0"
-          style={{ borderColor: 'var(--color-border)' }}
-        >
-          <span className="truncate font-mono" style={{ color: 'var(--color-text)' }}>
-            {tool.name}
-          </span>
-          <span className="text-right font-mono" style={{ color: 'var(--color-text-muted)' }}>
-            {tool.invocations}
-          </span>
-          <span
-            className="text-right font-mono font-[600]"
-            style={{
-              color:
-                tool.successRate == null
-                  ? 'var(--color-text-faint)'
-                  : tool.successRate >= 0.95
-                    ? 'var(--color-state-speaking)'
-                    : tool.successRate >= 0.8
-                      ? 'var(--color-state-warning)'
-                      : 'var(--color-state-error)',
-            }}
-          >
-            {formatPct(tool.successRate)}
-          </span>
-          <span
-            className="text-right font-mono"
-            style={{ color: latencyColor(tool.p95LatencyMs) }}
-          >
-            {formatMs(tool.p95LatencyMs)}
-          </span>
-        </div>
-      ))}
+    <div className="listing-scroll">
+      <table className="data-table" aria-label="Tool usage">
+        <thead>
+          <tr>
+            <th scope="col">Tool</th>
+            <th scope="col" className="data-table__right">Calls</th>
+            <th scope="col" className="data-table__right">Success</th>
+            <th scope="col" className="data-table__right">p95</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tools.tools.map((tool) => (
+            <tr key={tool.name}>
+              {/* Mono marks this as an API identifier rather than a display name. */}
+              <td className="data-table__strong font-mono">{tool.name}</td>
+              <td className="data-table__right num">{tool.invocations}</td>
+              <td className="data-table__right num">{formatPct(tool.successRate)}</td>
+              <td className="data-table__right num">{formatMs(tool.p95LatencyMs)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
 function AgentTable({ agents }: { agents: CallStats['topAgents'] }) {
   return (
-    <div className="flex flex-col">
-      <div
-        className="grid grid-cols-[1fr_60px_80px_80px_80px] gap-2 border-b pb-2 text-[10.5px] font-[500] uppercase tracking-[0.07em]"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-faint)' }}
-      >
-        <span>Agent</span>
-        <span className="text-right">Calls</span>
-        <span className="text-right">Engaged</span>
-        <span className="text-right">Avg cost</span>
-        <span className="text-right">Avg dur.</span>
-      </div>
-      {agents.map((agent) => (
-        <div
-          key={agent.agentId}
-          className="grid grid-cols-[1fr_60px_80px_80px_80px] items-center gap-2 border-b py-2.5 text-[12.5px] last:border-b-0"
-          style={{ borderColor: 'var(--color-border)' }}
-        >
-          <span className="flex min-w-0 flex-col">
-            <span className="truncate" style={{ color: 'var(--color-text)' }}>
-              {agent.name ?? agent.agentId}
-            </span>
-            {agent.llmModel && (
-              <span className="truncate font-mono text-[10.5px]" style={{ color: 'var(--color-text-faint)' }}>
-                {agent.llmModel}
-              </span>
-            )}
-          </span>
-          <span className="text-right font-mono" style={{ color: 'var(--color-text-muted)' }}>
-            {agent.calls}
-          </span>
-          <span
-            className="text-right font-mono font-[600]"
-            style={{
-              color:
-                agent.engagementRate >= 0.5
-                  ? 'var(--color-state-speaking)'
-                  : 'var(--color-state-warning)',
-            }}
-          >
-            {formatPct(agent.engagementRate)}
-          </span>
-          <span className="text-right font-mono" style={{ color: 'var(--color-text-muted)' }}>
-            {formatUsd(agent.avgCostUsd)}
-          </span>
-          <span className="text-right font-mono" style={{ color: 'var(--color-text-muted)' }}>
-            {formatMs(agent.avgDurationMs)}
-          </span>
-        </div>
-      ))}
+    <div className="listing-scroll">
+      <table className="data-table" aria-label="Agent comparison">
+        <thead>
+          <tr>
+            <th scope="col">Agent</th>
+            <th scope="col" className="data-table__right">Calls</th>
+            <th scope="col" className="data-table__right">Engaged</th>
+            <th scope="col" className="data-table__right">Avg cost</th>
+            <th scope="col" className="data-table__right">Avg dur.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {agents.map((agent) => (
+            <tr key={agent.agentId}>
+              <td className="data-table__strong">
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate">{agent.name ?? agent.agentId}</span>
+                  {agent.llmModel && (
+                    <span
+                      className="truncate font-mono"
+                      style={{
+                        color: 'var(--fg-muted)',
+                        fontSize: 'var(--text-caption)',
+                        fontWeight: 'var(--weight-regular)',
+                      }}
+                    >
+                      {agent.llmModel}
+                    </span>
+                  )}
+                </span>
+              </td>
+              <td className="data-table__right num">{agent.calls}</td>
+              <td className="data-table__right num">{formatPct(agent.engagementRate)}</td>
+              <td className="data-table__right num">{formatUsd(agent.avgCostUsd)}</td>
+              <td className="data-table__right num">{formatMs(agent.avgDurationMs)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-function MetricBlock({ label, value }: { label: string; value: string }) {
+/**
+ * Caveat about a statistic the reader must discount. Colour is confined to the
+ * glyph: a tinted fill or border here would be exactly the move rule 3 forbids.
+ */
+function Notice({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1">
-      <span
-        className="text-[10.5px] font-[500] uppercase tracking-[0.06em]"
-        style={{ color: 'var(--color-text-faint)' }}
+    <div className="card flex items-start gap-3" role="note">
+      <AlertCircle
+        size={16}
+        strokeWidth={2}
+        aria-hidden="true"
+        style={{ color: 'var(--status-warning)', flexShrink: 0, marginTop: 1 }}
+      />
+      <p
+        className="m-0"
+        style={{
+          color: 'var(--fg-body)',
+          fontSize: 'var(--text-caption)',
+          lineHeight: 'var(--leading-body)',
+        }}
       >
-        {label}
-      </span>
-      <span className="font-mono text-[15px] font-[600]" style={{ color: 'var(--color-text)' }}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function Notice({ tone, children }: { tone: 'warning'; children: React.ReactNode }) {
-  const color = tone === 'warning' ? 'var(--color-state-warning)' : 'var(--color-accent)';
-  return (
-    <div
-      className="flex items-start gap-2.5 rounded-[10px] px-4 py-3"
-      style={{ background: 'color-mix(in srgb, var(--color-state-warning) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--color-state-warning) 20%, transparent)' }}
-    >
-      <AlertCircle size={14} strokeWidth={2} style={{ color, flexShrink: 0, marginTop: 1 }} />
-      <p className="text-[12.5px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
         {children}
       </p>
     </div>
@@ -552,10 +539,7 @@ function AgentFilter({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       aria-label="Filter analytics by agent"
-      className="!w-auto text-[12px] font-[500] !py-1.5 !px-2.5"
-      style={{
-        background: 'var(--color-surface-raised)',
-      }}
+      className="!w-auto"
     >
       <option value="">All agents</option>
       {agents.map((agent) => (
@@ -567,92 +551,57 @@ function AgentFilter({
   );
 }
 
-function PeriodSelector({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (p: 7 | 30 | 90) => void;
-}) {
-  return (
-    <div
-      className="flex items-center gap-0.5 rounded-[8px] p-0.5"
-      style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
-    >
-      {PERIODS.map(({ label, value: v }) => (
-        <button
-          key={v}
-          onClick={() => onChange(v)}
-          className="rounded-[6px] px-3 py-1.5 text-[12px] font-[500] transition-all duration-[140ms]"
-          style={{
-            background: value === v ? 'var(--color-surface-elevated)' : 'transparent',
-            color: value === v ? 'var(--color-text)' : 'var(--color-text-faint)',
-            border: value === v ? '1px solid var(--color-border-strong)' : '1px solid transparent',
-          }}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div
-      className="flex flex-col items-center gap-3 rounded-[12px] py-12 text-center"
-      style={{ border: '1px dashed var(--color-border)' }}
-    >
-      <p className="text-[13px] font-[500]" style={{ color: 'var(--color-state-error)' }}>
-        {message}
-      </p>
-      <Button variant="ghost" size="sm" onClick={onRetry}>
-        Try again
-      </Button>
-    </div>
+    <EmptyState
+      icon={AlertCircle}
+      title="Could not load analytics"
+      description={message}
+      action={
+        <Button variant="secondary" size="sm" onClick={onRetry}>
+          Try again
+        </Button>
+      }
+    />
   );
 }
 
+/* Heights are reserved with flat fills — no shimmer anywhere in this language. */
 function AnalyticsSkeleton() {
   return (
-    <div className="flex flex-col gap-5">
-      <div
-        className="h-[100px] animate-pulse rounded-[10px]"
-        style={{ background: 'var(--color-surface-raised)' }}
-      />
-      <div className="grid grid-cols-[2fr_1fr] gap-4">
-        <div
-          className="h-[240px] animate-pulse rounded-[12px]"
-          style={{ background: 'var(--color-surface-raised)' }}
-        />
-        <div
-          className="h-[240px] animate-pulse rounded-[12px]"
-          style={{ background: 'var(--color-surface-raised)' }}
-        />
-      </div>
-      <div className="grid grid-cols-3 gap-4">
+    <div className="flex flex-col gap-6" aria-hidden="true">
+      <div className="stat-row">
         {[...Array(3)].map((_, i) => (
-          <div
-            key={i}
-            className="h-[200px] animate-pulse rounded-[12px]"
-            style={{ background: 'var(--color-surface-raised)' }}
-          />
+          <div key={i} className="stat" style={{ height: 108 }} />
         ))}
       </div>
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
+        <SkeletonCard height={260} />
+        <SkeletonCard height={260} />
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {[...Array(3)].map((_, i) => (
-          <div
-            key={i}
-            className="h-[200px] animate-pulse rounded-[12px]"
-            style={{ background: 'var(--color-surface-raised)' }}
-          />
+          <SkeletonCard key={i} height={220} />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {[...Array(3)].map((_, i) => (
+          <SkeletonCard key={i} height={220} />
         ))}
       </div>
     </div>
   );
 }
 
-function countOutcome(stats: CallStats, outcome: string): number {
-  return stats.outcomeMix.find((o) => o.outcome === outcome)?.count ?? 0;
+function SkeletonCard({ height }: { height: number }) {
+  return (
+    <div
+      style={{
+        height,
+        background: 'var(--surface-card)',
+        border: '1px solid var(--line-hairline)',
+        borderRadius: 'var(--radius-md)',
+      }}
+    />
+  );
 }
-

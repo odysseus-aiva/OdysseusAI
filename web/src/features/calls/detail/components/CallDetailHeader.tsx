@@ -34,7 +34,7 @@ export function CallDetailHeader({ call }: { call: CallSummary }) {
       title={
         <span className="inline-flex flex-wrap items-center gap-2">
           <span>{agentName}</span>
-          <Badge variant={statusVariant(call.status)} dot>
+          <Badge variant={statusVariant(call.status)}>
             {statusLabel(call.status, call.endedBy)}
           </Badge>
         </span>
@@ -52,16 +52,15 @@ export function CallDetailHeader({ call }: { call: CallSummary }) {
           <button
             type="button"
             onClick={copyId}
-            className="inline-flex items-center gap-1 font-mono transition-opacity hover:opacity-80"
-            style={{ color: 'var(--color-text-muted)' }}
+            className="inline-flex items-center gap-1 font-mono text-[var(--fg-body)] transition-colors duration-[120ms] hover:text-[var(--fg-ink)]"
             title="Copy call ID"
             aria-label="Copy call ID"
           >
             <span>{shortCallId(call.callId)}</span>
             {copied ? (
-              <Check size={11} strokeWidth={2.5} style={{ color: 'var(--color-state-speaking)' }} />
+              <Check size={12} strokeWidth={2} style={{ color: 'var(--status-success)' }} />
             ) : (
-              <Copy size={11} strokeWidth={2} style={{ color: 'var(--color-text-faint)' }} />
+              <Copy size={12} strokeWidth={2} style={{ color: 'var(--fg-muted)' }} />
             )}
           </button>
         </span>

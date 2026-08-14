@@ -18,7 +18,7 @@ export interface HeroContext {
 }
 
 export interface HeroContent {
-  /** Small uppercase line above the headline. */
+  /** Small caption line above the headline. Sentence case — never tracked out. */
   eyebrow: string;
   /** The headline, split into words for staggered entry. */
   headline: string[];

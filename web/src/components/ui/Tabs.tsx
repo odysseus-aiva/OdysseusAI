@@ -1,7 +1,6 @@
 'use client';
 
 import { useRef } from 'react';
-import { motion } from 'motion/react';
 
 export interface TabDef<T extends string> {
   id: T;
@@ -14,10 +13,14 @@ export interface TabDef<T extends string> {
 }
 
 /**
- * Underlined tab bar with a shared-layout indicator.
+ * Underlined tab bar.
  *
- * Roving tabindex + arrow-key navigation per the WAI-ARIA tabs pattern, so a
- * growing tab set stays keyboard-navigable.
+ * The indicator is 2px of ink sitting on the strip's own hairline, and the
+ * active label goes *darker*, never bolder — switching weight on activation
+ * reflows the row, and an accent underline is the most tempting
+ * colour-as-chrome violation in this language.
+ *
+ * Roving tabindex + arrow keys per the WAI-ARIA tabs pattern.
  */
 export function Tabs<T extends string>({
   tabs,
@@ -34,28 +37,38 @@ export function Tabs<T extends string>({
 
   const selectable = tabs.filter((t) => !t.comingSoon);
 
+  /* Selection follows focus: swapping a panel here is instant, so Enter and
+     Space are no-ops by design. */
   const onKeyDown = (e: React.KeyboardEvent) => {
-    const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-    if (dir === 0) return;
-    e.preventDefault();
     const idx = selectable.findIndex((t) => t.id === value);
-    const next = selectable[(idx + dir + selectable.length) % selectable.length];
+    let next: TabDef<T> | undefined;
+
+    switch (e.key) {
+      case 'ArrowRight':
+        next = selectable[(idx + 1) % selectable.length];
+        break;
+      case 'ArrowLeft':
+        next = selectable[(idx - 1 + selectable.length) % selectable.length];
+        break;
+      case 'Home':
+        next = selectable[0];
+        break;
+      case 'End':
+        next = selectable.at(-1);
+        break;
+      default:
+        return;
+    }
+
+    e.preventDefault();
     if (next) {
       onChange(next.id);
-      listRef.current
-        ?.querySelector<HTMLButtonElement>(`[data-tab-id="${next.id}"]`)
-        ?.focus();
+      listRef.current?.querySelector<HTMLButtonElement>(`[data-tab-id="${next.id}"]`)?.focus();
     }
   };
 
   return (
-    <div
-      ref={listRef}
-      role="tablist"
-      aria-label={label}
-      onKeyDown={onKeyDown}
-      className="flex items-center gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-    >
+    <div ref={listRef} role="tablist" aria-label={label} className="tabs">
       {tabs.map((tab) => {
         const active = tab.id === value;
         const Icon = tab.icon;
@@ -64,6 +77,7 @@ export function Tabs<T extends string>({
         return (
           <button
             key={tab.id}
+            id={`tab-${tab.id}`}
             data-tab-id={tab.id}
             role="tab"
             type="button"
@@ -71,63 +85,17 @@ export function Tabs<T extends string>({
             aria-controls={`panel-${tab.id}`}
             tabIndex={active ? 0 : -1}
             disabled={disabled}
+            data-active={active || undefined}
             onClick={() => !disabled && onChange(tab.id)}
-            className="group relative flex flex-shrink-0 items-center gap-2 px-3 pb-2.5 pt-1 text-[13px] font-[450] tracking-[-0.01em] transition-colors duration-[140ms]"
-            style={{
-              color: active
-                ? 'var(--color-text)'
-                : disabled
-                  ? 'var(--color-text-faint)'
-                  : 'var(--color-text-muted)',
-              cursor: disabled ? 'default' : 'pointer',
-              opacity: disabled ? 0.55 : 1,
-            }}
-            onMouseEnter={(e) => {
-              if (!active && !disabled) e.currentTarget.style.color = 'var(--color-text)';
-            }}
-            onMouseLeave={(e) => {
-              if (!active && !disabled) e.currentTarget.style.color = 'var(--color-text-muted)';
-            }}
+            onKeyDown={onKeyDown}
+            /* The 12px inset is the measured distance the indicator extends
+               past the label ink on each side. */
+            className="tab focus-inset px-3 disabled:opacity-40"
           >
-            {Icon && (
-              <Icon
-                size={13.5}
-                strokeWidth={active ? 2.1 : 1.8}
-                style={{ color: active ? 'var(--color-accent)' : 'currentColor' }}
-              />
-            )}
+            {Icon && <Icon size={16} strokeWidth={1.8} aria-hidden="true" />}
             {tab.label}
-
-            {tab.badge != null && (
-              <span
-                className="rounded-[5px] px-1.5 py-px text-[10.5px] font-[600] tabular-nums"
-                style={{
-                  background: active ? 'var(--color-accent-subtle)' : 'var(--color-surface-elevated)',
-                  color: active ? 'var(--color-accent)' : 'var(--color-text-faint)',
-                }}
-              >
-                {tab.badge}
-              </span>
-            )}
-
-            {tab.comingSoon && (
-              <span
-                className="text-[9.5px] font-[600] uppercase tracking-[0.1em]"
-                style={{ color: 'var(--color-text-faint)' }}
-              >
-                Soon
-              </span>
-            )}
-
-            {/* Active underline — shared layout so it slides between tabs */}
-            {active && (
-              <motion.span
-                layoutId="agent-tab-underline"
-                className="absolute bottom-0 left-2 right-2 rounded-full"
-                style={{ height: 1.5, background: 'var(--color-accent)' }}
-                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-              />
-            )}
+            {tab.badge != null && <span className="badge tabular-nums">{tab.badge}</span>}
+            {tab.comingSoon && <span className="badge">Soon</span>}
           </button>
         );
       })}

@@ -64,16 +64,18 @@ export function BarChart({
   return (
     <div className="relative select-none">
       {showYAxis && (
+        /* Axis ticks are data the reader compares against, so they take
+           --fg-body: --fg-muted fails AA at this size. */
         <div
-          className="pointer-events-none absolute left-0 flex flex-col justify-between text-right"
+          className="num pointer-events-none absolute left-0 flex flex-col justify-between text-right"
           style={{
             top: padTop,
             bottom: padBottom,
             width: yAxisWidth - 4,
-            fontFamily: 'var(--font-mono-var, monospace)',
-            fontSize: 9,
-            color: 'rgba(255,255,255,0.3)',
+            fontSize: 'var(--text-overline)',
+            color: 'var(--fg-body)',
           }}
+          aria-hidden="true"
         >
           <span>{format(max)}</span>
           <span>{format(yMid)}</span>
@@ -90,12 +92,11 @@ export function BarChart({
           {[0.25, 0.5, 0.75, 1].map((frac) => (
             <line
               key={frac}
+              className="chart__gridline"
               x1={0}
               y1={padTop + chartH * (1 - frac)}
               x2={vw}
               y2={padTop + chartH * (1 - frac)}
-              stroke="rgba(255,255,255,0.04)"
-              strokeWidth={1}
             />
           ))}
 
@@ -139,21 +140,19 @@ export function BarChart({
                       width={barW}
                       height={Math.max(segH, 1.5)}
                       fill={s.color}
-                      opacity={isHovered ? 1 : 0.62}
-                      rx={1.5}
-                      style={{ transition: 'opacity 90ms' }}
+                      opacity={isHovered ? 1 : 0.78}
+                      rx={2}
+                      style={{ transition: 'opacity var(--duration-instant) ease' }}
                     />
                   );
                 })}
 
                 {i % labelEvery === 0 && (
                   <text
+                    className="chart__tick"
                     x={x + barW / 2}
                     y={height - 3}
                     textAnchor="middle"
-                    fontSize={9}
-                    fill="rgba(255,255,255,0.26)"
-                    fontFamily="var(--font-mono-var, monospace)"
                   >
                     {label(point)}
                   </text>
@@ -164,43 +163,44 @@ export function BarChart({
         </svg>
 
         {hovered !== null && totals[hovered] > 0 && (
+          /* A tooltip genuinely floats, so it is one of the few things in this
+             language that earns a shadow. The panel itself stays neutral —
+             only the swatches carry series colour. */
           <div
-            className="pointer-events-none absolute z-10 flex flex-col gap-1 whitespace-nowrap rounded-[6px] px-2.5 py-2 text-[11.5px]"
+            className="chart__tooltip"
+            role="status"
             style={{
               left: tooltipX,
               top: -12 - series.length * 16,
               transform: 'translateX(-50%)',
-              background: 'var(--color-surface-elevated)',
-              border: '1px solid var(--color-border-strong)',
-              color: 'var(--color-text)',
             }}
           >
-            <span className="font-[600]">{label(points[hovered])}</span>
+            <span className="chart__tooltip-title">{label(points[hovered])}</span>
             {series.map((s) => {
               const value = points[hovered].values[s.key] ?? 0;
               if (value <= 0) return null;
               return (
-                <span key={s.key} className="flex items-center gap-1.5">
-                  <span className="rounded-full" style={{ width: 6, height: 6, background: s.color }} />
-                  <span style={{ color: 'var(--color-text-muted)' }}>{s.label}</span>
-                  <span className="ml-auto pl-3 font-mono font-[600]">{value}</span>
+                <span key={s.key} className="flex items-center gap-2">
+                  <span className="chart__swatch" style={{ background: s.color }} />
+                  <span style={{ color: 'var(--fg-body)' }}>{s.label}</span>
+                  <span className="num ml-auto pl-3" style={{ color: 'var(--fg-ink)' }}>
+                    {value}
+                  </span>
                 </span>
               );
             })}
-            <span className="font-mono text-[10.5px]" style={{ color: 'var(--color-text-faint)' }}>
+            <span className="num" style={{ color: 'var(--fg-muted)' }}>
               {totals[hovered]} {unit} total
             </span>
           </div>
         )}
 
         {series.length > 1 && (
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          <div className="chart__legend">
             {series.map((s) => (
-              <span key={s.key} className="flex items-center gap-1.5">
-                <span className="rounded-full" style={{ width: 7, height: 7, background: s.color }} />
-                <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)' }}>
-                  {s.label}
-                </span>
+              <span key={s.key} className="flex items-center gap-2">
+                <span className="chart__swatch" style={{ background: s.color }} />
+                <span>{s.label}</span>
               </span>
             ))}
           </div>

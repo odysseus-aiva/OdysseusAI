@@ -12,27 +12,18 @@ export function ComingSoon({ title, description, icon: Icon, detail }: ComingSoo
   return (
     <div className="flex flex-col h-full">
       <PageHeader title={title} description={description} />
-      <div className="flex-1 flex items-center justify-center px-8">
-        <div className="flex flex-col items-center gap-5 text-center max-w-sm">
-          <div
-            className="flex items-center justify-center rounded-2xl"
-            style={{
-              width: 56,
-              height: 56,
-              background: 'var(--color-surface-raised)',
-              border: '1px solid var(--color-border)',
-            }}
-          >
-            <Icon size={22} strokeWidth={1.5} style={{ color: 'var(--color-text-faint)' }} />
-          </div>
-          <div className="flex flex-col gap-2">
-            <p className="text-[15px] font-[500] tracking-[-0.02em]" style={{ color: 'var(--color-text)' }}>
-              We&apos;re working on this
-            </p>
-            <p className="text-[13px] leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
-              {detail ?? `${title} is coming soon. Check back in the next release.`}
-            </p>
-          </div>
+      {/* Bare rather than boxed: the page header already frames this, and a
+          container would float in the middle of an otherwise empty canvas.
+          Title and body are the same 15px — hierarchy is weight and colour. */}
+      <div className="flex flex-1 items-center justify-center px-6">
+        <div className="empty-state empty-state--bare">
+          <span className="empty-state__tile" aria-hidden="true">
+            <Icon size={20} strokeWidth={1.7} />
+          </span>
+          <h2 className="empty-state__title">We&apos;re working on this</h2>
+          <p className="empty-state__body">
+            {detail ?? `${title} is coming soon. Check back in the next release.`}
+          </p>
         </div>
       </div>
     </div>

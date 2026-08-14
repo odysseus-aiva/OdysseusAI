@@ -38,12 +38,12 @@ export function CallDetailsSidebar({ call }: { call: CallSummary }) {
   ].filter(Boolean) as { label: string; value: string }[];
 
   return (
-    <aside className="flex h-full min-h-0 flex-col gap-5 overflow-y-auto p-4">
+    <aside className="flex h-full min-h-0 flex-col gap-6 overflow-y-auto p-4">
       <Section title="Call details">
         <Panel>
           <DataRow label="Agent">{agentName}</DataRow>
           <DataRow label="Status">
-            <Badge variant={statusVariant(call.status)} dot>
+            <Badge variant={statusVariant(call.status)}>
               {statusLabel(call.status, call.endedBy)}
             </Badge>
           </DataRow>
@@ -59,15 +59,25 @@ export function CallDetailsSidebar({ call }: { call: CallSummary }) {
             <button
               type="button"
               onClick={copyId}
-              className="inline-flex max-w-full items-center gap-1 transition-opacity hover:opacity-80"
+              className="focus-inset inline-flex max-w-full items-center gap-1 rounded-xs transition-colors duration-[120ms] hover:text-[var(--fg-ink-hover)]"
+              aria-label={copied ? 'Call ID copied' : `Copy call ID ${call.callId}`}
               title="Copy call ID"
-              style={{ color: 'var(--color-text)' }}
             >
               <span className="truncate">{call.callId}</span>
               {copied ? (
-                <Check size={11} strokeWidth={2.5} style={{ color: 'var(--color-state-speaking)' }} />
+                <Check
+                  size={12}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                  style={{ color: 'var(--status-success)' }}
+                />
               ) : (
-                <Copy size={11} strokeWidth={2} style={{ color: 'var(--color-text-faint)' }} />
+                <Copy
+                  size={12}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                  style={{ color: 'var(--fg-muted)' }}
+                />
               )}
             </button>
           </DataRow>
@@ -76,36 +86,25 @@ export function CallDetailsSidebar({ call }: { call: CallSummary }) {
 
       {techPills.length > 0 && (
         <Section title="Technology">
-          <div className="flex flex-wrap gap-1.5">
+          <Panel>
             {techPills.map((p) => (
-              <span
-                key={p.label}
-                className="inline-flex max-w-full items-center gap-1 truncate rounded-[6px] px-2 py-1 text-[11px] font-[450]"
-                style={{
-                  background: 'var(--color-surface-raised)',
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text-muted)',
-                }}
-              >
-                <span style={{ color: 'var(--color-text-faint)' }}>{p.label}</span>
-                <span className="truncate" style={{ color: 'var(--color-text)' }}>
-                  {p.value}
-                </span>
-              </span>
+              <DataRow key={p.label} label={p.label}>
+                {p.value}
+              </DataRow>
             ))}
-          </div>
+          </Panel>
         </Section>
       )}
 
       {(call.errors?.length ?? 0) > 0 && (
         <Section title="Errors">
           <Panel>
-            <ul className="flex flex-col gap-1.5">
+            <ul className="flex flex-col gap-2">
               {call.errors.map((e, i) => (
                 <li
                   key={i}
-                  className="text-[12.5px] leading-[1.45]"
-                  style={{ color: 'var(--color-state-error)' }}
+                  className="text-caption leading-normal"
+                  style={{ color: 'var(--status-error)' }}
                 >
                   {e}
                 </li>

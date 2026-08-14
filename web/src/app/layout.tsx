@@ -1,17 +1,26 @@
 import type { Metadata, Viewport } from 'next';
-import { Space_Grotesk, JetBrains_Mono } from 'next/font/google';
-import { Particles } from '@/components/ui/Particles';
-import { FilmGrain } from '@/features/voice/components/ParticleOrb';
+import { Inter, Space_Grotesk, JetBrains_Mono } from 'next/font/google';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import { DevAnnotator } from '@/components/DevAnnotator';
 import { APP_NAME } from '@/lib/env';
 import '@livekit/components-styles';
 import './globals.css';
 
+/* Inter runs the entire UI. */
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  weight: ['300', '400', '500', '600'],
+  display: 'swap',
+});
+
+/* The display face, standing in for the proprietary Waldenburg 300. Reserved
+   for the 48px voice-stage headline — the one product moment where the
+   marketing idiom is quoted on purpose. Page titles are Inter 500. */
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
-  variable: '--font-display',
-  weight: ['300', '400', '500', '600', '700'],
+  variable: '--font-grotesk',
+  weight: ['300', '400', '500'],
   display: 'swap',
 });
 
@@ -28,7 +37,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#05060a',
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)', color: '#111111' },
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+  ],
   width: 'device-width',
   initialScale: 1,
 };
@@ -39,7 +51,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         {/* Runs before paint — reads localStorage and sets data-theme on <html>
             so the correct theme is applied before React hydrates, preventing flash. */}
@@ -51,9 +67,10 @@ export default function RootLayout({
       </head>
       <body>
         <ThemeProvider>
+          {/* The canvas is flat. The radial gradient wash, particle field and
+              film grain that used to sit here are decoration this language
+              does not have — neutral and high-contrast is rule 1. */}
           <div className="ambient-backdrop" />
-          <Particles />
-          <FilmGrain />
           {children}
           <DevAnnotator />
         </ThemeProvider>

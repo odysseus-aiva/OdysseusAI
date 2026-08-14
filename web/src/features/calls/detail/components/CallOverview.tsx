@@ -41,14 +41,18 @@ export function CallOverview({ analysis }: { analysis: CallAnalysis }) {
             <button
               type="button"
               onClick={copySummary}
-              className="inline-flex items-center gap-1 rounded-[6px] px-1.5 py-0.5 text-[11.5px] transition-colors hover:bg-[var(--color-glass-hover)]"
-              style={{ color: 'var(--color-text-faint)' }}
-              aria-label="Copy summary"
+              className="btn btn--ghost btn--sm"
+              aria-label={copied ? 'Summary copied' : 'Copy summary'}
             >
               {copied ? (
-                <Check size={12} strokeWidth={2.5} style={{ color: 'var(--color-state-speaking)' }} />
+                <Check
+                  size={14}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                  style={{ color: 'var(--status-success)' }}
+                />
               ) : (
-                <Copy size={12} strokeWidth={2} />
+                <Copy size={14} strokeWidth={2} aria-hidden="true" />
               )}
               {copied ? 'Copied' : 'Copy'}
             </button>
@@ -59,8 +63,8 @@ export function CallOverview({ analysis }: { analysis: CallAnalysis }) {
       {hasSummary && (
         <Panel>
           <p
-            className="text-[13.5px] leading-[1.6] text-pretty"
-            style={{ color: 'var(--color-text)', maxWidth: '68ch' }}
+            className="text-body leading-body text-pretty"
+            style={{ color: 'var(--fg-strong)', maxWidth: '68ch' }}
           >
             {analysis.summary}
           </p>

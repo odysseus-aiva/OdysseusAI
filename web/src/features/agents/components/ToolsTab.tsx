@@ -12,6 +12,9 @@ import { CustomToolBuilder } from './CustomToolBuilder';
 
 type Filter = 'all' | 'enabled' | string;
 
+/** One bordered card per group, hairlines between rows, no rule on the last row. */
+const ROW_LIST = 'overflow-hidden rounded-md border border-[var(--line-hairline)] bg-[var(--surface-card)]';
+
 /**
  * Tool library. Compact rows + search + category filters so the surface scales
  * to a large catalogue; configuration opens in a drawer rather than expanding
@@ -136,11 +139,11 @@ export function ToolsTab({
       <div className="flex flex-col gap-3">
         <div className="relative">
           <Search
-            size={13}
+            size={16}
             strokeWidth={2}
             aria-hidden
             className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
-            style={{ color: 'var(--color-text-faint)' }}
+            style={{ color: 'var(--fg-muted)' }}
           />
           <input
             ref={searchRef}
@@ -154,45 +157,28 @@ export function ToolsTab({
             }}
             placeholder="Search tools by name, description, or category"
             aria-label="Search tools"
-            className="w-full rounded-[9px] py-2 pl-9 pr-16 text-[13px] outline-none transition-colors duration-[140ms]"
-            style={{
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
-              color: 'var(--color-text)',
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = 'var(--color-border-focus)';
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = 'var(--color-border)';
-            }}
+            className="input pl-10 pr-16"
           />
           {query ? (
             <button
               type="button"
               onClick={() => setQuery('')}
               aria-label="Clear search"
-              className="absolute right-2.5 top-1/2 flex -translate-y-1/2 cursor-pointer items-center justify-center rounded-[5px]"
-              style={{ width: 20, height: 20, color: 'var(--color-text-faint)' }}
+              className="icon-btn absolute right-1 top-1/2 -translate-y-1/2"
             >
-              <X size={12} strokeWidth={2.2} />
+              <X size={16} strokeWidth={2} />
             </button>
           ) : (
             <kbd
               aria-hidden
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[5px] px-1.5 py-0.5 font-mono text-[10px]"
-              style={{
-                background: 'var(--color-surface-elevated)',
-                border: '1px solid var(--color-border)',
-                color: 'var(--color-text-faint)',
-              }}
+              className="badge absolute right-3 top-1/2 -translate-y-1/2 font-mono"
             >
               /
             </kbd>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
           <FilterChip
             label="All"
             count={catalogue.length}
@@ -204,12 +190,11 @@ export function ToolsTab({
             count={enabledCount}
             active={filter === 'enabled'}
             onClick={() => setFilter('enabled')}
-            accent
           />
           <span
             aria-hidden
             className="mx-1 self-stretch"
-            style={{ width: 1, background: 'var(--color-border)' }}
+            style={{ width: 1, background: 'var(--line-hairline)' }}
           />
           {categories.map((cat) => (
             <FilterChip
@@ -217,7 +202,6 @@ export function ToolsTab({
               label={cat.label}
               count={cat.count}
               icon={cat.icon}
-              iconColor={cat.color}
               active={filter === cat.id}
               onClick={() => setFilter(cat.id)}
             />
@@ -237,37 +221,25 @@ export function ToolsTab({
           }
         />
       ) : (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-6">
           {grouped.map(({ meta, tools }) => (
             <div key={meta.id} className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 px-0.5">
-                <meta.icon size={12} strokeWidth={2} style={{ color: meta.color }} />
-                <h3
-                  className="text-[11px] font-[600] uppercase tracking-[0.09em]"
-                  style={{ color: 'var(--color-text-faint)' }}
-                >
+              <div className="flex items-center gap-2">
+                <meta.icon size={16} strokeWidth={2} aria-hidden="true" style={{ color: meta.color }} />
+                <h3 className="text-caption font-medium" style={{ color: 'var(--fg-strong)' }}>
                   {meta.label}
                 </h3>
-                <span
-                  className="text-[11px] tabular-nums"
-                  style={{ color: 'var(--color-text-faint)' }}
-                >
+                <span className="text-caption tabular-nums" style={{ color: 'var(--fg-muted)' }}>
                   {tools.length}
                 </span>
               </div>
 
-              <ul
-                className="overflow-hidden rounded-[11px]"
-                style={{
-                  background: 'var(--color-surface-raised)',
-                  border: '1px solid var(--color-border)',
-                }}
-              >
+              <ul className={ROW_LIST}>
                 {tools.map((tool, i) => (
                   <li
                     key={tool.name}
                     style={{
-                      borderTop: i === 0 ? undefined : '1px solid var(--color-border)',
+                      borderTop: i === 0 ? undefined : '1px solid var(--line-hairline)',
                     }}
                   >
                     <ToolRow
@@ -314,92 +286,74 @@ function CustomFunctions({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2 px-0.5">
+      <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <Globe size={12} strokeWidth={2} style={{ color: 'var(--color-accent)' }} />
-          <h3
-            className="text-[11px] font-[600] uppercase tracking-[0.09em]"
-            style={{ color: 'var(--color-text-faint)' }}
-          >
+          <Globe size={16} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--fg-muted)' }} />
+          <h3 className="text-caption font-medium" style={{ color: 'var(--fg-strong)' }}>
             Custom functions
           </h3>
-          <span className="text-[11px] tabular-nums" style={{ color: 'var(--color-text-faint)' }}>
+          <span className="text-caption tabular-nums" style={{ color: 'var(--fg-muted)' }}>
             {customTools.length}
           </span>
         </div>
         <Button variant="secondary" size="sm" onClick={onNew}>
-          <Plus size={13} strokeWidth={2.2} />
+          <Plus size={16} strokeWidth={2} aria-hidden="true" />
           New function
         </Button>
       </div>
 
       {customTools.length === 0 ? (
         <p
-          className="rounded-[11px] px-3.5 py-4 text-[12px] leading-[1.5]"
+          className="rounded-md px-4 py-3 text-caption leading-body"
           style={{
-            border: '1px dashed var(--color-border)',
-            background: 'var(--color-surface)',
-            color: 'var(--color-text-faint)',
+            border: '1px solid var(--line-hairline)',
+            background: 'var(--surface-recessed)',
+            color: 'var(--fg-muted)',
           }}
         >
           Connect any HTTP API as a tool the agent can call during a conversation — no code required.
         </p>
       ) : (
-        <ul
-          className="overflow-hidden rounded-[11px]"
-          style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
-        >
+        <ul className={ROW_LIST}>
           {customTools.map((entry, i) => (
             <li
               key={entry.toolName}
-              className="group flex items-center gap-3 px-3.5 py-2.5"
-              style={{ borderTop: i === 0 ? undefined : '1px solid var(--color-border)' }}
+              className="group flex items-center gap-2 px-3 py-2"
+              style={{ borderTop: i === 0 ? undefined : '1px solid var(--line-hairline)' }}
             >
-              <span
-                aria-hidden
-                className="flex-shrink-0 rounded-full"
-                style={{
-                  width: 2.5,
-                  height: 22,
-                  background: entry.enabled ? 'var(--color-accent)' : 'var(--color-border-strong)',
-                  boxShadow: entry.enabled ? '0 0 8px var(--color-accent-glow)' : 'none',
-                }}
-              />
               <button
                 type="button"
                 onClick={() => onEdit(entry)}
-                className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left"
+                className="flex min-w-0 flex-1 cursor-pointer flex-col items-start gap-1 text-left"
               >
                 <span
-                  className="font-mono text-[12.5px]"
-                  style={{ color: entry.enabled ? 'var(--color-text)' : 'var(--color-text-muted)' }}
+                  className="font-mono text-caption"
+                  style={{ color: entry.enabled ? 'var(--fg-ink)' : 'var(--fg-body)' }}
                 >
                   {entry.toolName}
                 </span>
-                <span
-                  className="line-clamp-1 text-[11px]"
-                  style={{ color: 'var(--color-text-faint)' }}
-                >
-                  <span style={{ color: 'var(--color-accent)' }}>{entry.def.method}</span> {entry.def.url}
+                <span className="line-clamp-1 text-caption" style={{ color: 'var(--fg-muted)' }}>
+                  <span className="font-medium" style={{ color: 'var(--fg-body)' }}>
+                    {entry.def.method}
+                  </span>{' '}
+                  {entry.def.url}
                 </span>
               </button>
               <button
                 type="button"
                 aria-label={`Edit ${entry.toolName}`}
                 onClick={() => onEdit(entry)}
-                className="flex flex-shrink-0 items-center justify-center rounded-[7px] transition-opacity [@media(hover:hover)]:opacity-0 group-hover:opacity-100"
-                style={{ width: 28, height: 28, color: 'var(--color-text-muted)' }}
+                className="icon-btn transition-opacity [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               >
-                <Pencil size={12.5} strokeWidth={2} />
+                <Pencil size={16} strokeWidth={2} />
               </button>
               <button
                 type="button"
                 aria-label={`Delete ${entry.toolName}`}
                 onClick={() => void onRemove(entry.toolName)}
-                className="flex flex-shrink-0 items-center justify-center rounded-[7px] transition-opacity [@media(hover:hover)]:opacity-0 group-hover:opacity-100"
-                style={{ width: 28, height: 28, color: 'var(--color-text-faint)' }}
+                className="icon-btn transition-opacity [@media(hover:hover)]:opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               >
-                <Trash2 size={12.5} strokeWidth={2} />
+                <Trash2 size={16} strokeWidth={2} />
               </button>
               <div className="flex-shrink-0">
                 <Switch
@@ -417,7 +371,7 @@ function CustomFunctions({
   );
 }
 
-/** Compact row: state, identity, and the two actions. Fixed height. */
+/** Compact row: identity, then the two actions. Fixed height. */
 function ToolRow({
   tool,
   enabled,
@@ -434,57 +388,29 @@ function ToolRow({
   ).length;
 
   return (
-    <div
-      className="group flex items-center gap-3 px-3.5 py-2.5 transition-colors duration-[140ms]"
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = 'var(--color-surface-elevated)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'transparent';
-      }}
-    >
-      {/* Enabled rail — reads state before any text */}
-      <span
-        aria-hidden
-        className="flex-shrink-0 rounded-full transition-all duration-[180ms]"
-        style={{
-          width: 2.5,
-          height: 22,
-          background: enabled ? 'var(--color-accent)' : 'var(--color-border-strong)',
-          boxShadow: enabled ? '0 0 8px var(--color-accent-glow)' : 'none',
-        }}
-      />
-
+    <div className="group flex items-center gap-2 px-3 py-2 transition-colors duration-[var(--duration-hover)] hover:bg-[var(--surface-hover)]">
       {/* Identity — name, then description on one clamped line */}
       <button
         type="button"
         onClick={onOpenConfig}
-        className="flex min-w-0 flex-1 cursor-pointer flex-col items-start gap-0.5 text-left"
+        className="flex min-w-0 flex-1 cursor-pointer flex-col items-start gap-1 text-left"
       >
         <span className="flex items-center gap-2">
           <span
-            className="text-[13px] font-[500] tracking-[-0.01em]"
-            style={{ color: enabled ? 'var(--color-text)' : 'var(--color-text-muted)' }}
+            className="text-nav font-medium"
+            style={{ color: enabled ? 'var(--fg-ink)' : 'var(--fg-body)' }}
           >
             {tool.displayName}
           </span>
+          {/* A missing key is a prerequisite, not a status — so it is a neutral
+              label, not an amber one. */}
           {tool.requiredEnv.length > 0 && (
-            <span
-              title={`Requires ${tool.requiredEnv.join(', ')}`}
-              className="rounded-[4px] px-1 py-px text-[9.5px] font-[600] uppercase tracking-[0.06em]"
-              style={{
-                background: 'rgb(251 191 36 / 0.08)',
-                color: 'var(--color-state-warning)',
-              }}
-            >
+            <span className="badge" title={`Requires ${tool.requiredEnv.join(', ')}`}>
               Key
             </span>
           )}
         </span>
-        <span
-          className="line-clamp-1 text-[11.5px] leading-[1.45]"
-          style={{ color: 'var(--color-text-faint)' }}
-        >
+        <span className="line-clamp-1 text-caption" style={{ color: 'var(--fg-muted)' }}>
           {tool.description}
         </span>
       </button>
@@ -495,18 +421,9 @@ function ToolRow({
         type="button"
         onClick={onOpenConfig}
         aria-label={`Configure ${tool.displayName}`}
-        className="flex flex-shrink-0 cursor-pointer items-center gap-1.5 rounded-[7px] px-2 py-1 text-[11.5px] font-[450] transition-all duration-[140ms] group-hover:opacity-100 focus-visible:opacity-100 max-[560px]:hidden [@media(hover:hover)]:opacity-0"
-        style={{ color: 'var(--color-text-muted)' }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'var(--color-surface)';
-          e.currentTarget.style.color = 'var(--color-text)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'transparent';
-          e.currentTarget.style.color = 'var(--color-text-muted)';
-        }}
+        className="btn btn--ghost btn--sm flex-shrink-0 transition-opacity duration-[var(--duration-hover)] group-hover:opacity-100 focus-visible:opacity-100 max-[560px]:hidden [@media(hover:hover)]:opacity-0"
       >
-        <Settings2 size={11.5} strokeWidth={2} />
+        <Settings2 size={16} strokeWidth={2} aria-hidden="true" />
         {configurable > 0 ? `Configure` : 'Details'}
       </button>
 
@@ -522,40 +439,47 @@ function ToolRow({
   );
 }
 
+/**
+ * Active filter is an ink fill with an inverted label — the same inversion
+ * `.btn--primary` uses, so it flips in light mode for free.
+ */
 function FilterChip({
   label,
   count,
   icon: Icon,
-  iconColor,
   active,
-  accent = false,
   onClick,
 }: {
   label: string;
   count: number;
   icon?: React.ElementType;
-  iconColor?: string;
   active: boolean;
-  accent?: boolean;
   onClick: () => void;
 }) {
-  const activeColor = accent ? 'var(--color-accent)' : 'var(--color-text)';
-
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className="flex cursor-pointer items-center gap-1.5 rounded-[7px] px-2.5 py-1 text-[12px] font-[450] transition-all duration-[140ms]"
-      style={{
-        background: active ? 'var(--color-surface-elevated)' : 'transparent',
-        border: `1px solid ${active ? 'var(--color-border-strong)' : 'var(--color-border)'}`,
-        color: active ? activeColor : 'var(--color-text-muted)',
-      }}
+      className={`chip cursor-pointer transition-colors duration-[var(--duration-hover)] ${
+        active ? '' : 'hover:bg-[var(--surface-hover)]'
+      }`}
+      style={
+        active
+          ? {
+              background: 'var(--fg-ink)',
+              borderColor: 'var(--fg-ink)',
+              color: 'var(--fg-on-ink)',
+            }
+          : undefined
+      }
     >
-      {Icon && <Icon size={11.5} strokeWidth={2} style={{ color: active ? iconColor : 'currentColor' }} />}
+      {Icon && <Icon size={16} strokeWidth={2} aria-hidden="true" />}
       {label}
-      <span className="tabular-nums" style={{ color: 'var(--color-text-faint)' }}>
+      <span
+        className="num"
+        style={{ color: active ? 'var(--fg-on-ink-muted)' : 'var(--fg-muted)' }}
+      >
         {count}
       </span>
     </button>

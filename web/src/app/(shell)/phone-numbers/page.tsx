@@ -1,10 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { Phone, Plus, Loader2, AlertCircle, LinkIcon, Unlink, RefreshCw, ShoppingCart, ChevronDown, Check } from 'lucide-react';
+import { AlertCircle, Loader2, LinkIcon, Phone, Plus, RefreshCw, ShoppingCart, Unlink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { PageHeader } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Field';
+import { EmptyState } from '@/components/ui/Section';
 import { fetchAgents, updateAgent, type Agent } from '@/lib/api/agents';
 import type { OwnedNumber } from '@/lib/api/twilio';
 
@@ -17,6 +18,14 @@ const EMPTY_NUMBER = (phoneNumber: string): OwnedNumber => ({
   dateCreated: '',
   capabilities: { voice: true, sms: false },
 });
+
+/* Column tracks and row pitch are this screen's own geometry, so they ride on
+   the page root rather than the shared listing primitive. */
+const LISTING_GEOMETRY = {
+  '--listing-columns': 'minmax(0, 200px) minmax(0, 1fr) auto',
+  '--listing-min-width': '640px',
+  '--row-height': '56px',
+} as CSSProperties;
 
 interface NumberRow {
   number: OwnedNumber;
@@ -95,46 +104,58 @@ export default function PhoneNumbersPage() {
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader
-        title="Phone Numbers"
-        description="Buy a Twilio number and attach it to an agent so inbound calls are answered automatically."
-        actions={
-          <Button variant="primary" size="sm" onClick={() => setShowBuy(true)}>
-            <ShoppingCart size={13} strokeWidth={2.3} />
-            Buy a number
-          </Button>
-        }
-      />
+    <div style={LISTING_GEOMETRY}>
+      <header className="page__header">
+        <div className="min-w-0">
+          <h1 className="page__title">Phone numbers</h1>
+          <p className="page__meta mt-1">
+            Buy a Twilio number and attach it to an agent so inbound calls are answered
+            automatically.
+          </p>
+        </div>
+        <Button variant="primary" size="sm" onClick={() => setShowBuy(true)}>
+          <ShoppingCart size={16} strokeWidth={2} aria-hidden="true" />
+          Buy a number
+        </Button>
+      </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+      <div className="page__body">
         <div className="mx-auto flex max-w-4xl flex-col gap-4">
-          {/* Refresh */}
-          <div className="flex items-center justify-between">
-            <span className="text-[12.5px]" style={{ color: 'var(--color-text-faint)' }}>
+          <div className="flex items-center justify-between gap-3">
+            <span className="page__meta" role="status">
               {loading ? 'Loading…' : `${rows.length} number${rows.length !== 1 ? 's' : ''}`}
             </span>
-            <button
-              type="button"
-              onClick={() => void load()}
-              disabled={loading}
-              className="flex items-center gap-1.5 rounded-[7px] px-2.5 py-1.5 text-[12px] font-[500] transition-colors duration-[140ms] disabled:opacity-40"
-              style={{ color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--color-border-strong)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--color-border)'; }}
-            >
-              <RefreshCw size={11} strokeWidth={2} className={loading ? 'animate-spin' : ''} />
+            <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
+              <RefreshCw
+                size={16}
+                strokeWidth={2}
+                aria-hidden="true"
+                className={loading ? 'animate-spin' : ''}
+              />
               Refresh
-            </button>
+            </Button>
           </div>
 
+          {/* Colour is confined to the glyph: a tinted banner fill would be
+              exactly the move rule 3 forbids. */}
           {error && (
-            <div
-              className="flex items-center gap-2.5 rounded-[10px] px-4 py-3 text-[13px]"
-              style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', color: '#ef4444' }}
-            >
-              <AlertCircle size={14} strokeWidth={2} className="flex-shrink-0" />
-              {error}
+            <div className="card flex items-start gap-3" role="alert">
+              <AlertCircle
+                size={16}
+                strokeWidth={2}
+                aria-hidden="true"
+                style={{ color: 'var(--status-error)', flexShrink: 0, marginTop: 1 }}
+              />
+              <p
+                className="m-0"
+                style={{
+                  color: 'var(--fg-body)',
+                  fontSize: 'var(--text-caption)',
+                  lineHeight: 'var(--leading-body)',
+                }}
+              >
+                {error}
+              </p>
             </div>
           )}
 
@@ -143,25 +164,39 @@ export default function PhoneNumbersPage() {
           ) : rows.length === 0 ? (
             <EmptyNumbers onBuy={() => setShowBuy(true)} />
           ) : (
-            <AnimatePresence initial={false}>
-              {rows.map((row, i) => (
-                <motion.div
-                  key={row.number.phoneNumber}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.97 }}
-                  transition={{ duration: 0.22, delay: i * 0.04, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  <NumberCard
-                    row={row}
-                    agents={agents}
-                    actionTarget={actionTarget}
-                    onDetach={handleDetach}
-                    onAttach={handleAttach}
-                  />
-                </motion.div>
-              ))}
-            </AnimatePresence>
+            <div className="listing-scroll">
+              <div className="listing" role="table" aria-label="Phone numbers">
+                <div className="listing__head" role="row">
+                  <span role="columnheader">Number</span>
+                  <span role="columnheader">Agent</span>
+                  <span className="listing__right" role="columnheader">
+                    <span className="sr-only">Actions</span>
+                  </span>
+                </div>
+
+                <AnimatePresence initial={false}>
+                  {rows.map((row) => (
+                    <motion.div
+                      key={row.number.phoneNumber}
+                      className="listing__row"
+                      role="row"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.14, ease: [0.4, 0, 0.2, 1] }}
+                    >
+                      <NumberRowCells
+                        row={row}
+                        agents={agents}
+                        actionTarget={actionTarget}
+                        onDetach={handleDetach}
+                        onAttach={handleAttach}
+                      />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -180,7 +215,7 @@ export default function PhoneNumbersPage() {
   );
 }
 
-function NumberCard({
+function NumberRowCells({
   row,
   agents,
   actionTarget,
@@ -196,300 +231,123 @@ function NumberCard({
   const { number, attachedAgent } = row;
   const [attachTo, setAttachTo] = useState('');
 
-  // Only mark busy for this card's in-flight action — never treat actionTarget===null as busy
+  const available = agents.filter((a) => !a.phoneNumber);
+
+  // Only mark busy for this row's in-flight action — never treat actionTarget===null as busy
   const busy =
     (attachedAgent !== null && actionTarget === attachedAgent.agentId) ||
     (attachTo !== '' && actionTarget === attachTo);
 
   return (
-    <div
-      className="flex flex-col gap-0 overflow-hidden rounded-[12px]"
-      style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface-raised)' }}
-    >
-      {/* Top row */}
-      <div className="flex items-center gap-4 px-4 py-3.5">
-        {/* Phone icon */}
-        <div
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[9px]"
-          style={{
-            background: attachedAgent ? 'var(--color-accent-subtle)' : 'var(--color-surface-elevated)',
-            border: `1px solid ${attachedAgent ? 'var(--color-accent-border)' : 'var(--color-border)'}`,
-          }}
-        >
-          <Phone
-            size={14}
-            strokeWidth={1.8}
-            style={{ color: attachedAgent ? 'var(--color-accent)' : 'var(--color-text-faint)' }}
-          />
-        </div>
-
-        {/* Number + meta */}
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="font-mono text-[14px] font-[600]" style={{ color: 'var(--color-text)' }}>
-            {number.phoneNumber}
+    <>
+      <span className="flex min-w-0 flex-col justify-center" role="cell">
+        <span className="listing__strong truncate font-mono">{number.phoneNumber}</span>
+        {number.dateCreated && (
+          <span
+            className="num"
+            style={{ color: 'var(--fg-muted)', fontSize: 'var(--text-caption)' }}
+          >
+            Added {new Date(number.dateCreated).toLocaleDateString()}
           </span>
-          {number.dateCreated && (
-            <span className="text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
-              Added {new Date(number.dateCreated).toLocaleDateString()}
-            </span>
-          )}
-        </div>
+        )}
+      </span>
 
-        {/* Agent badge or "unassigned" */}
-        <div className="flex flex-shrink-0 items-center gap-2">
-          {attachedAgent ? (
-            <span
-              className="flex items-center gap-1.5 rounded-[6px] px-2.5 py-1 text-[11.5px] font-[500]"
-              style={{
-                background: 'var(--color-accent-subtle)',
-                border: '1px solid var(--color-accent-border)',
-                color: 'var(--color-accent)',
-              }}
-            >
-              <LinkIcon size={10} strokeWidth={2.2} />
-              {attachedAgent.name}
-            </span>
-          ) : (
-            <span
-              className="rounded-[6px] px-2.5 py-1 text-[11.5px]"
-              style={{
-                background: 'var(--color-surface-elevated)',
-                border: '1px solid var(--color-border)',
-                color: 'var(--color-text-faint)',
-              }}
-            >
-              No agent
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Actions row */}
-      <div
-        className="flex flex-wrap items-center gap-2.5 px-4 py-2.5"
-        style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-surface)' }}
-      >
+      <span className="min-w-0" role="cell">
         {attachedAgent ? (
-          /* Detach button */
-          <button
-            type="button"
+          <span className="flex min-w-0 items-center gap-2">
+            <LinkIcon
+              size={16}
+              strokeWidth={2}
+              aria-hidden="true"
+              style={{ color: 'var(--fg-muted)', flexShrink: 0 }}
+            />
+            <span className="truncate">{attachedAgent.name}</span>
+          </span>
+        ) : available.length === 0 ? (
+          <span className="listing__muted">All agents already have a number</span>
+        ) : (
+          <Select
+            value={attachTo}
+            onChange={(e) => setAttachTo(e.target.value)}
+            aria-label={`Agent to attach to ${number.phoneNumber}`}
+          >
+            <option value="">Select an agent…</option>
+            {available.map((a) => (
+              <option key={a.agentId} value={a.agentId}>
+                {`${a.name} (${a.agentId})`}
+              </option>
+            ))}
+          </Select>
+        )}
+      </span>
+
+      <span className="listing__right" role="cell">
+        {attachedAgent ? (
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => void onDetach(attachedAgent)}
             disabled={busy}
-            className="flex items-center gap-1.5 rounded-[7px] px-2.5 py-1.5 text-[12px] font-[500] transition-colors duration-[140ms] disabled:opacity-40"
-            style={{ border: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(239,68,68,0.4)';
-              e.currentTarget.style.color = '#ef4444';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'var(--color-border)';
-              e.currentTarget.style.color = 'var(--color-text-muted)';
-            }}
           >
-            {busy ? <Loader2 size={11} strokeWidth={2} className="animate-spin" /> : <Unlink size={11} strokeWidth={2} />}
+            {busy ? (
+              <Loader2 size={16} strokeWidth={2} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Unlink size={16} strokeWidth={2} aria-hidden="true" />
+            )}
             Detach
-          </button>
+          </Button>
         ) : (
-          /* Agent picker + Attach button */
-          <>
-            <AgentSelect
-              value={attachTo}
-              onChange={setAttachTo}
-              agents={agents}
-            />
-            <button
-              type="button"
-              disabled={!attachTo || busy}
-              onClick={() => void onAttach(number.phoneNumber, attachTo)}
-              className="flex items-center gap-1.5 rounded-[7px] px-2.5 py-1.5 text-[12px] font-[500] transition-colors duration-[140ms] disabled:opacity-40"
-              style={{
-                background: 'var(--color-accent-subtle)',
-                border: '1px solid var(--color-accent-border)',
-                color: 'var(--color-accent)',
-              }}
-            >
-              {busy ? <Loader2 size={11} strokeWidth={2} className="animate-spin" /> : <LinkIcon size={11} strokeWidth={2} />}
-              Attach
-            </button>
-          </>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={!attachTo || busy}
+            onClick={() => void onAttach(number.phoneNumber, attachTo)}
+          >
+            {busy ? (
+              <Loader2 size={16} strokeWidth={2} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <LinkIcon size={16} strokeWidth={2} aria-hidden="true" />
+            )}
+            Attach
+          </Button>
         )}
-      </div>
-    </div>
-  );
-}
-
-function AgentSelect({
-  value,
-  onChange,
-  agents,
-}: {
-  value: string;
-  onChange: (id: string) => void;
-  agents: Agent[];
-}) {
-  const [open, setOpen] = useState(false);
-  const [dropdownStyle, setDropdownStyle] = useState<CSSProperties>({});
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  const available = agents.filter((a) => !a.phoneNumber);
-  const selected = available.find((a) => a.agentId === value);
-
-  const openDropdown = useCallback(() => {
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setDropdownStyle({
-      position: 'fixed',
-      top: rect.bottom + 4,
-      left: rect.left,
-      width: Math.max(rect.width, 240),
-      zIndex: 9999,
-    });
-    setOpen(true);
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleMousedown = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleMousedown);
-    return () => document.removeEventListener('mousedown', handleMousedown);
-  }, [open]);
-
-  return (
-    <>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={open ? () => setOpen(false) : openDropdown}
-        className="flex items-center gap-2 rounded-[7px] px-2.5 py-1.5 text-[12px] transition-all duration-[140ms]"
-        style={{
-          background: 'var(--color-surface-raised)',
-          border: '1px solid var(--color-border)',
-          color: selected ? 'var(--color-text)' : 'var(--color-text-faint)',
-          minWidth: 200,
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--color-border-strong)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.borderColor = open ? 'var(--color-accent-border)' : 'var(--color-border)'; }}
-      >
-        <span className="flex-1 truncate text-left">
-          {selected ? `${selected.name} (${selected.agentId})` : 'Select agent to attach…'}
-        </span>
-        <ChevronDown
-          size={11}
-          strokeWidth={2}
-          className="flex-shrink-0 transition-transform duration-[140ms]"
-          style={{
-            color: 'var(--color-text-faint)',
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-          }}
-        />
-      </button>
-
-      {open && (
-        <div
-          ref={panelRef}
-          onMouseDown={(e) => e.stopPropagation()}
-          className="flex flex-col overflow-hidden rounded-[10px] py-1"
-          style={{
-            ...dropdownStyle,
-            background: 'var(--color-surface-raised)',
-            border: '1px solid var(--color-border-strong)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-          }}
-        >
-          {available.length === 0 ? (
-            <p className="px-3 py-2 text-[12px]" style={{ color: 'var(--color-text-faint)' }}>
-              All agents already have a number
-            </p>
-          ) : (
-            available.map((a) => {
-              const isSelected = a.agentId === value;
-              return (
-                <button
-                  key={a.agentId}
-                  type="button"
-                  onClick={() => { onChange(a.agentId); setOpen(false); }}
-                  className="flex items-center gap-2.5 px-3 py-2 text-left text-[12px] transition-colors duration-[100ms]"
-                  style={{ color: isSelected ? 'var(--color-accent)' : 'var(--color-text)', background: 'transparent' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-surface-elevated)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                >
-                  {isSelected ? (
-                    <Check size={11} strokeWidth={2.5} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
-                  ) : (
-                    <span style={{ width: 11, flexShrink: 0 }} />
-                  )}
-                  <span className="flex-1 truncate">
-                    <span className="font-[500]">{a.name}</span>
-                    <span style={{ color: 'var(--color-text-faint)' }}> ({a.agentId})</span>
-                  </span>
-                </button>
-              );
-            })
-          )}
-        </div>
-      )}
+      </span>
     </>
   );
 }
 
 function EmptyNumbers({ onBuy }: { onBuy: () => void }) {
   return (
-    <div
-      className="relative flex flex-col items-center gap-5 overflow-hidden rounded-[16px] px-6 py-16 text-center"
-      style={{ border: '1px dashed var(--color-border-strong)', background: 'var(--color-surface-raised)' }}
-    >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-40"
-        style={{
-          background: 'radial-gradient(ellipse 60% 100% at 50% 0%, var(--color-accent-subtle), transparent 70%)',
-        }}
-      />
-
-      <div
-        className="relative flex items-center justify-center rounded-[16px]"
-        style={{
-          width: 52,
-          height: 52,
-          background: 'var(--color-accent-subtle)',
-          border: '1px solid var(--color-accent-hairline)',
-        }}
-      >
-        <Phone size={22} strokeWidth={1.6} style={{ color: 'var(--color-accent)' }} />
-      </div>
-
-      <div className="relative flex flex-col items-center gap-1.5">
-        <h2 className="text-[16px] font-[600] tracking-[-0.02em]" style={{ color: 'var(--color-text)' }}>
-          No phone numbers yet
-        </h2>
-        <p className="max-w-[44ch] text-[13px] leading-[1.6]" style={{ color: 'var(--color-text-muted)' }}>
-          Buy a Twilio number and attach it to an agent. Inbound calls will automatically
-          start a voice session with the assigned agent.
-        </p>
-      </div>
-
-      <Button variant="primary" size="md" onClick={onBuy}>
-        <Plus size={14} strokeWidth={2.6} />
-        Buy a number
-      </Button>
-    </div>
+    <EmptyState
+      icon={Phone}
+      title="No phone numbers yet"
+      description="Buy a Twilio number and attach it to an agent. Inbound calls will automatically start a voice session with the assigned agent."
+      action={
+        <Button variant="primary" size="md" onClick={onBuy}>
+          <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
+          Buy a number
+        </Button>
+      }
+    />
   );
 }
 
+/* Bars at the row pitch on a flat fill — the header stays live, nothing shimmers. */
 function NumbersSkeleton() {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="listing" aria-hidden="true">
+      <div className="listing__head" />
       {[...Array(3)].map((_, i) => (
-        <div
-          key={i}
-          className="h-[96px] animate-pulse rounded-[12px]"
-          style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
-        />
+        <div key={i} className="flex items-center px-3" style={{ height: 'var(--row-height)' }}>
+          <div
+            className="w-full"
+            style={{
+              height: 36,
+              background: 'var(--surface-hover)',
+              borderRadius: 'var(--radius-sm)',
+            }}
+          />
+        </div>
       ))}
     </div>
   );

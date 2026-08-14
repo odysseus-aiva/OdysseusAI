@@ -13,7 +13,7 @@ interface LiveTranscriptPanelProps {
   toolEvents?: LiveToolEvent[];
   /** Call start epoch ms — timestamps render relative to it (m:ss). */
   callStartMs?: number;
-  /** Current session state — the header dot/label reflect it, synced to the orb. */
+  /** Current session state — the header dot reflects it, synced to the orb. */
   state?: VoiceState;
 }
 
@@ -23,7 +23,9 @@ type TimelineItem =
 
 /**
  * Full-height live-call transcript rail — Agent / Caller turns paired with the
- * orb. Token-driven so light mode stays bright paper; dark stays quiet glass.
+ * orb. Separation is carried by hairlines and by three steps of neutral surface,
+ * never by an accent edge: the orb is the product visual on this screen and the
+ * rail beside it is chrome.
  */
 export function LiveTranscriptPanel({
   lines,
@@ -35,7 +37,6 @@ export function LiveTranscriptPanel({
 }: LiveTranscriptPanelProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const lastText = lines.at(-1)?.text ?? '';
-  const stateColor = `var(${VOICE_STATE_META[state].colorVar})`;
 
   // Weave speech + tool executions into one time-ordered stream so a tool call
   // appears exactly where it fired, between the turns around it.
@@ -55,49 +56,40 @@ export function LiveTranscriptPanel({
 
   return (
     <aside
-      className="flex max-h-full min-h-0 w-full flex-col overflow-hidden rounded-[18px]"
+      className="flex max-h-full min-h-0 w-full flex-col overflow-hidden"
       style={{
-        /* Elevated cool sheet — separates from pale void in light mode */
-        background: 'var(--color-surface-elevated)',
-        border: '1px solid var(--color-border-strong)',
-        boxShadow:
-          '0 1px 0 var(--color-border-strong), 0 16px 40px rgb(12 17 32 / 0.14)',
+        borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--line-hairline)',
+        background: 'var(--surface-card)',
       }}
       aria-label="Live transcription"
     >
       <header
-        className="flex shrink-0 items-center justify-between gap-3 px-4 py-3"
+        className="flex shrink-0 items-center justify-between"
         style={{
-          background: 'color-mix(in srgb, var(--color-surface-elevated) 70%, var(--color-surface) 30%)',
-          borderBottom: '1px solid var(--color-border-strong)',
+          gap: 'var(--space-3)',
+          padding: 'var(--space-3) var(--space-4)',
+          borderBottom: '1px solid var(--line-hairline)',
         }}
       >
-        <div className="flex items-center gap-2.5">
-          <span className="relative flex h-2 w-2" aria-hidden>
-            <span
-              className="absolute inset-0 animate-ping rounded-full opacity-50"
-              style={{ background: stateColor }}
-            />
-            <span
-              className="relative h-2 w-2 rounded-full"
-              style={{ background: stateColor, boxShadow: `0 0 6px ${stateColor}` }}
-            />
-          </span>
-          <span
-            className="text-[10px] font-[600] uppercase tracking-[0.2em]"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
-            Live transcript
-          </span>
-        </div>
         <span
-          className="rounded-full px-2 py-0.5 font-mono text-[10.5px]"
           style={{
-            color: 'var(--color-text-muted)',
-            background: 'var(--color-glass)',
-            border: '1px solid var(--color-border)',
+            fontSize: 'var(--text-nav)',
+            fontWeight: 'var(--weight-medium)',
+            color: 'var(--fg-ink)',
           }}
         >
+          Live transcript
+        </span>
+        <span className="chip chip--sm">
+          <span
+            aria-hidden
+            className={`chip__dot chip__dot--${VOICE_STATE_META[state].dotTone}`}
+            style={{ animation: 'dotPulse 2s var(--ease-standard) infinite' }}
+          />
+          {/* The dot's tone is the only thing carrying the session state here, so
+              the state has to be said as well as coloured. */}
+          <span className="sr-only">{VOICE_STATE_META[state].label}</span>
           {lines.length === 0
             ? 'waiting'
             : `${lines.length} turn${lines.length === 1 ? '' : 's'}`}
@@ -106,24 +98,20 @@ export function LiveTranscriptPanel({
 
       <div
         ref={scrollerRef}
-        className="flex-1 overflow-y-auto px-3 py-3"
-        style={{
-          scrollbarGutter: 'stable',
-          background: 'var(--color-surface-elevated)',
-        }}
+        className="flex-1 overflow-y-auto"
+        style={{ padding: 'var(--space-3)', scrollbarGutter: 'stable' }}
       >
         {!ready || items.length === 0 ? (
           <EmptyState listening={ready} />
         ) : (
-          <ul className="flex flex-col gap-2.5">
-            {items.map((item, index) =>
+          <ul className="flex flex-col" style={{ gap: 'var(--space-2)' }}>
+            {items.map((item) =>
               item.kind === 'msg' ? (
                 <TranscriptLine
                   key={item.line.id}
                   line={item.line}
                   agentName={agentName}
                   callStartMs={callStartMs}
-                  isLatest={index === items.length - 1}
                 />
               ) : (
                 <ToolRow key={item.ev.id} ev={item.ev} callStartMs={callStartMs} />
@@ -138,10 +126,15 @@ export function LiveTranscriptPanel({
 
 function EmptyState({ listening }: { listening: boolean }) {
   return (
-    <div className="flex min-h-[120px] flex-col items-center justify-center gap-2 px-4 py-8 text-center">
+    <div className="empty-state empty-state--bare">
       <p
-        className="text-[13px] leading-relaxed"
-        style={{ color: 'var(--color-text-muted)' }}
+        className="m-0"
+        style={{
+          maxWidth: 'var(--measure-prose)',
+          fontSize: 'var(--text-body)',
+          lineHeight: 'var(--leading-body)',
+          color: 'var(--fg-muted)',
+        }}
       >
         {listening
           ? 'Start talking — words appear as you speak.'
@@ -155,73 +148,58 @@ function TranscriptLine({
   line,
   agentName,
   callStartMs,
-  isLatest,
 }: {
   line: LiveLine;
   agentName: string;
   callStartMs?: number;
-  isLatest: boolean;
 }) {
   const isAgent = line.role === 'assistant';
   const label = isAgent ? agentName : 'Caller';
 
   return (
-    <li
-      className={`flex ${isAgent ? 'justify-start' : 'justify-end'}`}
-    >
+    <li className={`flex ${isAgent ? 'justify-start' : 'justify-end'}`}>
       <div
-        className="relative max-w-[92%] rounded-[14px] px-3.5 py-2.5"
+        className="relative max-w-[92%]"
         style={{
-          /* White bubbles on cool sheet — readable lift in light mode */
-          background: isAgent
-            ? 'var(--color-accent-subtle)'
-            : 'var(--color-surface)',
-          border: `1px solid ${
-            isAgent ? 'var(--color-accent-border)' : 'var(--color-border-strong)'
-          }`,
-          borderLeft: isAgent
-            ? '3px solid var(--color-accent)'
-            : '1px solid var(--color-border-strong)',
-          boxShadow: isLatest
-            ? '0 2px 8px rgb(12 17 32 / 0.1)'
-            : '0 1px 2px rgb(12 17 32 / 0.05)',
+          padding: 'var(--space-2) var(--space-3)',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--line-hairline)',
+          // Two neutral steps rather than two hues: the agent sits back into the
+          // panel, the caller sits forward off it.
+          background: isAgent ? 'var(--surface-recessed)' : 'var(--surface-selected)',
         }}
       >
-        <div className="mb-1 flex items-center gap-1.5">
+        <div className="mb-1 flex items-center" style={{ gap: 'var(--space-1)' }}>
           {isAgent ? (
-            <AudioLines
-              size={12}
-              strokeWidth={2}
-              style={{ color: 'var(--color-accent)' }}
-            />
+            <AudioLines size={14} strokeWidth={2} style={{ color: 'var(--fg-muted)' }} aria-hidden />
           ) : (
-            <User
-              size={12}
-              strokeWidth={2}
-              style={{ color: 'var(--color-text-muted)' }}
-            />
+            <User size={14} strokeWidth={2} style={{ color: 'var(--fg-muted)' }} aria-hidden />
           )}
           <span
-            className="text-[11px] font-[600] tracking-[0.03em]"
             style={{
-              color: isAgent ? 'var(--color-accent)' : 'var(--color-text-muted)',
+              fontSize: 'var(--text-caption)',
+              fontWeight: 'var(--weight-medium)',
+              color: isAgent ? 'var(--fg-ink)' : 'var(--fg-body)',
             }}
           >
             {label}
           </span>
           <time
-            className="ml-auto font-mono text-[10px]"
-            style={{ color: 'var(--color-text-faint)' }}
+            className="num ml-auto"
+            style={{ fontSize: 'var(--text-micro)', color: 'var(--fg-muted)' }}
             dateTime={new Date(line.timestamp).toISOString()}
           >
             {formatClock(line.timestamp, callStartMs)}
           </time>
         </div>
         <p
-          className="whitespace-pre-wrap text-[13.5px] leading-[1.55]"
+          className="m-0 whitespace-pre-wrap"
           style={{
-            color: 'var(--color-text)',
-            opacity: line.isFinal ? 1 : 0.72,
+            fontSize: 'var(--text-body)',
+            lineHeight: 'var(--leading-body)',
+            // An open utterance is still being revised by STT, so it reads back
+            // a step until it commits.
+            color: line.isFinal ? 'var(--fg-ink)' : 'var(--fg-body)',
           }}
         >
           {line.text}
@@ -237,11 +215,13 @@ function ToolRow({ ev, callStartMs }: { ev: LiveToolEvent; callStartMs?: number 
   const [open, setOpen] = useState(false);
   const running = ev.status === 'running';
   const failed = ev.status === 'error';
+  // A tool outcome is a status, which is the one thing besides the orb that
+  // earns a hue. Everything else in this row is furniture.
   const tone = failed
-    ? 'var(--color-state-error)'
+    ? 'var(--status-error)'
     : running
-      ? 'var(--color-state-thinking)'
-      : 'var(--color-state-speaking)';
+      ? 'var(--fg-body)'
+      : 'var(--status-success)';
   const expandable = ev.args !== undefined || ev.output !== undefined || ev.error != null;
   const status = running ? 'Running…' : failed ? 'Failed' : 'Completed';
   const caption = [status, ev.latencyMs != null ? `${ev.latencyMs}ms` : null]
@@ -249,52 +229,87 @@ function ToolRow({ ev, callStartMs }: { ev: LiveToolEvent; callStartMs?: number 
     .join(' · ');
 
   return (
-    <li className="flex justify-center px-1.5">
+    <li className="flex justify-center">
       <div
-        className="w-full overflow-hidden rounded-[9px]"
-        style={{ border: '1px solid var(--color-border-strong)', background: 'var(--color-surface)' }}
+        className="w-full overflow-hidden"
+        style={{
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--line-hairline)',
+          background: 'var(--surface-recessed)',
+        }}
       >
         <button
           type="button"
           onClick={() => expandable && setOpen((v) => !v)}
-          className="flex w-full items-center gap-2 px-3 py-1.5 text-left"
-          style={{ cursor: expandable ? 'pointer' : 'default' }}
+          className="focus-inset flex w-full items-center text-left"
+          style={{
+            gap: 'var(--space-2)',
+            padding: 'var(--space-1) var(--space-3)',
+            minHeight: 'var(--icon-button-size)',
+            cursor: expandable ? 'pointer' : 'default',
+          }}
           aria-expanded={expandable ? open : undefined}
         >
-          <Wrench size={11} strokeWidth={2} style={{ color: tone }} />
-          <span className="font-mono text-[11.5px]" style={{ color: 'var(--color-text)' }}>
+          <Wrench size={14} strokeWidth={2} style={{ color: 'var(--fg-muted)' }} aria-hidden />
+          <span
+            className="font-mono"
+            style={{ fontSize: 'var(--text-caption)', color: 'var(--fg-ink)' }}
+          >
             {ev.name}
           </span>
           <span
-            className="min-w-0 flex-1 truncate text-[10.5px]"
-            style={{ color: failed ? tone : 'var(--color-text-faint)' }}
+            className="min-w-0 flex-1 truncate"
+            style={{
+              fontSize: 'var(--text-micro)',
+              color: failed ? tone : 'var(--fg-muted)',
+            }}
           >
             {caption}
           </span>
-          <time className="font-mono text-[10px]" style={{ color: 'var(--color-text-faint)' }}>
+          <time
+            className="num"
+            style={{ fontSize: 'var(--text-micro)', color: 'var(--fg-muted)' }}
+          >
             {formatClock(ev.timestamp, callStartMs)}
           </time>
           {running ? (
             <span
-              className="h-1.5 w-1.5 animate-pulse rounded-full"
-              style={{ background: tone }}
               aria-hidden
+              style={{
+                width: 'var(--dot-size)',
+                height: 'var(--dot-size)',
+                flex: '0 0 auto',
+                borderRadius: 'var(--radius-pill)',
+                background: tone,
+                animation: 'dotPulse 1.4s var(--ease-standard) infinite',
+              }}
             />
           ) : expandable ? (
             <ChevronDown
-              size={12}
+              size={16}
               strokeWidth={2}
               className="transition-transform"
-              style={{ color: 'var(--color-text-faint)', transform: open ? 'rotate(180deg)' : 'none' }}
+              style={{ color: 'var(--fg-muted)', transform: open ? 'rotate(180deg)' : 'none' }}
+              aria-hidden
             />
           ) : null}
         </button>
         {open && expandable && (
-          <div className="flex flex-col gap-1.5 border-t px-3 py-2" style={{ borderColor: 'var(--color-border)' }}>
+          <div
+            className="flex flex-col"
+            style={{
+              gap: 'var(--space-2)',
+              padding: 'var(--space-2) var(--space-3)',
+              borderTop: '1px solid var(--line-hairline)',
+            }}
+          >
             {ev.args !== undefined && <MiniJson label="Input" value={ev.args} />}
             {ev.output !== undefined && <MiniJson label="Output" value={ev.output} />}
             {ev.error != null && (
-              <p className="text-[11px]" style={{ color: 'var(--color-state-error)' }}>
+              <p
+                className="m-0"
+                style={{ fontSize: 'var(--text-caption)', color: 'var(--status-error)' }}
+              >
                 {ev.error}
               </p>
             )}
@@ -307,21 +322,18 @@ function ToolRow({ ev, callStartMs }: { ev: LiveToolEvent; callStartMs?: number 
 
 function MiniJson({ label, value }: { label: string; value: unknown }) {
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-1">
       <span
-        className="text-[9.5px] font-[600] uppercase tracking-[0.1em]"
-        style={{ color: 'var(--color-text-faint)' }}
+        style={{
+          fontSize: 'var(--text-overline)',
+          fontWeight: 'var(--weight-medium)',
+          letterSpacing: 'var(--tracking-overline)',
+          color: 'var(--fg-muted)',
+        }}
       >
         {label}
       </span>
-      <pre
-        className="overflow-x-auto rounded-[6px] px-2 py-1.5 text-[10.5px]"
-        style={{
-          background: 'var(--color-surface-raised)',
-          color: 'var(--color-text-muted)',
-          fontFamily: 'var(--font-mono)',
-        }}
-      >
+      <pre className="code-block" style={{ padding: 'var(--space-1) var(--space-2)' }}>
         {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
       </pre>
     </div>
@@ -332,8 +344,13 @@ function Caret() {
   return (
     <span
       aria-hidden
-      className="ml-0.5 inline-block h-[0.9em] w-[2px] align-[-0.1em] animate-pulse"
-      style={{ background: 'var(--color-accent)' }}
+      className="ml-0.5 inline-block align-[-0.1em]"
+      style={{
+        width: 2,
+        height: '0.9em',
+        background: 'var(--fg-ink)',
+        animation: 'dotPulse 1.1s var(--ease-standard) infinite',
+      }}
     />
   );
 }

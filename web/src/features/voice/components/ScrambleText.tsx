@@ -84,8 +84,11 @@ export function ScrambleText({
   }, [text, delay, duration]);
 
   return (
-    <span className={className} style={style} aria-label={text}>
-      <span aria-hidden style={{ fontVariantNumeric: 'tabular-nums' }}>
+    <span className={className} style={style}>
+      {/* aria-label on a generic span is unreliably exposed, so the settled text
+          is real content and only the decoding frames are hidden. */}
+      <span className="sr-only">{text}</span>
+      <span aria-hidden="true" style={{ fontVariantNumeric: 'tabular-nums' }}>
         {display}
       </span>
     </span>

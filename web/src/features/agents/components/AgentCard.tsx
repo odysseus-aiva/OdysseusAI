@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Bot, Wrench, ArrowUpRight, Ear, BrainCircuit, AudioLines, Cpu, Trash2 } from 'lucide-react';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import type { Agent } from '@/lib/api/agents';
 import { deleteAgent } from '@/lib/api/agents';
 import {
@@ -55,93 +57,56 @@ export function AgentCard({
   return (
     <Link
       href={`/agents/${encodeURIComponent(agent.agentId)}`}
-      className="group relative flex flex-col overflow-hidden rounded-[13px] transition-colors duration-[160ms]"
-      style={{
-        background: 'var(--color-surface-raised)',
-        border: '1px solid var(--color-border)',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = 'var(--color-accent-border)';
-        e.currentTarget.style.background = 'var(--color-surface-elevated)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'var(--color-border)';
-        e.currentTarget.style.background = 'var(--color-surface-raised)';
-      }}
+      className="group flex flex-col overflow-hidden rounded-md border border-[var(--line-hairline)] bg-[var(--surface-card)] transition-colors duration-[var(--duration-hover)] hover:border-[var(--line-strong)]"
     >
-      {/* Top accent hairline, revealed on hover */}
-      <span
-        aria-hidden
-        className="absolute inset-x-0 top-0 h-px opacity-0 transition-opacity duration-[220ms] group-hover:opacity-100"
-        style={{
-          background:
-            'linear-gradient(90deg, transparent, var(--color-accent) 50%, transparent)',
-        }}
-      />
-
-      {/* Header: glyph + identity + open affordance */}
+      {/* Header: glyph + identity + engine state */}
       <div className="flex items-start gap-3 px-4 pt-4">
-        <div
-          className="flex flex-shrink-0 items-center justify-center rounded-[10px]"
+        <span
+          className="flex flex-shrink-0 items-center justify-center rounded-sm"
           style={{
-            width: 36,
-            height: 36,
-            background: 'var(--color-accent-subtle)',
-            border: '1px solid var(--color-accent-hairline)',
+            width: 32,
+            height: 32,
+            background: 'var(--surface-recessed)',
+            border: '1px solid var(--line-hairline)',
+            color: 'var(--fg-body)',
           }}
         >
-          <Bot size={16} strokeWidth={2} style={{ color: 'var(--color-accent)' }} />
-        </div>
+          <Bot size={16} strokeWidth={2} aria-hidden="true" />
+        </span>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
           <span
-            className="truncate text-[14px] font-[600] tracking-[-0.02em]"
-            style={{ color: 'var(--color-text)' }}
+            className="truncate text-nav font-medium"
+            style={{ color: 'var(--fg-ink)' }}
           >
             {agent.name}
           </span>
-          <span
-            className="truncate font-mono text-[11px]"
-            style={{ color: 'var(--color-text-faint)' }}
-          >
+          <span className="truncate font-mono text-micro" style={{ color: 'var(--fg-muted)' }}>
             {agent.agentId}
           </span>
         </div>
 
         {isOmni ? (
-          <span
-            className="flex flex-shrink-0 items-center gap-1 rounded-[6px] px-1.5 py-0.5 text-[10.5px] font-[500]"
-            style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
-          >
-            <Cpu size={10} strokeWidth={2.2} />
+          <Badge>
+            <Cpu size={12} strokeWidth={2} aria-hidden="true" />
             Omni
-          </span>
+          </Badge>
         ) : (
-          <span
-            className="flex flex-shrink-0 items-center gap-1 rounded-[6px] px-1.5 py-0.5 text-[10.5px] font-[500]"
-            style={{ background: 'rgb(74 222 128 / 0.08)', color: 'var(--color-state-speaking)' }}
-          >
-            <span
-              aria-hidden
-              className="rounded-full"
-              style={{ width: 4, height: 4, background: 'var(--color-state-speaking)' }}
-            />
-            Ready
-          </span>
+          <Badge variant="success">Ready</Badge>
         )}
       </div>
 
       {/* One-line description / prompt preview */}
       <p
-        className="line-clamp-2 min-h-[34px] px-4 pt-2.5 text-[12px] leading-[1.5]"
-        style={{ color: 'var(--color-text-muted)' }}
+        className="line-clamp-2 min-h-[40px] px-4 pt-3 text-caption leading-body"
+        style={{ color: 'var(--fg-body)' }}
       >
         {summary}
       </p>
 
       {/* Pipeline chips — only meaningful for the pipeline engine. Omni fuses
           these stages, so we show a single engine chip instead. */}
-      <div className="flex flex-wrap items-center gap-1.5 px-4 pt-3">
+      <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
         {isOmni ? (
           <PipeChip icon={Cpu} value="Fused realtime engine" />
         ) : (
@@ -155,12 +120,12 @@ export function AgentCard({
 
       {/* Footer: tools + voice + updated + open */}
       <div
-        className="mt-3.5 flex items-center gap-3 px-4 py-2.5"
-        style={{ borderTop: '1px solid var(--color-border)' }}
+        className="mt-4 flex items-center gap-2 px-4 py-3"
+        style={{ borderTop: '1px solid var(--line-hairline)' }}
       >
-        <span className="flex items-center gap-1.5" title="Enabled tools">
-          <Wrench size={11.5} strokeWidth={2} style={{ color: 'var(--color-text-faint)' }} />
-          <span className="text-[11.5px] tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
+        <span className="flex items-center gap-2" title="Enabled tools">
+          <Wrench size={14} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--fg-muted)' }} />
+          <span className="text-caption tabular-nums" style={{ color: 'var(--fg-body)' }}>
             {toolCount == null ? '—' : `${toolCount} ${toolCount === 1 ? 'tool' : 'tools'}`}
           </span>
         </span>
@@ -168,7 +133,7 @@ export function AgentCard({
         {voiceBits && (
           <>
             <Dot />
-            <span className="truncate text-[11.5px]" style={{ color: 'var(--color-text-muted)' }}>
+            <span className="truncate text-caption" style={{ color: 'var(--fg-body)' }}>
               {voiceBits}
             </span>
           </>
@@ -177,49 +142,36 @@ export function AgentCard({
         <span className="flex-1" />
 
         {confirmDelete ? (
-          <span className="flex items-center gap-1.5" onClick={(e) => e.preventDefault()}>
-            <span className="text-[11px]" style={{ color: 'var(--color-state-error)' }}>
+          <span className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
+            <span className="text-caption" style={{ color: 'var(--fg-muted)' }}>
               Delete?
             </span>
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="rounded-[5px] px-1.5 py-0.5 text-[11px] font-[500] transition-colors duration-[120ms]"
-              style={{ background: 'rgb(251 113 133 / 0.15)', color: 'var(--color-state-error)' }}
-            >
-              {deleting ? '…' : 'Yes'}
-            </button>
-            <button
-              type="button"
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(false); }}
-              className="rounded-[5px] px-1.5 py-0.5 text-[11px] font-[500] transition-colors duration-[120ms]"
-              style={{ background: 'var(--color-surface)', color: 'var(--color-text-muted)' }}
-            >
+            <Button variant="secondary" size="sm" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(false); }}>
               No
-            </button>
+            </Button>
+            <Button variant="danger" size="sm" onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Yes'}
+            </Button>
           </span>
         ) : (
           <>
-            <span className="flex-shrink-0 text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
+            <span className="flex-shrink-0 text-caption" style={{ color: 'var(--fg-muted)' }}>
               {relativeTime(agent.updatedAt)}
             </span>
             <button
               type="button"
               aria-label={`Delete ${agent.name}`}
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(true); }}
-              className="flex-shrink-0 flex items-center justify-center rounded-[6px] opacity-0 transition-all duration-[140ms] group-hover:opacity-100"
-              style={{ width: 24, height: 24, color: 'var(--color-text-faint)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-state-error)'; e.currentTarget.style.background = 'rgb(251 113 133 / 0.1)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-faint)'; e.currentTarget.style.background = 'transparent'; }}
+              className="icon-btn opacity-0 transition-opacity duration-[var(--duration-hover)] group-hover:opacity-100 focus-visible:opacity-100"
             >
-              <Trash2 size={12} strokeWidth={2} />
+              <Trash2 size={16} strokeWidth={2} />
             </button>
             <ArrowUpRight
-              size={13}
+              size={16}
               strokeWidth={2}
-              className="flex-shrink-0 -translate-x-0.5 opacity-0 transition-all duration-[160ms] group-hover:translate-x-0 group-hover:opacity-100"
-              style={{ color: 'var(--color-accent)' }}
+              aria-hidden="true"
+              className="flex-shrink-0 opacity-0 transition-opacity duration-[var(--duration-hover)] group-hover:opacity-100"
+              style={{ color: 'var(--fg-muted)' }}
             />
           </>
         )}
@@ -230,25 +182,18 @@ export function AgentCard({
 
 function PipeChip({ icon: Icon, value }: { icon: React.ElementType; value: string }) {
   return (
-    <span
-      className="flex items-center gap-1 rounded-[6px] px-1.5 py-1"
-      style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-    >
-      <Icon size={10.5} strokeWidth={2} style={{ color: 'var(--color-text-faint)' }} />
-      <span className="text-[11px] font-[450]" style={{ color: 'var(--color-text-muted)' }}>
-        {value}
-      </span>
+    <span className="chip chip--sm">
+      <Icon size={12} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--fg-muted)' }} />
+      {value}
     </span>
   );
 }
 
 function Dot() {
   return (
-    <span
-      aria-hidden
-      className="flex-shrink-0 rounded-full"
-      style={{ width: 2.5, height: 2.5, background: 'var(--color-text-faint)' }}
-    />
+    <span aria-hidden className="flex-shrink-0 text-caption" style={{ color: 'var(--fg-muted)' }}>
+      ·
+    </span>
   );
 }
 

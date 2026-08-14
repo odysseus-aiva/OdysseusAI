@@ -24,10 +24,18 @@ export interface ToolCategoryMeta {
   id: string;
   label: string;
   icon: LucideIcon;
-  /** Accent color token for the category glyph. */
+  /**
+   * Colour token for the category glyph. Every category resolves to the same
+   * neutral: a hue per category is decorative colour on chrome, and category is
+   * already carried by the icon and the label. The field stays so the glyph
+   * colour has one definition rather than one per call site.
+   */
   color: string;
   description: string;
 }
+
+/** The one colour a category glyph may take. */
+const GLYPH = 'var(--fg-muted)';
 
 export const TOOL_CATEGORIES: Record<string, ToolCategoryMeta> = {
   // ── Live today ──────────────────────────────────────────────────────────
@@ -35,28 +43,28 @@ export const TOOL_CATEGORIES: Record<string, ToolCategoryMeta> = {
     id: 'information',
     label: 'Information',
     icon: Cloud,
-    color: 'var(--color-accent)',
+    color: GLYPH,
     description: 'Look up external facts and data',
   },
   utility: {
     id: 'utility',
     label: 'Utility',
     icon: Wrench,
-    color: 'var(--color-state-warning)',
+    color: GLYPH,
     description: 'Time, math, and formatting helpers',
   },
   call_control: {
     id: 'call_control',
     label: 'Call control',
     icon: PhoneOff,
-    color: 'var(--color-state-speaking)',
+    color: GLYPH,
     description: 'Steer the call itself',
   },
   demo: {
     id: 'demo',
     label: 'Demo',
     icon: FlaskConical,
-    color: 'var(--color-state-thinking)',
+    color: GLYPH,
     description: 'Sample tools for testing',
   },
 
@@ -65,42 +73,42 @@ export const TOOL_CATEGORIES: Record<string, ToolCategoryMeta> = {
     id: 'search',
     label: 'Search',
     icon: Search,
-    color: 'var(--color-accent)',
+    color: GLYPH,
     description: 'Web and document retrieval',
   },
   communication: {
     id: 'communication',
     label: 'Communication',
     icon: MessageSquare,
-    color: 'var(--color-accent-2)',
+    color: GLYPH,
     description: 'Send email, SMS, and notifications',
   },
   crm: {
     id: 'crm',
     label: 'CRM',
     icon: Users,
-    color: 'var(--color-state-warning)',
+    color: GLYPH,
     description: 'Read and write customer records',
   },
   integrations: {
     id: 'integrations',
     label: 'Integrations',
     icon: Plug,
-    color: 'var(--color-state-speaking)',
+    color: GLYPH,
     description: 'Third-party service actions',
   },
   custom: {
     id: 'custom',
     label: 'Custom',
     icon: Code2,
-    color: 'var(--color-text-muted)',
+    color: GLYPH,
     description: 'Your own HTTP functions',
   },
   mcp: {
     id: 'mcp',
     label: 'MCP',
     icon: Server,
-    color: 'var(--color-accent-2)',
+    color: GLYPH,
     description: 'Tools exposed by MCP servers',
   },
 };
@@ -109,7 +117,7 @@ export const UNKNOWN_CATEGORY: ToolCategoryMeta = {
   id: 'other',
   label: 'Other',
   icon: Wrench,
-  color: 'var(--color-text-muted)',
+  color: GLYPH,
   description: 'Uncategorized',
 };
 

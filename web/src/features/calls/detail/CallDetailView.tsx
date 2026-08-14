@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useCallback, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { PageHeader } from '@/components/layout/AppShell';
-import { Button } from '@/components/ui/Button';
 import { useCallDetail } from './useCallDetail';
 import { hasLatency, shortCallId } from './utils';
 import { CallDetailHeader } from './components/CallDetailHeader';
@@ -16,6 +15,8 @@ import { CallTranscriptPanel } from './components/CallTranscriptPanel';
 import { CallAudioPlayer } from './components/CallAudioPlayer';
 
 type MobileTab = 'details' | 'overview' | 'transcript';
+
+const HAIRLINE = '1px solid var(--line-hairline)';
 
 export function CallDetailView({ callId }: { callId: string }) {
   const { call, timeline, agentName, loading, error } = useCallDetail(callId);
@@ -40,7 +41,7 @@ export function CallDetailView({ callId }: { callId: string }) {
   const showPerf = hasLatency(call.latencyMetrics);
 
   const centerPanel = (
-    <div className="flex flex-col gap-7 p-5">
+    <div className="flex flex-col gap-8 p-5">
       {analysisVisible && call.analysis && <CallOverview analysis={call.analysis} />}
       {showPerf && <CallPerformance metrics={call.latencyMetrics} />}
       {call.cost && <CallCostBreakdown cost={call.cost} />}
@@ -66,7 +67,7 @@ export function CallDetailView({ callId }: { callId: string }) {
       <div className="flex min-h-0 flex-1 flex-col px-8 py-5">
         {/* Mobile tabs — same control vocabulary as the rest of the app */}
         <div
-          className="mb-3 flex flex-none gap-0.5 lg:hidden"
+          className="tabs mb-4 flex-none lg:hidden"
           role="tablist"
           aria-label="Call sections"
         >
@@ -83,14 +84,12 @@ export function CallDetailView({ callId }: { callId: string }) {
                 key={t.id}
                 type="button"
                 role="tab"
+                id={`call-tab-${t.id}`}
                 aria-selected={on}
+                aria-controls={`call-panel-${t.id}`}
                 onClick={() => setMobileTab(t.id)}
-                className="rounded-[8px] px-3 py-1.5 text-[13px] font-[450] tracking-[-0.01em] transition-colors duration-[140ms]"
-                style={{
-                  color: on ? 'var(--color-accent)' : 'var(--color-text-muted)',
-                  background: on ? 'var(--color-nav-active-bg)' : 'transparent',
-                  border: `1px solid ${on ? 'var(--color-accent-hairline)' : 'transparent'}`,
-                }}
+                className="tab"
+                data-active={on || undefined}
               >
                 {t.label}
               </button>
@@ -98,21 +97,21 @@ export function CallDetailView({ callId }: { callId: string }) {
           })}
         </div>
 
-        {/* Workspace — same bordered surface language as Call History table */}
+        {/* Workspace — hairline and radius, never a shadow */}
         <div
-          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[12px]"
-          style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface)' }}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg"
+          style={{ border: HAIRLINE, background: 'var(--surface-card)' }}
         >
           <div className="hidden min-h-0 flex-1 lg:flex">
             <div
               className="min-h-0 w-[280px] flex-none overflow-hidden xl:w-[300px]"
-              style={{ borderRight: '1px solid var(--color-border)' }}
+              style={{ borderRight: HAIRLINE }}
             >
               <CallDetailsSidebar call={call} />
             </div>
             <div
               className="min-h-0 min-w-0 flex-1 overflow-y-auto"
-              style={{ borderRight: '1px solid var(--color-border)' }}
+              style={{ borderRight: HAIRLINE }}
             >
               {centerPanel}
             </div>
@@ -123,14 +122,35 @@ export function CallDetailView({ callId }: { callId: string }) {
 
           <div className="min-h-0 flex-1 overflow-hidden lg:hidden">
             {mobileTab === 'details' && (
-              <div className="h-full overflow-y-auto">
+              <div
+                role="tabpanel"
+                id="call-panel-details"
+                aria-labelledby="call-tab-details"
+                className="h-full overflow-y-auto"
+              >
                 <CallDetailsSidebar call={call} />
               </div>
             )}
             {mobileTab === 'overview' && (
-              <div className="h-full overflow-y-auto">{centerPanel}</div>
+              <div
+                role="tabpanel"
+                id="call-panel-overview"
+                aria-labelledby="call-tab-overview"
+                className="h-full overflow-y-auto"
+              >
+                {centerPanel}
+              </div>
             )}
-            {mobileTab === 'transcript' && transcript}
+            {mobileTab === 'transcript' && (
+              <div
+                role="tabpanel"
+                id="call-panel-transcript"
+                aria-labelledby="call-tab-transcript"
+                className="h-full"
+              >
+                {transcript}
+              </div>
+            )}
           </div>
 
           <CallAudioPlayer
@@ -160,10 +180,21 @@ function DetailSkeleton({ callId }: { callId: string }) {
         description={shortCallId(callId)}
       />
       <div className="min-h-0 flex-1 px-8 py-5">
+        {/* Bars, not a shimmer — nothing in this language animates a gradient. */}
         <div
-          className="h-full animate-pulse rounded-[12px]"
-          style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
-        />
+          className="flex h-full flex-col gap-2 overflow-hidden rounded-lg p-4"
+          style={{ border: HAIRLINE, background: 'var(--surface-card)' }}
+          aria-busy="true"
+          aria-label="Loading call"
+        >
+          {[...Array(5)].map((_, i) => (
+            <div
+              key={i}
+              className="flex-none rounded-sm"
+              style={{ height: 'var(--row-height, 56px)', background: 'var(--surface-hover)' }}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -181,19 +212,19 @@ function ErrorState({ message, callId }: { message: string; callId: string }) {
         title="Call"
         description={shortCallId(callId)}
       />
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-        <AlertCircle size={24} style={{ color: 'var(--color-state-error)' }} />
-        <p className="text-[13.5px] font-[500]" style={{ color: 'var(--color-text)' }}>
-          Could not load call
-        </p>
-        <p className="max-w-sm text-[12.5px]" style={{ color: 'var(--color-state-error)' }}>
-          {message}
-        </p>
-        <Link href="/calls">
-          <Button variant="ghost" size="sm">
-            Back to Call History
-          </Button>
-        </Link>
+      <div className="flex flex-1 items-center justify-center px-6">
+        <div className="empty-state empty-state--bare">
+          <span className="empty-state__tile" aria-hidden="true">
+            <AlertCircle size={20} strokeWidth={1.7} style={{ color: 'var(--status-error)' }} />
+          </span>
+          <h2 className="empty-state__title">Could not load call</h2>
+          <p className="empty-state__body">{message}</p>
+          <div className="empty-state__actions">
+            <Link href="/calls" className="btn btn--secondary">
+              Back to Call History
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );

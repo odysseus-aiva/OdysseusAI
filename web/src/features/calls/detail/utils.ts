@@ -202,11 +202,13 @@ export function statusLabel(status: CallStatus, endedBy?: string): string {
   return 'Error';
 }
 
+/* In-flight reads neutral, not warning: warning is reserved for a state the
+   user has to act on. */
 export function statusVariant(
   status: CallStatus,
-): 'success' | 'accent' | 'error' {
+): 'success' | 'muted' | 'error' {
   if (status === 'completed') return 'success';
-  if (status === 'in_progress') return 'accent';
+  if (status === 'in_progress') return 'muted';
   return 'error';
 }
 
@@ -224,12 +226,12 @@ export function latencyState(ms: number | undefined | null): LatencyState | null
   return 'slow';
 }
 
-/** Soft state tint — bars/labels only; large numbers stay neutral text. */
+/** Status tint — bars/labels only; large numbers stay neutral text. */
 export function latencyColor(ms: number): string {
   const state = latencyState(ms);
-  if (state === 'good') return 'var(--color-state-speaking)';
-  if (state === 'warning') return 'var(--color-state-warning)';
-  return 'var(--color-state-error)';
+  if (state === 'good') return 'var(--status-success)';
+  if (state === 'warning') return 'var(--status-warning)';
+  return 'var(--status-error)';
 }
 
 export function latencyStateLabel(state: LatencyState): string {
@@ -268,6 +270,11 @@ export function formatLatencyMs(ms: number): string {
   return `${Math.round(ms)}ms`;
 }
 
+/**
+ * Cost composition segments. The three series separate on an ink ramp rather
+ * than on hue — this is a furniture-sized bar, not a chart, and hue in it would
+ * read as chrome.
+ */
 export function costRows(cost: CallCost): {
   label: string;
   usd: number;
@@ -284,7 +291,7 @@ export function costRows(cost: CallCost): {
       ]
         .filter(Boolean)
         .join(' · '),
-      color: 'var(--color-accent)',
+      color: 'var(--fg-ink)',
     },
     {
       label: 'TTS',
@@ -292,7 +299,7 @@ export function costRows(cost: CallCost): {
       detail: [cost.breakdown.tts.provider, `${formatCount(cost.breakdown.tts.characters)} chars`]
         .filter(Boolean)
         .join(' · '),
-      color: 'var(--color-state-thinking)',
+      color: 'var(--fg-body)',
     },
     {
       label: 'STT',
@@ -300,7 +307,7 @@ export function costRows(cost: CallCost): {
       detail: [cost.breakdown.stt.provider, `${cost.breakdown.stt.seconds}s`]
         .filter(Boolean)
         .join(' · '),
-      color: 'var(--color-state-speaking)',
+      color: 'var(--fg-muted)',
     },
   ];
 }

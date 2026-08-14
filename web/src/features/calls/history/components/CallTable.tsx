@@ -9,6 +9,8 @@ import type { PageSizeOption } from '../useCallHistory';
 
 const PAGE_SIZE_OPTIONS: PageSizeOption[] = [10, 25, 50, 100];
 
+const SKELETON_ROWS = 5;
+
 export function CallTable({
   calls,
   selectedId,
@@ -19,22 +21,19 @@ export function CallTable({
   onSelect: (id: string) => void;
 }) {
   return (
-    <div
-      className="overflow-hidden rounded-[10px]"
-      style={{ border: '1px solid var(--color-border)' }}
-      role="table"
-      aria-label="Call history"
-    >
-      <CallTableHeader />
-      <div role="rowgroup">
-        {calls.map((call) => (
-          <CallRow
-            key={call.callId}
-            call={call}
-            selected={selectedId === call.callId}
-            onSelect={() => onSelect(call.callId)}
-          />
-        ))}
+    <div className="listing-scroll">
+      <div className="listing" role="table" aria-label="Call history">
+        <CallTableHeader />
+        <div role="rowgroup">
+          {calls.map((call) => (
+            <CallRow
+              key={call.callId}
+              call={call}
+              selected={selectedId === call.callId}
+              onSelect={() => onSelect(call.callId)}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -42,27 +41,15 @@ export function CallTable({
 
 export function CallHistoryEmpty() {
   return (
-    <div
-      className="flex flex-col items-center justify-center gap-4 rounded-[12px] px-6 py-16 text-center"
-      style={{ border: '1px dashed var(--color-border)' }}
-    >
-      <div
-        className="flex h-11 w-11 items-center justify-center rounded-full"
-        style={{
-          background: 'var(--color-surface-raised)',
-          border: '1px solid var(--color-border)',
-        }}
-      >
-        <Clock size={18} style={{ color: 'var(--color-text-faint)' }} />
-      </div>
-      <div className="flex flex-col gap-1">
-        <p className="text-[14px] font-[500]" style={{ color: 'var(--color-text)' }}>
-          No calls match these filters
-        </p>
-        <p className="max-w-sm text-[13px]" style={{ color: 'var(--color-text-muted)' }}>
-          Try clearing search or widening the date range. New voice sessions appear here when they complete.
-        </p>
-      </div>
+    <div className="empty-state" aria-live="polite">
+      <span className="empty-state__tile" aria-hidden="true">
+        <Clock size={20} strokeWidth={1.7} />
+      </span>
+      <h2 className="empty-state__title">No calls match these filters</h2>
+      <p className="empty-state__body">
+        Try clearing search or widening the date range. New voice sessions appear here when they
+        complete.
+      </p>
     </div>
   );
 }
@@ -75,50 +62,38 @@ export function CallHistoryError({
   onRetry: () => void;
 }) {
   return (
-    <div
-      className="flex flex-col items-center justify-center gap-3 rounded-[12px] px-6 py-14 text-center"
-      style={{ border: '1px dashed var(--color-border)' }}
-    >
-      <AlertCircle size={20} style={{ color: 'var(--color-state-error)' }} />
-      <p className="text-[14px] font-[500]" style={{ color: 'var(--color-text)' }}>
-        Could not load call history
-      </p>
-      <p className="text-[13px]" style={{ color: 'var(--color-state-error)' }}>
-        {message}
-      </p>
-      <Button variant="ghost" size="sm" onClick={onRetry}>
-        Try again
-      </Button>
+    <div className="empty-state">
+      <span className="empty-state__tile" aria-hidden="true">
+        <AlertCircle size={20} strokeWidth={1.7} style={{ color: 'var(--status-error)' }} />
+      </span>
+      <h2 className="empty-state__title">Could not load call history</h2>
+      <p className="empty-state__body">{message}</p>
+      <div className="empty-state__actions">
+        <Button variant="secondary" onClick={onRetry}>
+          Try again
+        </Button>
+      </div>
     </div>
   );
 }
 
+/* Bars at row height, no shimmer: a travelling highlight would be the only
+   animated gradient in the app. The header stays live. */
 export function CallHistorySkeleton() {
   return (
-    <div
-      className="overflow-hidden rounded-[10px]"
-      style={{ border: '1px solid var(--color-border)' }}
-      aria-busy="true"
-      aria-label="Loading calls"
-    >
-      <div
-        style={{
-          height: 38,
-          background: 'var(--color-surface)',
-          borderBottom: '1px solid var(--color-border)',
-        }}
-      />
-      {[...Array(7)].map((_, i) => (
-        <div
-          key={i}
-          className="animate-pulse"
-          style={{
-            height: 56,
-            background: 'var(--color-surface-raised)',
-            borderTop: i > 0 ? '1px solid var(--color-border)' : undefined,
-          }}
-        />
-      ))}
+    <div className="listing-scroll">
+      <div className="listing" aria-busy="true" aria-label="Loading calls">
+        <CallTableHeader />
+        <div className="flex flex-col gap-1 pt-1">
+          {[...Array(SKELETON_ROWS)].map((_, i) => (
+            <div
+              key={i}
+              className="rounded-sm"
+              style={{ height: 'var(--row-height)', background: 'var(--surface-hover)' }}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -147,16 +122,20 @@ export function CallPagination({
 
   return (
     <div className="flex w-full flex-wrap items-center justify-between gap-3">
-      {/* Page size selector */}
       <div className="flex items-center gap-2">
-        <span className="whitespace-nowrap text-[12px]" style={{ color: 'var(--color-text-faint)' }}>
+        <span className="whitespace-nowrap text-caption" style={{ color: 'var(--fg-muted)' }}>
           Rows per page
         </span>
         <Select
           aria-label="Rows per page"
           value={String(pageSize)}
           onChange={(e) => onPageSizeChange(Number(e.target.value) as PageSizeOption)}
-          style={{ height: 32, minWidth: 84 }}
+          style={{
+            height: 'var(--icon-button-size)',
+            minWidth: 84,
+            width: 'auto',
+            borderRadius: 'var(--radius-sm)',
+          }}
         >
           {PAGE_SIZE_OPTIONS.map((size) => (
             <option key={size} value={size}>
@@ -166,9 +145,8 @@ export function CallPagination({
         </Select>
       </div>
 
-      {/* Page info + navigation */}
       <div className="flex items-center gap-3">
-        <p className="text-[12px]" style={{ color: 'var(--color-text-faint)' }}>
+        <p className="text-caption tabular-nums" style={{ color: 'var(--fg-muted)' }}>
           {total === 0 ? 'No results' : `${from}–${to} of ${total}`}
           {totalPages > 1 ? ` · Page ${page} of ${totalPages}` : null}
         </p>

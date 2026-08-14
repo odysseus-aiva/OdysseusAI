@@ -2,47 +2,61 @@
 
 import { useMemo, useRef, useState, useId } from 'react';
 import { PageHeader } from '@/components/layout/AppShell';
-import { OMNI_RATE_PER_MIN, COMPETITOR_RATES } from '@/lib/config/competitor-rates';
+import { OMNI_RATE_PER_MIN } from '@/lib/config/competitor-rates';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface ChartPoint {
-  month: number;
-  omni: number;
-  competitor: number;
-}
+interface ChartPoint { month: number; omni: number; competitor: number; }
+type CompKey  = 'retell' | 'vapi' | 'other';
+type Currency = 'usd' | 'inr';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PERIODS: { label: string; months: number }[] = [
-  { label: '1 mo',  months: 1  },
-  { label: '3 mo',  months: 3  },
-  { label: '6 mo',  months: 6  },
-  { label: '1 yr',  months: 12 },
+  { label: '1 mo', months: 1  },
+  { label: '3 mo', months: 3  },
+  { label: '6 mo', months: 6  },
+  { label: '1 yr', months: 12 },
 ];
 
-const COMPETITOR_OPTIONS = [
-  ...COMPETITOR_RATES.map((c) => ({
-    label: c.name,
-    value: c.name,
-    rate: c.ratePerMin,
-    note: c.note,
-  })),
-  { label: 'Custom rate', value: 'custom', rate: 0.13, note: 'Enter your own $/min rate' },
-];
+const COMPETITORS: Record<CompKey, { label: string; shortLabel: string; defaultCost: number }> = {
+  retell: { label: 'Retell AI', shortLabel: 'Retell', defaultCost: 0.20 },
+  vapi:   { label: 'Vapi',     shortLabel: 'Vapi',   defaultCost: 0.20 },
+  other:  { label: 'Other',    shortLabel: 'Other',  defaultCost: 0.20 },
+};
+
+const VOLUME_TIERS = [1_000, 10_000, 100_000];
+const DEFAULT_EXCHANGE_RATE = 84; // 1 USD = 84 INR (approximate)
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
-function fmtFull(v: number): string {
-  if (v === 0) return '$0';
-  if (v >= 1_000_000) return '$' + (v / 1_000_000).toFixed(2) + 'M';
-  if (v >= 100) return '$' + Math.round(v).toLocaleString();
-  if (v >= 1)   return `$${v.toFixed(2)}`;
+function fmtMoney(usdValue: number, currency: Currency, rate: number): string {
+  const v = currency === 'inr' ? usdValue * rate : usdValue;
+  if (v === 0) return currency === 'inr' ? '₹0' : '$0';
+
+  if (currency === 'inr') {
+    if (v >= 10_000_000) return `₹${(v / 10_000_000).toFixed(2)}Cr`;
+    if (v >= 100_000)    return `₹${(v / 100_000).toFixed(1)}L`;
+    if (v >= 1_000)      return `₹${Math.round(v).toLocaleString('en-IN')}`;
+    if (v >= 1)          return `₹${v.toFixed(2)}`;
+    return `₹${v.toFixed(2)}`;
+  }
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`;
+  if (v >= 100)        return `$${Math.round(v).toLocaleString()}`;
+  if (v >= 1)          return `$${v.toFixed(2)}`;
   return `$${v.toFixed(4)}`;
 }
 
-function fmtAxis(v: number): string {
-  if (v === 0) return '$0';
+function fmtAxis(usdValue: number, currency: Currency, rate: number): string {
+  const v = currency === 'inr' ? usdValue * rate : usdValue;
+  if (v === 0) return currency === 'inr' ? '₹0' : '$0';
+
+  if (currency === 'inr') {
+    if (v >= 10_000_000) return `₹${(v / 10_000_000).toFixed(1)}Cr`;
+    if (v >= 100_000)    return `₹${(v / 100_000).toFixed(0)}L`;
+    if (v >= 1_000)      return `₹${(v / 1_000).toFixed(0)}k`;
+    return `₹${v.toFixed(0)}`;
+  }
   if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 10_000)    return `$${Math.round(v / 1_000)}k`;
   if (v >= 1_000)     return `$${(v / 1_000).toFixed(1)}k`;
@@ -56,8 +70,8 @@ export default function SavingsPage() {
   return (
     <div className="flex flex-col h-full">
       <PageHeader
-        title="Cost Projection"
-        description="Adjust usage assumptions — see projected savings update in real time."
+        title="Cost & Savings"
+        description="See projected gross margin and the extra profit you unlock with PyAI Omni."
       />
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div style={{ maxWidth: 1040 }}>
@@ -71,48 +85,73 @@ export default function SavingsPage() {
 // ─── Calculator (state owner) ─────────────────────────────────────────────────
 
 function SavingsCalculator() {
-  const [callsPerMonth, setCallsPerMonth] = useState(1_000);
-  const [avgDurationMin, setAvgDurationMin] = useState(3);
-  const [omniRate, setOmniRate] = useState<number>(OMNI_RATE_PER_MIN);
-  const [competitorKey, setCompetitorKey] = useState(COMPETITOR_RATES[0].name);
-  const [customRate, setCustomRate] = useState(0.13);
+  const [jcPrice,          setJcPrice]          = useState(0.99);
+  const [omniRate,         setOmniRate]         = useState<number>(OMNI_RATE_PER_MIN);
+  const [competitorKey,    setCompetitorKey]    = useState<CompKey>('retell');
+  const [competitorCost,   setCompetitorCost]   = useState(0.20);
+  const [callsPerMonth,    setCallsPerMonth]    = useState(1_000);
+  const [avgDurationMin,   setAvgDurationMin]   = useState(3);
   const [projectionMonths, setProjectionMonths] = useState(12);
+  const [currency,         setCurrency]         = useState<Currency>('usd');
+  const [exchangeRate,     setExchangeRate]     = useState(DEFAULT_EXCHANGE_RATE);
 
-  const competitorRate =
-    competitorKey === 'custom'
-      ? customRate
-      : (COMPETITOR_RATES.find((c) => c.name === competitorKey)?.ratePerMin ?? 0.13);
-
-  const competitorLabel = competitorKey === 'custom' ? 'Custom' : competitorKey;
+  const competitorLabel = COMPETITORS[competitorKey].label;
 
   const calc = useMemo(() => {
-    const minsPerMonth = callsPerMonth * avgDurationMin;
-    const omniPerMonth = minsPerMonth * omniRate;
-    const compPerMonth = minsPerMonth * competitorRate;
-    const savePerMonth = Math.max(0, compPerMonth - omniPerMonth);
-    const totalOmni = omniPerMonth * projectionMonths;
-    const totalComp = compPerMonth * projectionMonths;
-    const totalSave = Math.max(0, totalComp - totalOmni);
-    const savePct = totalComp > 0 ? (totalSave / totalComp) * 100 : 0;
+    const minsPerMonth     = callsPerMonth * avgDurationMin;
+    const omniMarginPerMin = jcPrice - omniRate;
+    const compMarginPerMin = jcPrice - competitorCost;
+    const totalOmniMargin  = omniMarginPerMin * minsPerMonth * projectionMonths;
+    const totalCompMargin  = compMarginPerMin * minsPerMonth * projectionMonths;
+    const extraBySwitch    = totalOmniMargin - totalCompMargin;
+    const omniMarginPct    = jcPrice > 0 ? (omniMarginPerMin / jcPrice) * 100 : 0;
+    const compMarginPct    = jcPrice > 0 ? (compMarginPerMin / jcPrice) * 100 : 0;
+    const marginGainPct    = totalCompMargin > 0 ? (extraBySwitch / totalCompMargin) * 100 : 0;
     const points: ChartPoint[] = Array.from({ length: projectionMonths + 1 }, (_, i) => ({
-      month: i,
-      omni: omniPerMonth * i,
-      competitor: compPerMonth * i,
+      month:      i,
+      omni:       omniMarginPerMin * minsPerMonth * i,
+      competitor: compMarginPerMin * minsPerMonth * i,
     }));
-    return { minsPerMonth, omniPerMonth, compPerMonth, savePerMonth, totalOmni, totalComp, totalSave, savePct, points };
-  }, [callsPerMonth, avgDurationMin, omniRate, competitorRate, projectionMonths]);
+    return {
+      minsPerMonth, omniMarginPerMin, compMarginPerMin,
+      totalOmniMargin, totalCompMargin, extraBySwitch,
+      omniMarginPct, compMarginPct, marginGainPct, points,
+    };
+  }, [jcPrice, omniRate, competitorCost, callsPerMonth, avgDurationMin, projectionMonths]);
+
+  function handleCompetitorChange(key: CompKey) {
+    setCompetitorKey(key);
+    setCompetitorCost(COMPETITORS[key].defaultCost);
+  }
+
+  const fmt = (usdValue: number) => fmtMoney(usdValue, currency, exchangeRate);
+  const fmtAx = (usdValue: number) => fmtAxis(usdValue, currency, exchangeRate);
+
+  // Convert USD state value to display currency for inputs
+  const toDisplay = (usdValue: number) =>
+    currency === 'inr' ? usdValue * exchangeRate : usdValue;
+  // Convert display currency input back to USD for state
+  const fromDisplay = (displayValue: number) =>
+    currency === 'inr' ? displayValue / exchangeRate : displayValue;
+
+  const currSymbol = currency === 'inr' ? '₹' : '$';
 
   return (
     <div className="flex flex-col gap-5">
 
-      {/* Outcome hero */}
-      <OutcomeHero
-        totalSavings={calc.totalSave}
-        savingsPct={calc.savePct}
-        totalOmni={calc.totalOmni}
-        totalCompetitor={calc.totalComp}
+      {/* Margin hero */}
+      <MarginHero
+        totalOmniMargin={calc.totalOmniMargin}
+        totalCompMargin={calc.totalCompMargin}
+        extraBySwitch={calc.extraBySwitch}
+        omniMarginPct={calc.omniMarginPct}
+        compMarginPct={calc.compMarginPct}
+        marginGainPct={calc.marginGainPct}
         competitorLabel={competitorLabel}
         projectionMonths={projectionMonths}
+        fmt={fmt}
+        currency={currency}
+        setCurrency={setCurrency}
       />
 
       {/* Two columns */}
@@ -120,28 +159,32 @@ function SavingsCalculator() {
 
         {/* Input panel */}
         <InputPanel
+          jcPrice={jcPrice}
+          setJcPrice={(v) => setJcPrice(fromDisplay(v))}
+          omniRate={omniRate}
+          setOmniRate={(v) => setOmniRate(fromDisplay(v))}
+          competitorKey={competitorKey}
+          setCompetitorKey={handleCompetitorChange}
+          competitorCost={competitorCost}
+          setCompetitorCost={(v) => setCompetitorCost(fromDisplay(v))}
           callsPerMonth={callsPerMonth}
           setCallsPerMonth={setCallsPerMonth}
           avgDurationMin={avgDurationMin}
           setAvgDurationMin={setAvgDurationMin}
-          omniRate={omniRate}
-          setOmniRate={setOmniRate}
-          competitorKey={competitorKey}
-          setCompetitorKey={setCompetitorKey}
-          customRate={customRate}
-          setCustomRate={setCustomRate}
-          minutesPerMonth={calc.minsPerMonth}
-          omniMonthly={calc.omniPerMonth}
-          competitorMonthly={calc.compPerMonth}
-          savingsMonthly={calc.savePerMonth}
-          competitorLabel={competitorLabel}
+          currency={currency}
+          exchangeRate={exchangeRate}
+          setExchangeRate={setExchangeRate}
+          toDisplay={toDisplay}
+          currSymbol={currSymbol}
         />
 
         {/* Chart column */}
         <div className="flex-1 flex flex-col gap-3 min-w-0">
 
-          {/* Period tabs */}
-          <div className="flex items-center gap-2">
+          {/* Controls row: period tabs */}
+          <div className="flex items-center gap-3">
+
+            {/* Period tabs */}
             {PERIODS.map((p) => {
               const active = projectionMonths === p.months;
               return (
@@ -159,51 +202,83 @@ function SavingsCalculator() {
                 </button>
               );
             })}
+
             <span
               className="ml-auto text-[11px]"
               style={{ color: 'var(--color-text-faint)' }}
             >
-              Cumulative projected cost
+              Cumulative projected margin
             </span>
           </div>
 
-          {/* Hero chart */}
           <SavingsGapChart
             points={calc.points}
             competitorLabel={competitorLabel}
+            fmt={fmt}
+            fmtAx={fmtAx}
           />
         </div>
       </div>
+
+      {/* Switching benefit — last section */}
+      <SwitchingBenefitCard
+        jcPrice={jcPrice}
+        omniRate={omniRate}
+        omniMarginPerMin={calc.omniMarginPerMin}
+        compMarginPerMin={calc.compMarginPerMin}
+        competitorCost={competitorCost}
+        minsPerMonth={calc.minsPerMonth}
+        projectionMonths={projectionMonths}
+        extraBySwitch={calc.extraBySwitch}
+        competitorLabel={competitorLabel}
+        fmt={fmt}
+      />
 
       {/* Disclaimer */}
       <p
         className="text-[10.5px] leading-[1.6]"
         style={{ color: 'var(--color-text-faint)' }}
       >
-        Projections are illustrative estimates based on your inputs and publicly listed competitor pricing as of August 2025.
-        Actual costs vary by model selection, usage tier, and provider configuration.&nbsp;
-        Sources: retellai.com/pricing · vapi.ai/pricing · bland.ai/pricing
+        Projections are illustrative estimates based on your inputs and publicly listed competitor
+        pricing as of August 2025. Actual costs vary by model selection, usage tier, and provider
+        configuration.&nbsp;Sources: retellai.com/pricing · vapi.ai/pricing · bland.ai/pricing
+        {currency === 'inr' && (
+          <>&nbsp;· INR conversion at ₹{exchangeRate}/USD (approximate).</>
+        )}
       </p>
     </div>
   );
 }
 
-// ─── Outcome hero ─────────────────────────────────────────────────────────────
+// ─── Margin hero ──────────────────────────────────────────────────────────────
 
-function OutcomeHero({
-  totalSavings,
-  savingsPct,
-  totalOmni,
-  totalCompetitor,
+const NO_SPINNER =
+  '[appearance:textfield] [&::-webkit-outer-spin-button]:hidden [&::-webkit-inner-spin-button]:hidden';
+
+function MarginHero({
+  totalOmniMargin,
+  totalCompMargin,
+  extraBySwitch,
+  omniMarginPct,
+  compMarginPct,
+  marginGainPct,
   competitorLabel,
   projectionMonths,
+  fmt,
+  currency,
+  setCurrency,
 }: {
-  totalSavings: number;
-  savingsPct: number;
-  totalOmni: number;
-  totalCompetitor: number;
+  totalOmniMargin: number;
+  totalCompMargin: number;
+  extraBySwitch: number;
+  omniMarginPct: number;
+  compMarginPct: number;
+  marginGainPct: number;
   competitorLabel: string;
   projectionMonths: number;
+  fmt: (usdValue: number) => string;
+  currency: Currency;
+  setCurrency: (c: Currency) => void;
 }) {
   const periodLabel =
     projectionMonths === 1
@@ -211,8 +286,6 @@ function OutcomeHero({
       : projectionMonths === 12
       ? '1 year'
       : `${projectionMonths} months`;
-
-  const noSavings = totalSavings <= 0;
 
   return (
     <div
@@ -222,92 +295,163 @@ function OutcomeHero({
         border: '1px solid var(--color-border)',
       }}
     >
-      {/* Ambient glow */}
       <div
         className="pointer-events-none absolute inset-0"
         style={{
-          background: noSavings
-            ? 'radial-gradient(ellipse 30% 60% at 8% 50%, color-mix(in srgb, var(--color-state-error) 5%, transparent), transparent 70%)'
-            : 'radial-gradient(ellipse 30% 60% at 8% 50%, color-mix(in srgb, var(--color-state-speaking) 7%, transparent), transparent 70%)',
+          background:
+            'radial-gradient(ellipse 45% 80% at 0% 50%, color-mix(in srgb, var(--color-state-speaking) 8%, transparent), transparent 60%)',
         }}
       />
 
-      <div className="relative flex flex-wrap items-center gap-x-14 gap-y-5">
+      <div className="relative flex flex-col gap-4">
 
-        {/* Big savings number */}
-        <div className="flex flex-col gap-1">
+        {/* Header row with currency switcher */}
+        <div className="flex items-center gap-3">
           <span
-            className="text-[11px] font-[500] uppercase tracking-[0.09em]"
+            className="text-[11px] font-[600] uppercase tracking-[0.09em]"
+            style={{ color: 'var(--color-text-faint)' }}
+          >
+            Gross margin · {periodLabel}
+          </span>
+          <div
+            className="flex items-center gap-1.5 rounded-[6px] px-2.5 py-1"
             style={{
-              color: noSavings ? 'var(--color-state-error)' : 'var(--color-state-speaking)',
-              opacity: 0.75,
+              background: 'color-mix(in srgb, var(--color-state-speaking) 12%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--color-state-speaking) 25%, transparent)',
             }}
           >
-            Projected savings · {periodLabel} · vs {competitorLabel}
-          </span>
-          <span
-            className="font-mono font-[700] leading-none tracking-[-0.04em]"
-            style={{
-              fontSize: 'clamp(36px, 5vw, 54px)',
-              color: noSavings ? 'var(--color-state-error)' : 'var(--color-state-speaking)',
-            }}
-          >
-            {noSavings ? '$0' : fmtFull(totalSavings)}
-          </span>
-          {!noSavings && (
-            <span
-              className="text-[15px] font-[600]"
-              style={{ color: 'var(--color-state-speaking)', opacity: 0.65 }}
-            >
-              {savingsPct.toFixed(1)}% cheaper than {competitorLabel}
+            <span className="text-[13px] font-[700]" style={{ color: 'var(--color-state-speaking)' }}>
+              +{marginGainPct.toFixed(1)}%
             </span>
-          )}
-          {noSavings && (
-            <span className="text-[13px]" style={{ color: 'var(--color-text-faint)' }}>
-              PyAI Omni costs more at current rates — adjust inputs
-            </span>
-          )}
-        </div>
-
-        {/* Supporting numbers */}
-        <div className="flex gap-8">
-          <div className="flex flex-col gap-0.5">
-            <span
-              className="text-[10.5px] uppercase tracking-[0.07em]"
-              style={{ color: 'var(--color-text-faint)' }}
-            >
-              You pay
-            </span>
-            <span
-              className="font-mono font-[600] text-[22px]"
-              style={{ color: 'var(--color-text)' }}
-            >
-              {fmtFull(totalOmni)}
-            </span>
-            <span className="text-[11px]" style={{ color: 'var(--color-accent)' }}>
-              PyAI Omni
+            <span className="text-[10.5px]" style={{ color: 'var(--color-state-speaking)', opacity: 0.75 }}>
+              more margin with PyAI Omni
             </span>
           </div>
-          <div className="flex flex-col gap-0.5">
-            <span
-              className="text-[10.5px] uppercase tracking-[0.07em]"
-              style={{ color: 'var(--color-text-faint)' }}
-            >
-              Without PyAI
-            </span>
-            <span
-              className="font-mono font-[600] text-[22px]"
-              style={{ color: 'var(--color-text)' }}
-            >
-              {fmtFull(totalCompetitor)}
-            </span>
-            <span
-              className="text-[11px]"
-              style={{ color: 'var(--color-state-error)', opacity: 0.8 }}
-            >
-              {competitorLabel}{' '}
-              <span style={{ color: 'var(--color-text-faint)' }}>(est.)</span>
-            </span>
+
+          {/* Currency switcher — top right */}
+          <div className="ml-auto flex rounded-[7px] p-0.5 gap-0.5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            {(['usd', 'inr'] as Currency[]).map((c) => {
+              const active = currency === c;
+              return (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className="rounded-[5px] px-2.5 py-1 text-[11.5px] font-[600] transition-all duration-150"
+                  style={{
+                    background: active ? 'var(--color-accent)' : 'transparent',
+                    color: active ? 'var(--color-void)' : 'var(--color-text-faint)',
+                  }}
+                >
+                  {c === 'usd' ? '$ USD' : '₹ INR'}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Three cards: Extra savings (most prominent) | With PyAI | Without PyAI */}
+        <div className="flex gap-4">
+
+          {/* EXTRA SAVINGS — most prominent, first */}
+          <div
+            className="flex-[1.2] rounded-[12px] p-5 relative overflow-hidden"
+            style={{
+              background: 'var(--color-surface)',
+              border: '2px solid var(--color-state-speaking)',
+              boxShadow: '0 0 28px color-mix(in srgb, var(--color-state-speaking) 18%, transparent)',
+            }}
+          >
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(ellipse 100% 70% at 0% 50%, color-mix(in srgb, var(--color-state-speaking) 14%, transparent), transparent)',
+              }}
+            />
+            <div className="relative flex flex-col gap-2">
+              <span
+                className="text-[10.5px] font-[600] uppercase tracking-[0.08em]"
+                style={{ color: 'var(--color-state-speaking)', opacity: 0.85 }}
+              >
+                Extra profit · vs {competitorLabel}
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span
+                  className="font-mono font-[700] leading-none tracking-[-0.04em]"
+                  style={{ fontSize: 'clamp(34px, 4.4vw, 52px)', color: 'var(--color-state-speaking)' }}
+                >
+                  +{fmt(extraBySwitch)}
+                </span>
+                <span style={{ fontSize: 20, color: 'var(--color-state-speaking)' }}>↑</span>
+              </div>
+              <span className="text-[12px] font-[500]" style={{ color: 'var(--color-state-speaking)', opacity: 0.7 }}>
+                by switching from {competitorLabel}
+              </span>
+            </div>
+          </div>
+
+          {/* WITH PyAI */}
+          <div
+            className="flex-1 rounded-[12px] p-5 relative overflow-hidden"
+            style={{
+              background: 'var(--color-surface)',
+              border: '1px solid color-mix(in srgb, var(--color-state-speaking) 55%, var(--color-border))',
+            }}
+          >
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(ellipse 80% 50% at 0% 50%, color-mix(in srgb, var(--color-state-speaking) 6%, transparent), transparent)',
+              }}
+            />
+            <div className="relative flex flex-col gap-2">
+              <span
+                className="text-[10.5px] font-[600] uppercase tracking-[0.08em]"
+                style={{ color: 'var(--color-state-speaking)', opacity: 0.7 }}
+              >
+                With PyAI Omni
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span
+                  className="font-mono font-[700] leading-none tracking-[-0.04em]"
+                  style={{ fontSize: 'clamp(24px, 3vw, 36px)', color: 'var(--color-state-speaking)' }}
+                >
+                  {fmt(totalOmniMargin)}
+                </span>
+                <span style={{ fontSize: 15, color: 'var(--color-state-speaking)', opacity: 0.75 }}>↑</span>
+              </div>
+              <span className="text-[11.5px]" style={{ color: 'var(--color-state-speaking)', opacity: 0.55 }}>
+                {omniMarginPct.toFixed(1)}% gross margin
+              </span>
+            </div>
+          </div>
+
+          {/* WITHOUT PyAI */}
+          <div
+            className="flex-1 rounded-[12px] p-5"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+          >
+            <div className="flex flex-col gap-2">
+              <span
+                className="text-[10.5px] font-[600] uppercase tracking-[0.08em]"
+                style={{ color: 'var(--color-text-faint)' }}
+              >
+                Without PyAI · vs {competitorLabel}
+              </span>
+              <div className="flex items-baseline gap-2">
+                <span
+                  className="font-mono font-[700] leading-none tracking-[-0.04em]"
+                  style={{ fontSize: 'clamp(24px, 3vw, 36px)', color: 'var(--color-text-muted)' }}
+                >
+                  {fmt(totalCompMargin)}
+                </span>
+                <span style={{ fontSize: 15, color: 'var(--color-text-faint)' }}>↓</span>
+              </div>
+              <span className="text-[11.5px]" style={{ color: 'var(--color-text-faint)' }}>
+                {compMarginPct.toFixed(1)}% gross margin
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -318,38 +462,45 @@ function OutcomeHero({
 // ─── Input panel ──────────────────────────────────────────────────────────────
 
 function InputPanel({
-  callsPerMonth,
-  setCallsPerMonth,
-  avgDurationMin,
-  setAvgDurationMin,
+  jcPrice,
+  setJcPrice,
   omniRate,
   setOmniRate,
   competitorKey,
   setCompetitorKey,
-  customRate,
-  setCustomRate,
-  minutesPerMonth,
-  omniMonthly,
-  competitorMonthly,
-  savingsMonthly,
-  competitorLabel,
+  competitorCost,
+  setCompetitorCost,
+  callsPerMonth,
+  setCallsPerMonth,
+  avgDurationMin,
+  setAvgDurationMin,
+  currency,
+  exchangeRate,
+  setExchangeRate,
+  toDisplay,
+  currSymbol,
 }: {
+  jcPrice: number;
+  setJcPrice: (v: number) => void;
+  omniRate: number;
+  setOmniRate: (v: number) => void;
+  competitorKey: CompKey;
+  setCompetitorKey: (key: CompKey) => void;
+  competitorCost: number;
+  setCompetitorCost: (v: number) => void;
   callsPerMonth: number;
   setCallsPerMonth: (v: number) => void;
   avgDurationMin: number;
   setAvgDurationMin: (v: number) => void;
-  omniRate: number;
-  setOmniRate: (v: number) => void;
-  competitorKey: string;
-  setCompetitorKey: (v: string) => void;
-  customRate: number;
-  setCustomRate: (v: number) => void;
-  minutesPerMonth: number;
-  omniMonthly: number;
-  competitorMonthly: number;
-  savingsMonthly: number;
-  competitorLabel: string;
+  currency: Currency;
+  exchangeRate: number;
+  setExchangeRate: (v: number) => void;
+  toDisplay: (usdValue: number) => number;
+  currSymbol: string;
 }) {
+  const minPrice = currency === 'inr' ? 0.01 : 0.001;
+  const stepPrice = currency === 'inr' ? 0.5 : 0.01;
+
   return (
     <div
       className="flex flex-col gap-5 rounded-[14px] p-5 shrink-0"
@@ -359,14 +510,134 @@ function InputPanel({
         border: '1px solid var(--color-border)',
       }}
     >
-      <span
-        className="text-[11px] font-[600] uppercase tracking-[0.09em]"
-        style={{ color: 'var(--color-text-faint)' }}
-      >
-        Usage assumptions
-      </span>
+      {/* JustCall selling price */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <span
+            className="text-[11px] font-[600] uppercase tracking-[0.09em]"
+            style={{ color: 'var(--color-text-faint)' }}
+          >
+            JustCall selling price
+          </span>
+          <span className="text-[10.5px]" style={{ color: 'var(--color-text-faint)' }}>
+            {currSymbol}/min
+          </span>
+        </div>
+        <input
+          type="number"
+          value={Number(toDisplay(jcPrice).toFixed(currency === 'inr' ? 2 : 3))}
+          onChange={(e) =>
+            setJcPrice(Math.max(minPrice, parseFloat(e.target.value) || 0))
+          }
+          step={stepPrice}
+          min={minPrice}
+          className={`w-full rounded-[7px] px-3 py-1.5 text-[13px] font-mono font-[600] ${NO_SPINNER}`}
+          style={{
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border-strong)',
+            color: 'var(--color-text)',
+            outline: 'none',
+            cursor: 'text',
+          }}
+        />
+      </div>
 
-      {/* Calls per month */}
+      {/* PyAI Omni price */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <span
+            className="text-[11px] font-[600] uppercase tracking-[0.09em]"
+            style={{ color: 'var(--color-text-faint)' }}
+          >
+            PyAI Omni
+          </span>
+          <span className="text-[10.5px]" style={{ color: 'var(--color-text-faint)' }}>
+            {currSymbol}/min
+          </span>
+        </div>
+        <input
+          type="number"
+          value={Number(toDisplay(omniRate).toFixed(currency === 'inr' ? 2 : 4))}
+          onChange={(e) =>
+            setOmniRate(Math.max(minPrice, parseFloat(e.target.value) || 0))
+          }
+          step={stepPrice}
+          min={minPrice}
+          className={`w-full rounded-[7px] px-3 py-1.5 text-[13px] font-mono font-[600] ${NO_SPINNER}`}
+          style={{
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-accent)',
+            color: 'var(--color-accent)',
+            outline: 'none',
+            cursor: 'text',
+          }}
+        />
+      </div>
+
+      <div style={{ borderTop: '1px solid var(--color-border)' }} />
+
+      {/* Competitor tabs + cost */}
+      <div className="flex flex-col gap-3">
+        <span
+          className="text-[11px] font-[600] uppercase tracking-[0.09em]"
+          style={{ color: 'var(--color-text-faint)' }}
+        >
+          Compare against
+        </span>
+
+        <div
+          className="flex rounded-[8px] p-0.5 gap-0.5"
+          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+        >
+          {(Object.keys(COMPETITORS) as CompKey[]).map((key) => {
+            const active = competitorKey === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setCompetitorKey(key)}
+                className="flex-1 rounded-[6px] py-1 text-[11px] font-[500] transition-all duration-150"
+                style={{
+                  background: active ? 'var(--color-surface-raised)' : 'transparent',
+                  color: active ? 'var(--color-text)' : 'var(--color-text-faint)',
+                  border: active ? '1px solid var(--color-border)' : '1px solid transparent',
+                }}
+              >
+                {COMPETITORS[key].shortLabel}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] shrink-0" style={{ color: 'var(--color-text-faint)' }}>
+            Cost
+          </span>
+          <input
+            type="number"
+            value={Number(toDisplay(competitorCost).toFixed(currency === 'inr' ? 2 : 3))}
+            onChange={(e) =>
+              setCompetitorCost(Math.max(minPrice, parseFloat(e.target.value) || 0))
+            }
+            step={stepPrice}
+            min={minPrice}
+            className={`flex-1 rounded-[7px] px-2 py-1.5 text-[12px] font-mono text-right ${NO_SPINNER}`}
+            style={{
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              color: 'var(--color-text)',
+              outline: 'none',
+              cursor: 'text',
+            }}
+          />
+          <span className="text-[10.5px] shrink-0" style={{ color: 'var(--color-text-faint)' }}>
+            {currSymbol}/min
+          </span>
+        </div>
+      </div>
+
+      <div style={{ borderTop: '1px solid var(--color-border)' }} />
+
+      {/* Usage sliders */}
       <SliderInput
         label="Calls / month"
         value={callsPerMonth}
@@ -376,8 +647,6 @@ function InputPanel({
         step={100}
         display={callsPerMonth.toLocaleString()}
       />
-
-      {/* Avg duration */}
       <SliderInput
         label="Avg duration"
         value={avgDurationMin}
@@ -388,148 +657,42 @@ function InputPanel({
         display={`${avgDurationMin} min`}
       />
 
-      {/* Derived minutes */}
-      <div className="flex items-center justify-between -mt-1">
-        <span className="text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
-          Total min / month
-        </span>
-        <span
-          className="font-mono text-[11.5px] font-[600]"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
-          {minutesPerMonth.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-        </span>
-      </div>
-
-      <div style={{ borderTop: '1px solid var(--color-border)' }} />
-
-      {/* Compare against */}
-      <div className="flex flex-col gap-2">
-        <span
-          className="text-[11px] font-[500]"
-          style={{ color: 'var(--color-text-faint)' }}
-        >
-          Compare against
-        </span>
-        <select
-          value={competitorKey}
-          onChange={(e) => setCompetitorKey(e.target.value)}
-          className="w-full rounded-[8px] px-3 py-2 text-[12.5px]"
-          style={{
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            color: 'var(--color-text)',
-            outline: 'none',
-          }}
-        >
-          {COMPETITOR_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label} — ${opt.rate}/min
-            </option>
-          ))}
-        </select>
-        {competitorKey === 'custom' && (
-          <div className="flex items-center gap-2">
-            <span
-              className="text-[11px] shrink-0"
-              style={{ color: 'var(--color-text-faint)' }}
-            >
-              Rate $/min
-            </span>
+      {/* Exchange rate — shown only when INR selected */}
+      {currency === 'inr' && (
+        <>
+          <div style={{ borderTop: '1px solid var(--color-border)' }} />
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span
+                className="text-[11px] font-[500]"
+                style={{ color: 'var(--color-text-faint)' }}
+              >
+                Exchange rate
+              </span>
+              <span className="text-[10.5px]" style={{ color: 'var(--color-text-faint)' }}>
+                ₹ / USD
+              </span>
+            </div>
             <input
               type="number"
-              value={customRate}
+              value={exchangeRate}
               onChange={(e) =>
-                setCustomRate(Math.max(0.001, parseFloat(e.target.value) || 0.01))
+                setExchangeRate(Math.max(1, parseFloat(e.target.value) || DEFAULT_EXCHANGE_RATE))
               }
-              step={0.01}
-              min={0.001}
-              className="flex-1 rounded-[7px] px-2 py-1.5 text-[12.5px] font-mono"
+              step={0.5}
+              min={1}
+              className={`w-full rounded-[7px] px-3 py-1.5 text-[12.5px] font-mono ${NO_SPINNER}`}
               style={{
                 background: 'var(--color-surface)',
                 border: '1px solid var(--color-border)',
-                color: 'var(--color-text)',
+                color: 'var(--color-text-muted)',
                 outline: 'none',
+                cursor: 'text',
               }}
             />
           </div>
-        )}
-      </div>
-
-      {/* PyAI Omni rate override */}
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <span
-            className="text-[11px] font-[500]"
-            style={{ color: 'var(--color-text-faint)' }}
-          >
-            PyAI Omni rate
-          </span>
-          <span
-            className="text-[10.5px]"
-            style={{ color: 'var(--color-accent)', opacity: 0.65 }}
-          >
-            overrideable
-          </span>
-        </div>
-        <input
-          type="number"
-          value={omniRate}
-          onChange={(e) =>
-            setOmniRate(Math.max(0.001, parseFloat(e.target.value) || 0.05))
-          }
-          step={0.005}
-          min={0.001}
-          className="w-full rounded-[7px] px-3 py-1.5 text-[12.5px] font-mono"
-          style={{
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-accent)',
-            color: 'var(--color-accent)',
-            outline: 'none',
-          }}
-        />
-      </div>
-
-      <div style={{ borderTop: '1px solid var(--color-border)' }} />
-
-      {/* Monthly summary */}
-      <div className="flex flex-col gap-2.5">
-        <span
-          className="text-[11px] font-[600] uppercase tracking-[0.07em]"
-          style={{ color: 'var(--color-text-faint)' }}
-        >
-          Per month
-        </span>
-        <SummaryRow
-          label="PyAI Omni"
-          value={fmtFull(omniMonthly)}
-          color="var(--color-state-speaking)"
-        />
-        <SummaryRow
-          label={competitorLabel}
-          value={fmtFull(competitorMonthly)}
-          color="var(--color-state-error)"
-          muted
-        />
-        <div
-          style={{
-            borderTop: '1px solid var(--color-border)',
-            paddingTop: 8,
-            marginTop: 2,
-          }}
-        >
-          <SummaryRow
-            label="Monthly savings"
-            value={fmtFull(savingsMonthly)}
-            color={
-              savingsMonthly > 0
-                ? 'var(--color-state-speaking)'
-                : 'var(--color-text-faint)'
-            }
-            bold
-          />
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }
@@ -558,36 +721,22 @@ function SliderInput({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span
-          className="text-[11.5px] font-[450]"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
+        <span className="text-[11.5px] font-[450]" style={{ color: 'var(--color-text-muted)' }}>
           {label}
         </span>
-        <span
-          className="font-mono text-[13px] font-[600]"
-          style={{ color: 'var(--color-text)' }}
-        >
+        <span className="font-mono text-[13px] font-[600]" style={{ color: 'var(--color-text)' }}>
           {display}
         </span>
       </div>
       <div className="relative h-6 flex items-center">
-        {/* Track background */}
         <div
           className="absolute w-full rounded-full pointer-events-none"
           style={{ height: 3, background: 'var(--color-surface-elevated)' }}
         />
-        {/* Track fill */}
         <div
           className="absolute rounded-full pointer-events-none"
-          style={{
-            height: 3,
-            width: `${pct}%`,
-            background: 'var(--color-accent)',
-            opacity: 0.75,
-          }}
+          style={{ height: 3, width: `${pct}%`, background: 'var(--color-accent)', opacity: 0.75 }}
         />
-        {/* Custom thumb */}
         <div
           className="absolute pointer-events-none rounded-full"
           style={{
@@ -599,7 +748,6 @@ function SliderInput({
             boxShadow: '0 0 0 3px var(--color-surface-raised), 0 0 0 4.5px var(--color-accent)',
           }}
         />
-        {/* Native range (invisible) for interaction */}
         <input
           type="range"
           min={min}
@@ -614,35 +762,255 @@ function SliderInput({
   );
 }
 
-// ─── Summary row ──────────────────────────────────────────────────────────────
+// ─── Switching benefit card (last section) ────────────────────────────────────
 
-function SummaryRow({
-  label,
-  value,
-  color,
-  bold,
-  muted,
+function SwitchingBenefitCard({
+  jcPrice,
+  omniRate,
+  omniMarginPerMin,
+  compMarginPerMin,
+  competitorCost,
+  minsPerMonth,
+  projectionMonths,
+  extraBySwitch,
+  competitorLabel,
+  fmt,
 }: {
-  label: string;
-  value: string;
-  color: string;
-  bold?: boolean;
-  muted?: boolean;
+  jcPrice: number;
+  omniRate: number;
+  omniMarginPerMin: number;
+  compMarginPerMin: number;
+  competitorCost: number;
+  minsPerMonth: number;
+  projectionMonths: number;
+  extraBySwitch: number;
+  competitorLabel: string;
+  fmt: (usdValue: number) => string;
+}) {
+  const periodLabel =
+    projectionMonths === 1
+      ? '1 month'
+      : projectionMonths === 12
+      ? '1 year'
+      : `${projectionMonths} months`;
+
+  const maxMargin       = omniMarginPerMin * VOLUME_TIERS[VOLUME_TIERS.length - 1];
+  const switchDeltaPerMin = omniMarginPerMin - compMarginPerMin;
+
+  return (
+    <div
+      className="rounded-[16px] p-6 relative overflow-hidden"
+      style={{
+        background: 'var(--color-surface-raised)',
+        border: '1px solid var(--color-border)',
+      }}
+    >
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(ellipse 25% 60% at 8% 50%, color-mix(in srgb, var(--color-accent) 5%, transparent), transparent 70%)',
+        }}
+      />
+
+      <div className="relative flex flex-col gap-6">
+
+        {/* Header */}
+        <div>
+          <span
+            className="text-[11px] font-[600] uppercase tracking-[0.09em]"
+            style={{ color: 'var(--color-text-faint)' }}
+          >
+            Extra profit by switching to PyAI Omni
+          </span>
+          <p className="text-[13px] mt-1" style={{ color: 'var(--color-text-muted)' }}>
+            vs {competitorLabel} · (${jcPrice.toFixed(2)} − ${omniRate.toFixed(3)}) vs ($
+            {jcPrice.toFixed(2)} − ${competitorCost.toFixed(3)})
+          </p>
+        </div>
+
+        {/* Volume bar comparison */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <span
+              className="text-[11px] font-[600] uppercase tracking-[0.08em]"
+              style={{ color: 'var(--color-text-faint)' }}
+            >
+              Total margin by volume (per month)
+            </span>
+            <div className="flex items-center gap-3 ml-auto">
+              <LegendDot color="var(--color-state-speaking)" label="PyAI Omni" />
+              <LegendDot color="rgba(255,255,255,0.18)" label={competitorLabel} />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-4">
+            {VOLUME_TIERS.map((mins) => {
+              const omniProfit = omniMarginPerMin * mins;
+              const compProfit = compMarginPerMin * mins;
+              const omniPct    = maxMargin > 0 ? (omniProfit / maxMargin) * 100 : 0;
+              const compPct    = maxMargin > 0 ? (compProfit / maxMargin) * 100 : 0;
+              const volLabel   =
+                mins >= 1_000 ? `${(mins / 1_000).toFixed(0)}k min/mo` : `${mins} min/mo`;
+              return (
+                <div key={mins} className="flex flex-col gap-1.5">
+                  <span className="font-mono text-[10.5px]" style={{ color: 'var(--color-text-faint)' }}>
+                    {volLabel}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="rounded-full"
+                      style={{
+                        height: 10,
+                        width: `${omniPct}%`,
+                        minWidth: 4,
+                        background: 'var(--color-state-speaking)',
+                        opacity: 0.9,
+                      }}
+                    />
+                    <span className="font-mono text-[11.5px] font-[700] shrink-0" style={{ color: 'var(--color-state-speaking)' }}>
+                      {fmt(omniProfit)}
+                    </span>
+                    <span className="text-[10px] shrink-0" style={{ color: 'var(--color-state-speaking)', opacity: 0.55 }}>
+                      Omni
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="rounded-full"
+                      style={{
+                        height: 10,
+                        width: `${compPct}%`,
+                        minWidth: 4,
+                        background: 'rgba(255,255,255,0.16)',
+                      }}
+                    />
+                    <span className="font-mono text-[11.5px] font-[600] shrink-0" style={{ color: 'var(--color-text-muted)' }}>
+                      {fmt(compProfit)}
+                    </span>
+                    <span className="text-[10px] shrink-0" style={{ color: 'var(--color-text-faint)' }}>
+                      {competitorLabel}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Switching savings table */}
+        <div className="flex flex-col gap-3">
+          <div>
+            <span
+              className="text-[11px] font-[600] uppercase tracking-[0.08em]"
+              style={{ color: 'var(--color-text-faint)' }}
+            >
+              Additional margin by switching — per month
+            </span>
+            <p
+              className="text-[10.5px] mt-0.5"
+              style={{ color: 'var(--color-text-faint)', opacity: 0.65 }}
+            >
+              (Omni margin − {competitorLabel} margin) × minutes
+            </p>
+          </div>
+
+          <div
+            className="rounded-[10px] overflow-hidden"
+            style={{ border: '1px solid var(--color-border)' }}
+          >
+            <div
+              className="flex"
+              style={{ borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface)' }}
+            >
+              <span
+                className="py-2 px-3 text-[10.5px] font-[600] uppercase tracking-[0.07em]"
+                style={{ width: 120, color: 'var(--color-text-faint)', borderRight: '1px solid var(--color-border)' }}
+              >
+                Volume
+              </span>
+              <span
+                className="flex-1 py-2 px-3 text-[10.5px] font-[600] uppercase tracking-[0.07em] text-right"
+                style={{ color: 'var(--color-text-faint)' }}
+              >
+                Extra vs {competitorLabel}
+              </span>
+            </div>
+
+            {VOLUME_TIERS.map((mins, ri) => {
+              const gain     = switchDeltaPerMin * mins;
+              const volLabel =
+                mins >= 1_000 ? `${(mins / 1_000).toFixed(0)}k min/mo` : `${mins} min/mo`;
+              return (
+                <div
+                  key={mins}
+                  className="flex"
+                  style={{
+                    borderBottom: ri < VOLUME_TIERS.length - 1 ? '1px solid var(--color-border)' : undefined,
+                    background: ri % 2 === 0 ? 'transparent' : 'var(--color-surface)',
+                  }}
+                >
+                  <span
+                    className="py-2.5 px-3 font-mono text-[11.5px]"
+                    style={{ width: 120, color: 'var(--color-text-faint)', borderRight: '1px solid var(--color-border)' }}
+                  >
+                    {volLabel}
+                  </span>
+                  <span
+                    className="flex-1 py-2.5 px-3 font-mono text-[12px] font-[700] text-right"
+                    style={{ color: gain > 0 ? 'var(--color-state-speaking)' : 'var(--color-text-faint)' }}
+                  >
+                    {gain > 0 ? '+' : ''}{fmt(gain)}/mo
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Your usage summary row */}
+        <div
+          className="flex items-center justify-between rounded-[10px] px-4 py-3"
+          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+        >
+          <span className="text-[12px]" style={{ color: 'var(--color-text-faint)' }}>
+            Extra profit from switching · {periodLabel}
+            <span className="ml-2 text-[10.5px]">
+              ({minsPerMonth.toLocaleString(undefined, { maximumFractionDigits: 0 })} min/mo ×
+              ${switchDeltaPerMin.toFixed(3)}/min × {projectionMonths} mo)
+            </span>
+          </span>
+          <span
+            className="font-mono font-[700] text-[18px] shrink-0"
+            style={{ color: extraBySwitch > 0 ? 'var(--color-state-speaking)' : 'var(--color-text-faint)' }}
+          >
+            {extraBySwitch > 0 ? '+' : ''}{fmt(extraBySwitch)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Legend dot ───────────────────────────────────────────────────────────────
+
+function LegendDot({ color, label, fill, muted }: {
+  color: string; label: string; fill?: boolean; muted?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <span
-        className="text-[12px]"
-        style={{ color: muted ? 'var(--color-text-faint)' : 'var(--color-text-muted)' }}
-      >
-        {label}
-      </span>
-      <span
-        className={`font-mono text-[12.5px] ${bold ? 'font-[700]' : 'font-[600]'}`}
-        style={{ color }}
-      >
-        {value}
-      </span>
+    <div className="flex items-center gap-1.5">
+      {fill ? (
+        <span
+          className="rounded-[2px]"
+          style={{ width: 12, height: 8, background: color, opacity: 0.45, display: 'block' }}
+        />
+      ) : (
+        <span
+          className="rounded-full"
+          style={{ width: 8, height: 8, background: color, opacity: muted ? 0.65 : 1, display: 'block' }}
+        />
+      )}
+      <span className="text-[11px]" style={{ color: 'var(--color-text-faint)' }}>{label}</span>
     </div>
   );
 }
@@ -652,38 +1020,40 @@ function SummaryRow({
 function SavingsGapChart({
   points,
   competitorLabel,
+  fmt,
+  fmtAx,
 }: {
   points: ChartPoint[];
   competitorLabel: string;
+  fmt: (usdValue: number) => string;
+  fmtAx: (usdValue: number) => string;
 }) {
-  const uid = useId();
+  const uid    = useId();
   const svgRef = useRef<SVGSVGElement>(null);
-  const [hovered, setHovered] = useState<number | null>(null);
+  const [hovered,     setHovered]     = useState<number | null>(null);
   const [tooltipLeft, setTooltipLeft] = useState(0);
 
   const n = points.length;
   if (n < 2) return null;
 
-  // SVG layout constants
   const VW = 800;
   const VH = 290;
-  const PL = 68;   // y-axis labels
-  const PR = 110;  // end annotations
+  const PL = 68;
+  const PR = 110;
   const PT = 18;
-  const PB = 30;   // x-axis labels
+  const PB = 30;
   const CW = VW - PL - PR;
   const CH = VH - PT - PB;
   const BASE = PT + CH;
 
-  const maxComp = points[n - 1].competitor;
-  const maxY = maxComp > 0 ? maxComp * 1.18 : 1;
+  const maxOmni = points[n - 1].omni;
+  const maxY    = maxOmni > 0 ? maxOmni * 1.18 : 1;
 
   const xAt = (idx: number) => PL + (idx / (n - 1)) * CW;
-  const yAt = (v: number) => PT + CH - (v / maxY) * CH;
+  const yAt = (v: number)   => PT + CH - (v / maxY) * CH;
 
-  // SVG path strings
-  const omniD  = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i)} ${yAt(p.omni)}`).join(' ');
-  const compD  = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i)} ${yAt(p.competitor)}`).join(' ');
+  const omniD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i)} ${yAt(p.omni)}`).join(' ');
+  const compD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i)} ${yAt(p.competitor)}`).join(' ');
 
   const gapD = [
     ...points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i)} ${yAt(p.competitor)}`),
@@ -698,13 +1068,8 @@ function SavingsGapChart({
     'Z',
   ].join(' ');
 
-  // Y-axis ticks at 0%, 25%, 50%, 75%, 100%
-  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => ({
-    value: maxY * f,
-    y: yAt(maxY * f),
-  }));
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => ({ value: maxY * f, y: yAt(maxY * f) }));
 
-  // X-axis label indices: now, quarters, end
   const xLabelIndices = Array.from(
     new Set(
       [
@@ -717,13 +1082,17 @@ function SavingsGapChart({
     ),
   );
 
-  // End annotations — enforce minimum vertical separation
   const yOmniEnd = yAt(points[n - 1].omni);
   const yCompEnd = yAt(points[n - 1].competitor);
-  const sep = yOmniEnd - yCompEnd;
-  const minSep = 38;
-  const compAnnotY = sep < minSep ? yCompEnd - (minSep - sep) / 2 : yCompEnd;
-  const omniAnnotY = sep < minSep ? yOmniEnd + (minSep - sep) / 2 : yOmniEnd;
+  const minSep   = 38;
+  const rawSep   = Math.abs(yCompEnd - yOmniEnd);
+  let omniAnnotY = yOmniEnd;
+  let compAnnotY = yCompEnd;
+  if (rawSep < minSep) {
+    const nudge = (minSep - rawSep) / 2;
+    omniAnnotY -= nudge;
+    compAnnotY += nudge;
+  }
 
   const bandW = CW / Math.max(n - 1, 1);
 
@@ -731,24 +1100,19 @@ function SavingsGapChart({
     const svg = svgRef.current;
     if (!svg) return;
     const rect = svg.getBoundingClientRect();
-    const pixelsPerViewUnit = rect.width / VW;
-    setTooltipLeft((xAt(i) - PL) * pixelsPerViewUnit);
+    setTooltipLeft((xAt(i) - PL) * (rect.width / VW));
     setHovered(i);
   }
 
   return (
     <div
       className="rounded-[14px] p-4 relative"
-      style={{
-        background: 'var(--color-surface-raised)',
-        border: '1px solid var(--color-border)',
-      }}
+      style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
     >
-      {/* Legend */}
       <div className="flex items-center gap-4 mb-3 px-1">
         <LegendDot color="var(--color-state-speaking)" label="PyAI Omni" />
         <LegendDot color="var(--color-state-error)" label={`${competitorLabel} (est.)`} muted />
-        <LegendDot color="#22c55e" label="Savings gap" fill />
+        <LegendDot color="#22c55e" label="Extra margin" fill />
       </div>
 
       <div className="relative select-none">
@@ -760,7 +1124,7 @@ function SavingsGapChart({
         >
           <defs>
             <linearGradient id={`${uid}-gap`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor="#22c55e" stopOpacity="0.18" />
+              <stop offset="0%"   stopColor="#22c55e" stopOpacity="0.20" />
               <stop offset="100%" stopColor="#22c55e" stopOpacity="0.03" />
             </linearGradient>
             <linearGradient id={`${uid}-omni`} x1="0" y1="0" x2="0" y2="1">
@@ -769,175 +1133,81 @@ function SavingsGapChart({
             </linearGradient>
           </defs>
 
-          {/* Grid lines */}
           {yTicks.map((t) => (
-            <line
-              key={t.value}
-              x1={PL}  y1={t.y}
-              x2={VW - PR} y2={t.y}
-              stroke="rgba(255,255,255,0.045)"
-              strokeWidth="1"
-            />
+            <line key={t.value} x1={PL} y1={t.y} x2={VW - PR} y2={t.y}
+              stroke="rgba(255,255,255,0.045)" strokeWidth="1" />
           ))}
 
-          {/* Y-axis labels */}
-          {yTicks
-            .filter((t) => t.value > 0)
-            .map((t) => (
-              <text
-                key={t.value}
-                x={PL - 8}
-                y={t.y + 4}
-                textAnchor="end"
-                fontSize="11"
-                fill="rgba(255,255,255,0.22)"
-                fontFamily="ui-monospace,monospace"
-              >
-                {fmtAxis(t.value)}
-              </text>
-            ))}
+          {yTicks.filter((t) => t.value > 0).map((t) => (
+            <text key={t.value} x={PL - 8} y={t.y + 4} textAnchor="end"
+              fontSize="11" fill="rgba(255,255,255,0.22)" fontFamily="ui-monospace,monospace">
+              {fmtAx(t.value)}
+            </text>
+          ))}
 
-          {/* X-axis labels */}
           {xLabelIndices.map((i) => (
-            <text
-              key={i}
-              x={xAt(i)}
-              y={VH - 5}
-              textAnchor="middle"
-              fontSize="10"
-              fill="rgba(255,255,255,0.22)"
-              fontFamily="ui-monospace,monospace"
-            >
+            <text key={i} x={xAt(i)} y={VH - 5} textAnchor="middle"
+              fontSize="10" fill="rgba(255,255,255,0.22)" fontFamily="ui-monospace,monospace">
               {points[i].month === 0 ? 'now' : `mo ${points[i].month}`}
             </text>
           ))}
 
-          {/* Omni area fill */}
           <path d={omniAreaD} fill={`url(#${uid}-omni)`} />
+          <path d={gapD}      fill={`url(#${uid}-gap)`} />
 
-          {/* Savings gap fill */}
-          <path d={gapD} fill={`url(#${uid}-gap)`} />
+          <path d={compD} fill="none" stroke="var(--color-state-error)"
+            strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"
+            vectorEffect="non-scaling-stroke" opacity="0.75" />
+          <path d={omniD} fill="none" stroke="var(--color-state-speaking)"
+            strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
+            vectorEffect="non-scaling-stroke" />
 
-          {/* Competitor line */}
-          <path
-            d={compD}
-            fill="none"
-            stroke="var(--color-state-error)"
-            strokeWidth="2"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-            opacity="0.75"
-          />
-
-          {/* Omni line */}
-          <path
-            d={omniD}
-            fill="none"
-            stroke="var(--color-state-speaking)"
-            strokeWidth="2.5"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-          />
-
-          {/* End annotation — competitor */}
+          {/* Competitor annotation (lower) */}
           <g transform={`translate(${xAt(n - 1) + 10}, ${compAnnotY})`}>
-            <text
-              y="4"
-              fontSize="12"
-              fill="var(--color-state-error)"
-              fontFamily="ui-monospace,monospace"
-              fontWeight="600"
-              opacity="0.9"
-            >
-              {fmtFull(points[n - 1].competitor)}
+            <text y="4" fontSize="12" fill="var(--color-state-error)"
+              fontFamily="ui-monospace,monospace" fontWeight="600" opacity="0.9">
+              {fmt(points[n - 1].competitor)}
             </text>
-            <text
-              y="17"
-              fontSize="9.5"
-              fill="rgba(255,255,255,0.32)"
-              fontFamily="ui-monospace,monospace"
-            >
+            <text y="17" fontSize="9.5" fill="rgba(255,255,255,0.32)" fontFamily="ui-monospace,monospace">
               {competitorLabel}
             </text>
           </g>
 
-          {/* End annotation — PyAI Omni */}
+          {/* Omni annotation (higher) */}
           <g transform={`translate(${xAt(n - 1) + 10}, ${omniAnnotY})`}>
-            <text
-              y="4"
-              fontSize="12"
-              fill="var(--color-state-speaking)"
-              fontFamily="ui-monospace,monospace"
-              fontWeight="600"
-            >
-              {fmtFull(points[n - 1].omni)}
+            <text y="4" fontSize="12" fill="var(--color-state-speaking)"
+              fontFamily="ui-monospace,monospace" fontWeight="600">
+              {fmt(points[n - 1].omni)}
             </text>
-            <text
-              y="17"
-              fontSize="9.5"
-              fill="rgba(255,255,255,0.32)"
-              fontFamily="ui-monospace,monospace"
-            >
+            <text y="17" fontSize="9.5" fill="rgba(255,255,255,0.32)" fontFamily="ui-monospace,monospace">
               PyAI Omni
             </text>
           </g>
 
-          {/* Hover vertical guide */}
           {hovered !== null && hovered > 0 && (
-            <line
-              x1={xAt(hovered)}
-              y1={PT}
-              x2={xAt(hovered)}
-              y2={BASE}
-              stroke="rgba(255,255,255,0.12)"
-              strokeWidth="1"
-              strokeDasharray="4 3"
-            />
+            <line x1={xAt(hovered)} y1={PT} x2={xAt(hovered)} y2={BASE}
+              stroke="rgba(255,255,255,0.12)" strokeWidth="1" strokeDasharray="4 3" />
           )}
 
-          {/* Hover dots */}
           {hovered !== null && hovered > 0 && (
             <>
-              <circle
-                cx={xAt(hovered)}
-                cy={yAt(points[hovered].competitor)}
-                r="4.5"
-                fill="var(--color-state-error)"
-                stroke="var(--color-surface-raised)"
-                strokeWidth="2"
-                vectorEffect="non-scaling-stroke"
-              />
-              <circle
-                cx={xAt(hovered)}
-                cy={yAt(points[hovered].omni)}
-                r="4.5"
-                fill="var(--color-state-speaking)"
-                stroke="var(--color-surface-raised)"
-                strokeWidth="2"
-                vectorEffect="non-scaling-stroke"
-              />
+              <circle cx={xAt(hovered)} cy={yAt(points[hovered].competitor)} r="4.5"
+                fill="var(--color-state-error)" stroke="var(--color-surface-raised)"
+                strokeWidth="2" vectorEffect="non-scaling-stroke" />
+              <circle cx={xAt(hovered)} cy={yAt(points[hovered].omni)} r="4.5"
+                fill="var(--color-state-speaking)" stroke="var(--color-surface-raised)"
+                strokeWidth="2" vectorEffect="non-scaling-stroke" />
             </>
           )}
 
-          {/* Invisible hover bands */}
           {points.map((_, i) => (
-            <rect
-              key={i}
-              x={xAt(i) - bandW / 2}
-              y={PT}
-              width={bandW}
-              height={CH}
-              fill="transparent"
-              style={{ cursor: 'crosshair' }}
+            <rect key={i} x={xAt(i) - bandW / 2} y={PT} width={bandW} height={CH}
+              fill="transparent" style={{ cursor: 'crosshair' }}
               onMouseEnter={(e) => handleMouseEnter(e, i)}
-              onMouseLeave={() => setHovered(null)}
-            />
+              onMouseLeave={() => setHovered(null)} />
           ))}
         </svg>
 
-        {/* HTML tooltip */}
         {hovered !== null && hovered > 0 && (
           <div
             className="pointer-events-none absolute z-20 flex flex-col gap-1.5 rounded-[9px] px-3 py-2.5 text-[11.5px] whitespace-nowrap"
@@ -953,28 +1223,17 @@ function SavingsGapChart({
             <span className="font-[600]" style={{ color: 'var(--color-text-muted)' }}>
               Month {points[hovered].month}
             </span>
-            <TooltipRow
-              dot="var(--color-state-error)"
-              label={competitorLabel}
-              value={fmtFull(points[hovered].competitor)}
-            />
-            <TooltipRow
-              dot="var(--color-state-speaking)"
-              label="PyAI Omni"
-              value={fmtFull(points[hovered].omni)}
-            />
+            <TooltipRow dot="var(--color-state-speaking)" label="PyAI Omni"
+              value={fmt(points[hovered].omni)} />
+            <TooltipRow dot="var(--color-state-error)" label={competitorLabel}
+              value={fmt(points[hovered].competitor)} />
             <div
               className="flex items-center justify-between gap-6 pt-1.5"
               style={{ borderTop: '1px solid var(--color-border)' }}
             >
-              <span style={{ color: 'var(--color-text-faint)' }}>Savings</span>
-              <span
-                className="font-mono font-[700]"
-                style={{ color: 'var(--color-state-speaking)' }}
-              >
-                {fmtFull(
-                  Math.max(0, points[hovered].competitor - points[hovered].omni),
-                )}
+              <span style={{ color: 'var(--color-text-faint)' }}>Extra margin</span>
+              <span className="font-mono font-[700]" style={{ color: 'var(--color-state-speaking)' }}>
+                {fmt(Math.max(0, points[hovered].omni - points[hovered].competitor))}
               </span>
             </div>
           </div>
@@ -986,68 +1245,15 @@ function SavingsGapChart({
 
 // ─── Tooltip row ──────────────────────────────────────────────────────────────
 
-function TooltipRow({
-  dot,
-  label,
-  value,
-}: {
-  dot: string;
-  label: string;
-  value: string;
-}) {
+function TooltipRow({ dot, label, value }: { dot: string; label: string; value: string }) {
   return (
     <div className="flex items-center gap-2 justify-between">
       <div className="flex items-center gap-1.5">
-        <span
-          className="rounded-full shrink-0"
-          style={{ width: 6, height: 6, background: dot }}
-        />
+        <span className="rounded-full shrink-0" style={{ width: 6, height: 6, background: dot }} />
         <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
       </div>
-      <span
-        className="font-mono font-[600] pl-4"
-        style={{ color: 'var(--color-text)' }}
-      >
+      <span className="font-mono font-[600] pl-4" style={{ color: 'var(--color-text)' }}>
         {value}
-      </span>
-    </div>
-  );
-}
-
-// ─── Legend dot ───────────────────────────────────────────────────────────────
-
-function LegendDot({
-  color,
-  label,
-  fill,
-  muted,
-}: {
-  color: string;
-  label: string;
-  fill?: boolean;
-  muted?: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      {fill ? (
-        <span
-          className="rounded-[2px]"
-          style={{ width: 12, height: 8, background: color, opacity: 0.45, display: 'block' }}
-        />
-      ) : (
-        <span
-          className="rounded-full"
-          style={{
-            width: 8,
-            height: 8,
-            background: color,
-            opacity: muted ? 0.65 : 1,
-            display: 'block',
-          }}
-        />
-      )}
-      <span className="text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
-        {label}
       </span>
     </div>
   );

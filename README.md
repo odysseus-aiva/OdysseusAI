@@ -9,8 +9,7 @@ Two engines run behind the same interface — a **swappable STT → LLM → TTS 
 speech-to-speech WebSocket. Switching an agent between them is a dropdown, and the
 dashboard prices both so you can see what the tradeoff actually costs.
 
-<img width="1509" height="738" alt="image" src="https://github.com/user-attachments/assets/cbace9b1-9335-4927-ba5f-49c8a3ccbcf1" />
-
+https://github.com/user-attachments/assets/add63f6b-1d8f-467b-bd63-00edcabb6c4e
 
 ## Five-minute setup
 

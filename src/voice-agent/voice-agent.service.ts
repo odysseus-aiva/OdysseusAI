@@ -54,6 +54,8 @@ interface ActiveSessionContext {
   turnCount: number;
   /** Set only for the Omni engine — the live Omni socket bridge. */
   omni?: OmniHandle | null;
+  /** Set only for the Omni engine — STT stream transcribing the agent's audio. */
+  agentSttStream?: SttStreamHandle | null;
   /** Omni greeting already revealed in the live caption panel. */
   greetingCaptionSent?: boolean;
 }
@@ -278,10 +280,14 @@ export class VoiceAgentService {
       await sttStream.end();
     }
 
-    // Close the Omni socket (Omni sessions have no STT stream).
+    // Close the Omni socket + its agent-audio STT stream.
     if (context.omni) {
       await context.omni.stop().catch(() => undefined);
       context.omni = null;
+    }
+    if (context.agentSttStream) {
+      await context.agentSttStream.end().catch(() => undefined);
+      context.agentSttStream = null;
     }
 
     if (context.rtcConnected) {
@@ -415,6 +421,51 @@ export class VoiceAgentService {
     // can be attached to the assistant TranscriptEntry (mirrors pipeline behaviour).
     const pendingToolNames: string[] = [];
 
+    // Omni never streams the agent's transcript, so transcribe the agent's OWN
+    // outgoing audio with our STT (Deepgram). This is the single source for
+    // agent turns — live captions + persisted history — including the greeting.
+    const agentStt = this.sttService.transcribeStream(
+      {
+        callId,
+        roomName,
+        participantId: 'agent',
+        language: config.language,
+        sampleRate: OMNI_OUTPUT_RATE,
+      },
+      'deepgram',
+    );
+    context.agentSttStream = agentStt;
+    agentStt.onEvent((event) => {
+      const text = (event.transcript ?? '').trim();
+      if (!text) return;
+      void this.livekitRtcService.publishLiveTranscript(roomName, {
+        role: 'assistant',
+        text,
+        isFinal: event.isFinal,
+      });
+      if (!event.isFinal) return;
+      void (async () => {
+        try {
+          const turnIndex =
+            convState.transcriptHistory.filter((e) => e.role === 'assistant').length + 1;
+          convState.transcriptHistory.push({
+            role: 'assistant',
+            text,
+            timestamp: Date.now(),
+            turnIndex,
+            toolCallNames: pendingToolNames.length > 0 ? [...pendingToolNames] : undefined,
+          });
+          convState.lastAgentResponse = text;
+          pendingToolNames.length = 0;
+          await this.conversationStateService.save(convState);
+          const active = this.sessions.get(roomName);
+          if (active) active.turnCount += 1;
+        } catch (err) {
+          this.logger.error(`[${callId}] Agent STT persist failed: ${(err as Error).message}`);
+        }
+      })();
+    });
+
     let handle: OmniHandle;
     try {
       handle = await this.omniEngine.connect(roomName, callId, config, {
@@ -423,23 +474,13 @@ export class VoiceAgentService {
           // streaming-append path — publishPcm would abort each frame with the
           // next and shred the audio.
           void this.livekitRtcService.enqueuePcm(roomName, pcm, OMNI_OUTPUT_RATE);
+          // Tee the agent audio into STT for live agent transcription.
+          context.agentSttStream?.writeAudio(pcm);
         },
         onStatus: (status) => {
           const active = this.sessions.get(roomName);
           if (!active) return;
           this.setStatus(active, status);
-          // Greeting text is known up-front — start typing it as soon as Omni speaks.
-          if (
-            status === 'speaking' &&
-            !active.greetingCaptionSent &&
-            config.greeting?.trim()
-          ) {
-            active.greetingCaptionSent = true;
-            void this.livekitRtcService.streamAssistantCaption(
-              roomName,
-              config.greeting,
-            );
-          }
         },
         onBargeIn: () => {
           this.livekitRtcService.cancelAssistantCaption(roomName);
@@ -466,67 +507,27 @@ export class VoiceAgentService {
           void this.stopSession(roomName, 'error');
         },
         onTranscript: (event: OmniTranscriptEvent) => {
-          if (event.role === 'assistant') {
-            const text = event.text.trim();
-            if (!text) {
-              /* empty */
-            } else if (
-              // Only skip the Omni echo of the greeting we already started typing.
-              event.isFinal &&
-              config.greeting?.trim() &&
-              normalizeCaption(config.greeting) === normalizeCaption(text)
-            ) {
-              // Still force a final commit in case the greeting stream was aborted.
-              void this.livekitRtcService.publishLiveTranscript(roomName, {
-                role: 'assistant',
-                text,
-                isFinal: true,
-              });
-            } else if (event.isFinal) {
-              void this.livekitRtcService.streamAssistantCaption(roomName, text);
-            } else {
-              void this.livekitRtcService.publishLiveTranscript(roomName, {
-                role: 'assistant',
-                text,
-                isFinal: false,
-              });
-            }
-          } else {
-            void this.livekitRtcService.publishLiveTranscript(roomName, {
-              role: 'user',
-              text: event.text,
-              isFinal: event.isFinal,
-            });
-          }
+          // Agent transcription comes from server-side STT on the agent audio
+          // (wired below) — the single source for agent turns. Here we only
+          // surface the CALLER's ASR from Omni's 0x02 stream.
+          if (event.role !== 'user') return;
+          void this.livekitRtcService.publishLiveTranscript(roomName, {
+            role: 'user',
+            text: event.text,
+            isFinal: event.isFinal,
+          });
           if (!event.isFinal) return;
           void (async () => {
             try {
-              if (event.role === 'user') {
-                const turnIndex =
-                  convState.transcriptHistory.filter((e) => e.role === 'user').length + 1;
-                convState.transcriptHistory.push({
-                  role: 'user',
-                  text: event.text,
-                  timestamp: event.timestamp,
-                  turnIndex,
-                });
-                convState.lastUserUtterance = event.text;
-              } else {
-                const turnIndex =
-                  convState.transcriptHistory.filter((e) => e.role === 'assistant').length + 1;
-                convState.transcriptHistory.push({
-                  role: 'assistant',
-                  text: event.text,
-                  timestamp: event.timestamp,
-                  turnIndex,
-                  toolCallNames: pendingToolNames.length > 0 ? [...pendingToolNames] : undefined,
-                });
-                convState.lastAgentResponse = event.text;
-                pendingToolNames.length = 0;
-                // Mirror pipeline turnCount so call summary shows correct turns.
-                const active = this.sessions.get(roomName);
-                if (active) active.turnCount += 1;
-              }
+              const turnIndex =
+                convState.transcriptHistory.filter((e) => e.role === 'user').length + 1;
+              convState.transcriptHistory.push({
+                role: 'user',
+                text: event.text,
+                timestamp: event.timestamp,
+                turnIndex,
+              });
+              convState.lastUserUtterance = event.text;
               await this.conversationStateService.save(convState);
             } catch (err) {
               this.logger.error(`[${callId}] Failed to save Omni transcript: ${(err as Error).message}`);

@@ -346,31 +346,40 @@ export function PageHeader({
   description,
   breadcrumb,
   actions,
+  compact = false,
 }: {
-  title: string;
-  description?: string;
+  title: React.ReactNode;
+  description?: React.ReactNode;
   breadcrumb?: { label: string; href?: string }[];
   actions?: React.ReactNode;
+  /** Tighter header for nested detail workspaces. */
+  compact?: boolean;
 }) {
   return (
     <motion.header
-      className="flex items-start justify-between gap-6 px-8 pt-7 pb-5"
+      className={`flex items-start justify-between gap-6 px-8 ${
+        compact ? 'pb-3.5 pt-4' : 'pb-5 pt-7'
+      }`}
       style={{ borderBottom: '1px solid var(--color-border)' }}
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
     >
-      <div className="flex flex-col gap-1.5">
+      <div className={`flex flex-col ${compact ? 'gap-1' : 'gap-1.5'}`}>
         {breadcrumb && <PageBreadcrumb items={breadcrumb} />}
         <h1
-          className="text-[22px] font-[600] tracking-[-0.035em] leading-tight"
+          className={`font-[600] leading-tight ${
+            compact
+              ? 'text-[17px] tracking-[-0.025em]'
+              : 'text-[22px] tracking-[-0.035em]'
+          }`}
           style={{ color: 'var(--color-text)' }}
         >
           {title}
         </h1>
         {description && (
           <p
-            className="text-[13px] font-[400] leading-snug"
+            className={`font-[400] leading-snug ${compact ? 'text-[12px]' : 'text-[13px]'}`}
             style={{ color: 'var(--color-text-muted)' }}
           >
             {description}
@@ -378,7 +387,7 @@ export function PageHeader({
         )}
       </div>
       {actions && (
-        <div className="flex items-center gap-2 flex-shrink-0 pt-0.5">{actions}</div>
+        <div className="flex flex-shrink-0 items-center gap-2 pt-0.5">{actions}</div>
       )}
     </motion.header>
   );

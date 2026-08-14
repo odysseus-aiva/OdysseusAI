@@ -1,196 +1,265 @@
 # OdysseusAI — Voice Agent Platform
 
-A production-structured NestJS backend powering the OdysseusAI voice agent platform. Providers (STT, LLM, TTS) are swappable via interfaces, with structured call logging and latency measurement built in. Supports both the default Pipeline engine and the PyAI Omni engine.
+Build a voice agent, talk to it in the browser or over a real phone number, and get a
+complete record of every call: turn-by-turn transcript, per-stage latency, every tool
+execution, and the provider cost down to six decimal places.
 
-## Architecture
+Two engines run behind the same interface — a **swappable STT → LLM → TTS pipeline**
+(Deepgram / OpenAI / ElevenLabs, each replaceable) and **PyAI Omni**, a single
+speech-to-speech WebSocket. Switching an agent between them is a dropdown, and the
+dashboard prices both so you can see what the tradeoff actually costs.
 
-```
-┌─────────────┐     POST /livekit/token      ┌──────────────────┐
-│   Client    │ ───────────────────────────► │  LiveKit Module  │
-│  (browser/  │     POST /livekit/webhook    │  - tokens        │
-│   SIP)      │ ◄─────────────────────────── │  - rooms         │
-└──────┬──────┘                              │  - webhooks      │
-       │                                     └────────┬─────────┘
-       │ joins room via LiveKit                       │
-       ▼                                              ▼
-┌─────────────┐     POST /voice-agent/start  ┌──────────────────┐
-│  LiveKit    │ ◄─────────────────────────── │ Voice Agent Mod  │
-│    Room     │                              │  - orchestration │
-└─────────────┘                              │  - turn detect   │
-                                             └────────┬─────────┘
-                                                      │
-                    ┌─────────────────────────────────┼─────────────────────────┐
-                    ▼                                 ▼                         ▼
-             ┌──────────┐                    ┌──────────┐              ┌──────────┐
-             │   STT    │                    │   LLM    │              │   TTS    │
-             │ Deepgram │                    │ OpenAI/  │              │ ElevenLabs│
-             │ (swap)   │                    │ Claude   │              │ OpenAI/  │
-             └──────────┘                    └──────────┘              │ Cartesia │
-                                                                        └──────────┘
-                    │
-                    ▼
-             ┌──────────────┐     ┌──────────────────┐
-             │  Call Logs   │     │   Performance    │
-             │ (in-memory)  │     │  latency metrics │
-             └──────────────┘     └──────────────────┘
+![OdysseusAI dashboard — call volume by outcome, p50 latency and cost per call](docs/images/dashboard.png)
+
+## Five-minute setup
+
+Sample data is included, so you get a populated dashboard without placing a call.
+
+**Prerequisites:** Node 18+, MongoDB running locally (`brew install mongodb-community`
+or Docker), and a free [LiveKit Cloud](https://cloud.livekit.io/) project.
+
+### 1. Install both apps (~90s)
+
+```bash
+git clone <this-repo> && cd OdysseusAI
+npm install
+cd web && npm install && cd ..
 ```
 
-### Module overview
-
-| Module | Responsibility |
-|--------|----------------|
-| `livekit` | Access tokens, room create/get, webhook routing, SIP-ready config |
-| `voice-agent` | Session lifecycle, STT turn detection, TTS + LiveKit playback |
-| `orchestration` | Prompt, tools, state, guardrails |
-| `stt` | `transcribeStream()` provider interface (Deepgram) |
-| `llm` | `generateResponse()` with optional tool calling (OpenAI) |
-| `tts` | `synthesizeSpeech()` provider interface (ElevenLabs, OpenAI, Cartesia) |
-| `call-logs` | Per-call event log + in-memory repository (swap for Mongo/Postgres) |
-| `performance` | Milestone timestamps and end-to-end latency calculation |
-
-## Setup
-
-### Prerequisites
-
-- Node.js 18+
-- npm
-- A [LiveKit Cloud](https://cloud.livekit.io/) project (or self-hosted LiveKit server)
-
-### Install
+### 2. Configure the backend (~2 min)
 
 ```bash
 cp .env.example .env
-# Fill in your environment variables in .env
-
-npm install
-npm run build
-npm run start:dev
 ```
 
-The server starts on `http://localhost:3000` by default.
+Fill in these five values — everything else has a working default:
 
-## Environment variables
+| Variable | Where to get it |
+|----------|-----------------|
+| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | LiveKit Cloud → Project Settings → Keys |
+| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com/api-keys) — used for LLM and TTS |
+| `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com/) — $200 free credit |
 
-See [`.env.example`](.env.example) for all placeholders.
+Then switch persistence on in the same `.env`, so calls survive a restart and the sample
+data has somewhere to live:
 
-| Variable | Description |
-|----------|-------------|
-| `LIVEKIT_URL` | LiveKit server URL (e.g. `wss://your-project.livekit.cloud`) |
-| `LIVEKIT_API_KEY` | LiveKit API key |
-| `LIVEKIT_API_SECRET` | LiveKit API secret |
-| `LIVEKIT_WEBHOOK_SECRET` | Optional webhook signing secret |
-| `DEEPGRAM_API_KEY` | Deepgram API key for STT |
-| `OPENAI_API_KEY` | OpenAI API key for LLM/TTS |
-| `ANTHROPIC_API_KEY` | Anthropic API key for Claude LLM |
-| `ELEVENLABS_API_KEY` | ElevenLabs API key for TTS |
-| `CARTESIA_API_KEY` | Cartesia API key for TTS |
-| `PYAI_API_KEY` | PyAI API key (Omni engine) |
-| `PYAI_BASE_URL` | PyAI base URL (default `https://api.pyai.com/v1`) |
-| `DEFAULT_STT_PROVIDER` | `deepgram` (default) |
-| `DEFAULT_LLM_PROVIDER` | `openai` or `claude` |
-| `DEFAULT_TTS_PROVIDER` | `elevenlabs`, `openai`, or `cartesia` |
-| `ORCHESTRATION_MAX_TOOL_LOOPS` | Max tool-calling rounds per turn (default `3`) |
-| `ORCHESTRATION_TOOL_TIMEOUT_MS` | Per-tool timeout in ms (default `5000`) |
-| `ORCHESTRATION_FALLBACK_RESPONSE` | Spoken fallback when orchestration fails |
-| `PERSISTENCE_PROVIDER` | `memory` (default) or `mongodb` |
-| `MONGODB_URI` | MongoDB connection string (required when provider is `mongodb`) |
-| `MONGODB_DB_NAME` | Database name (default `odysseus_ai`) |
+```ini
+PERSISTENCE_PROVIDER=mongodb
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DB_NAME=odysseus_ai
+```
 
-## API usage
-
-### 1. Generate a LiveKit token
+### 3. Configure the web app (~15s)
 
 ```bash
-curl -X POST http://localhost:3000/livekit/token \
-  -H "Content-Type: application/json" \
-  -d '{
-    "roomName": "support-room-1",
-    "participantName": "user-123",
-    "metadata": { "callId": "call-abc" }
-  }'
+cd web && cp .env.local.example .env.local && cd ..
 ```
 
-Response:
+The default `BACKEND_URL=http://localhost:3000` is already correct.
+
+### 4. Load the sample data (~10s)
+
+```bash
+npm run seed
+```
+
+### 5. Run it (~30s)
+
+Two terminals:
+
+```bash
+npm run start:dev     # backend  → http://localhost:3000
+cd web && npm run dev # frontend → http://localhost:3001
+```
+
+Open **http://localhost:3001** and press **Talk**. Grant mic access and the agent
+greets you. Every call you place shows up under **Calls** within a second of hanging up.
+
+## Sample data
+
+`npm run seed` loads [`sample-data/`](sample-data/) into MongoDB so the dashboard,
+analytics and transcript views have something real to show on a fresh clone.
+
+| File | Contents |
+|------|----------|
+| [`agents.json`](sample-data/agents.json) | 3 agents — a general assistant and a support agent on the pipeline engine, plus a hotel concierge on Omni |
+| [`calls.json`](sample-data/calls.json) | 9 calls over the last 7 days, 26 conversational turns, 12 tool executions |
+
+The calls are written as readable scenarios (transcript, tool inputs and outputs,
+per-stage latency), and the seeder expands each one into the same `calls`,
+`call_events` and `conversations` documents a live call produces. Timestamps are
+relative to *now*, so the 7-day analytics window is always populated.
+
+Deliberately included so the edge cases are visible in a demo:
+
+- a **failed call** — tool timeout followed by a TTS 502, which lands in the error view
+- two **Omni calls** priced per minute against pipeline calls priced per token, so
+  Cost & Savings has something to compare
+- a **no-interaction call** — connected, heard the greeting, hung up without speaking,
+  which the platform classifies separately from a failure
+
+Re-running is safe: calls are replaced only for the `demo-call-*` IDs the seeder owns,
+and an agent that already exists is left exactly as you edited it. To remove the sample
+calls:
+
+```bash
+npm run seed:clean
+```
+
+## Two-minute demo path
+
+1. **Dashboard** — outcome mix, p50/p95 latency and cost per call over 7 days.
+2. **Calls → `demo-call-02`** — the transcript with tool executions interleaved at the
+   point they fired, and the latency breakdown for each turn.
+3. **Calls → `demo-call-07`** — the failed call: tool timeout and provider error captured
+   against the exact turn.
+4. **Agents → Omni Concierge** — flip the engine, prompt and voice; no redeploy.
+5. **Voice Console** — press Talk and have a live conversation. Interrupt it mid-sentence
+   to show barge-in (`BARGE_IN_ENABLED=true`).
+6. **Analytics** — where the time actually goes: STT vs LLM vs TTS vs unaccounted.
+
+## How it works
+
+```
+   Browser (WebRTC)                     Phone (Twilio DID)
+         │                                      │
+         │  POST /session/start                 │  SIP trunk → dispatch rule
+         ▼                                      ▼
+   ┌─────────────────────── LiveKit room ───────────────────────┐
+   │              media plane for both entry paths              │
+   └────────────────────────────┬───────────────────────────────┘
+                                │ agent joins, publishes audio
+                                ▼
+                     ┌──────────────────────┐
+                     │  voice-agent module  │  turn detection, barge-in,
+                     │  session lifecycle   │  interruption, cleanup
+                     └──────────┬───────────┘
+                    ┌───────────┴────────────┐
+        engine:     ▼                        ▼      engine: omni
+   ┌────────────────────────────┐   ┌──────────────────────────┐
+   │ STT  →  LLM  →  TTS        │   │  PyAI Omni WebSocket     │
+   │ Deepgram  OpenAI  OpenAI   │   │  speech-to-speech,       │
+   │ (each provider swappable)  │   │  ~500ms round trip       │
+   └────────────┬───────────────┘   └────────────┬─────────────┘
+                └──────────────┬─────────────────┘
+                               ▼
+              orchestration: prompt, tools, guardrails
+                               ▼
+              MongoDB: calls, events, transcripts, cost
+                               ▼
+                  Next.js dashboard (REST, port 3001)
+```
+
+Both engines write the same call record, so analytics, cost and transcripts work
+identically no matter which one an agent uses.
+
+### Modules
+
+| Module | Responsibility |
+|--------|----------------|
+| `session` | Client-facing entry point — mints tokens, creates rooms, starts the agent |
+| `voice-agent` | Session lifecycle, turn detection, barge-in, engine fork |
+| `livekit` | Tokens, rooms, RTC audio, webhooks, inbound SIP routing |
+| `orchestration` | Prompt assembly, tool calling, conversation state, guardrails |
+| `stt` / `llm` / `tts` | One interface per stage; providers are drop-in |
+| `agents` | Agent CRUD, per-agent tool config, first-run seeding |
+| `call-logs` | Call records, event timeline, analytics aggregation |
+| `cost` | Per-call provider cost from real token/character/second usage |
+| `twilio` | Search, buy and attach phone numbers to the SIP trunk |
+| `suggestions` | AI-proposed prompt and greeting improvements from real transcripts |
+
+## API tour
+
+Start a session — the client supplies no room name, call ID or token; all three are
+generated server-side:
+
+```bash
+curl -X POST http://localhost:3000/session/start \
+  -H "Content-Type: application/json" \
+  -d '{ "agentConfig": { "agentId": "assistant" }, "metadata": { "source": "cli" } }'
+```
 
 ```json
 {
+  "serverUrl": "wss://your-project.livekit.cloud",
   "token": "<jwt>",
-  "roomName": "support-room-1",
-  "participantName": "user-123",
-  "livekitUrl": "wss://your-project.livekit.cloud"
+  "roomName": "voice-2f9c…",
+  "callId": "2f9c…",
+  "participantIdentity": "user-2f9c…",
+  "agentIdentity": "agent-2f9c…"
 }
 ```
 
-Use the token with the [LiveKit client SDK](https://docs.livekit.io/client-sdk-js/) to join the room.
-
-### 2. Start a voice agent session
+Read the results:
 
 ```bash
-curl -X POST http://localhost:3000/voice-agent/start \
-  -H "Content-Type: application/json" \
-  -d '{
-    "roomName": "support-room-1",
-    "callId": "call-abc",
-    "agentConfig": {
-      "systemPrompt": "You are a helpful support agent.",
-      "sttProvider": "deepgram",
-      "llmProvider": "openai",
-      "ttsProvider": "elevenlabs",
-      "turnSilenceMs": 700,
-      "agentId": "support-agent",
-      "dynamicVariables": { "company": "Acme" },
-      "enabledTools": ["get_user_details"]
-    }
-  }'
+curl 'http://localhost:3000/call-logs?limit=10'            # paginated history
+curl  http://localhost:3000/call-logs/demo-call-02/transcript
+curl 'http://localhost:3000/call-logs/stats?period=7'      # dashboard aggregates
+curl 'http://localhost:3000/call-logs/latency?period=7'    # percentiles + stage split
+curl  http://localhost:3000/agents
 ```
 
-### 3. Get session state and logs
+## Phone numbers
 
-```bash
-curl http://localhost:3000/voice-agent/session/support-room-1
-```
+Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_TRUNK_SID`, then buy a number
+from the **Phone Numbers** page. It is attached to your Elastic SIP Trunk automatically.
+Point the trunk at LiveKit SIP, set `LIVEKIT_SIP_ENABLED=true` with the trunk and
+dispatch rule IDs, and inbound calls route to the agent that owns the dialled number —
+the full setup checklist is in [`.env.example`](.env.example).
 
-### 4. Get call logs by call ID
+## Environment variables
 
-```bash
-curl http://localhost:3000/call-logs/call-abc
-```
+[`.env.example`](.env.example) documents every option. The ones worth knowing:
 
-### 5. LiveKit webhooks
+| Variable | Description |
+|----------|-------------|
+| `DEFAULT_STT_PROVIDER` | `deepgram` or `pyai` |
+| `DEFAULT_LLM_PROVIDER` | `openai` or `claude` |
+| `DEFAULT_TTS_PROVIDER` | `openai`, `elevenlabs`, `cartesia` or `pyai` |
+| `PYAI_API_KEY` | Required for the Omni engine — instant sandbox key, no signup: `curl -X POST https://api.pyai.com/v1/sandbox/keys` |
+| `BARGE_IN_ENABLED` | Listen while the agent speaks so callers can interrupt |
+| `PERSISTENCE_PROVIDER` | `memory` (no MongoDB, nothing persists) or `mongodb` |
+| `ORCHESTRATION_TOOL_TIMEOUT_MS` | Per-tool timeout, default `12000` |
 
-Configure your LiveKit project to send webhooks to:
-
-```
-POST http://your-server/livekit/webhook
-```
-
-Events (`participant_joined`, `participant_left`, `room_finished`) are logged and routed to the voice agent.
+Secrets are read from the environment only — nothing is committed, and `.env.example`
+ships with empty placeholders.
 
 ## Project structure
 
 ```
-src/
-├── config/              # Environment configuration
-├── common/types/        # Shared TypeScript interfaces
-├── livekit/             # Tokens, rooms, webhooks, RTC
-├── voice-agent/         # Session lifecycle + turn detection
-├── orchestration/       # Prompt, tools, state, guardrails
-├── stt/                 # STT providers
-├── llm/                 # LLM providers (tool calling)
-├── tts/                 # TTS providers
-├── call-logs/           # In-memory call log repository
-└── performance/         # Latency measurement
+src/                     NestJS backend
+├── session/             client entry point
+├── voice-agent/         lifecycle, turn detection, engines/
+├── livekit/             tokens, rooms, RTC, webhooks, SIP
+├── orchestration/       prompt, tools, state, guardrails
+├── stt/ llm/ tts/       swappable providers
+├── agents/              agent + tool configuration
+├── call-logs/           records, events, analytics
+├── cost/                per-call cost accounting
+├── recording/           mixed WAV capture
+├── twilio/              number provisioning
+└── persistence/         memory or MongoDB, chosen by env
+
+web/                     Next.js 15 dashboard + voice console
+sample-data/             seedable demo agents and calls
+scripts/                 seed-sample-data.mjs
+docs/                    architecture and runtime flow notes
 ```
 
 ## Scripts
 
 | Command | Description |
 |---------|-------------|
-| `npm run start` | Start server |
-| `npm run start:dev` | Start with hot reload |
+| `npm run start:dev` | Backend with hot reload |
+| `npm run seed` | Load `sample-data/` into MongoDB |
+| `npm run seed:clean` | Remove the sample data |
 | `npm run build` | Compile TypeScript |
-| `npm run lint` | Run ESLint |
+| `npm run lint` | ESLint |
 
-## License
+## Known limits
 
-UNLICENSED — private.
+- `PERSISTENCE_PROVIDER=memory` keeps everything in process — restart and history is gone.
+  Use `mongodb` for anything you want to look at twice.
+- Recordings are written to local disk (`recordings/`), not object storage.
+- There is no auth in front of the API yet; run it on localhost or behind your own gateway.

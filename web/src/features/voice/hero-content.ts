@@ -54,13 +54,19 @@ export function resolveHero(ctx: HeroContext): HeroContent {
     { label: 'TTS', value: providerName(dp?.tts, DEFAULTS.tts) },
   ];
 
-  const providers = agent
-    ? agent.engine === 'omni'
-      ? [{ label: 'Powered by', value: 'PyAI Omni' }]
-      : pipelineProviders(agent.defaultProviders)
-    : agentCount > 0
-      ? pipelineProviders()
-      : [];
+  const omniProviders = [{ label: 'Powered by', value: 'PyAI Omni' }];
+
+  let providers: HeroContent['providers'] = [];
+  if (agent) {
+    providers =
+      agent.engine === 'omni'
+        ? omniProviders
+        : pipelineProviders(agent.defaultProviders);
+  } else if (agentCount > 0) {
+    // No agent selected means the backend falls back to its own default config,
+    // which runs on Omni — so the chips must say Omni, not a pipeline it won't use.
+    providers = omniProviders;
+  }
 
   if (phase === 'error') {
     return {

@@ -21,7 +21,6 @@ export function CallDetailView({ callId }: { callId: string }) {
   const { call, timeline, agentName, loading, error } = useCallDetail(callId);
   const [mobileTab, setMobileTab] = useState<MobileTab>('overview');
   const [currentTime, setCurrentTime] = useState(0);
-  const [syncEnabled, setSyncEnabled] = useState(true);
   const [seekRequest, setSeekRequest] = useState<number | null>(null);
 
   const onSeek = useCallback((seconds: number) => {
@@ -56,8 +55,6 @@ export function CallDetailView({ callId }: { callId: string }) {
       status={call.status}
       language={call.agentSnapshot?.language}
       currentTimeSec={currentTime}
-      syncEnabled={syncEnabled}
-      onSyncChange={setSyncEnabled}
       onSeek={onSeek}
     />
   );

@@ -94,8 +94,6 @@ export function CallTranscriptPanel({
   status,
   language,
   currentTimeSec,
-  syncEnabled,
-  onSyncChange,
   onSeek,
 }: {
   timeline: TimelineItem[];
@@ -104,8 +102,6 @@ export function CallTranscriptPanel({
   status: CallStatus;
   language?: string;
   currentTimeSec: number;
-  syncEnabled: boolean;
-  onSyncChange: (next: boolean) => void;
   onSeek: (seconds: number) => void;
 }) {
   const [query, setQuery] = useState('');
@@ -152,12 +148,6 @@ export function CallTranscriptPanel({
     }
     return active;
   }, [filtered, currentTimeSec, callStartMs]);
-
-  useEffect(() => {
-    if (!syncEnabled || !activeMessageId) return;
-    const el = rowRefs.current.get(activeMessageId);
-    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [activeMessageId, syncEnabled]);
 
   useEffect(() => {
     if (!activeMatch) return;
@@ -321,20 +311,6 @@ export function CallTranscriptPanel({
               })}
             </div>
 
-            <button
-              type="button"
-              onClick={() => onSyncChange(!syncEnabled)}
-              className="rounded-[9px] px-2.5 py-1.5 text-[12px] font-[450] transition-colors duration-[140ms]"
-              style={{
-                color: syncEnabled ? 'var(--color-accent)' : 'var(--color-text-muted)',
-                background: syncEnabled ? 'var(--color-accent-soft)' : 'var(--color-void)',
-                border: `1px solid ${syncEnabled ? 'var(--color-accent-hairline)' : 'var(--color-border)'}`,
-                height: 36,
-              }}
-              title="Auto-scroll transcript with playback"
-            >
-              Sync {syncEnabled ? 'on' : 'off'}
-            </button>
           </div>
 
           <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3 lg:px-4">

@@ -25,6 +25,7 @@ export const LLM_RATES: Record<string, LlmRate> = {
   // OpenAI
   'gpt-4o-mini': { inputPerMillion: 0.15, outputPerMillion: 0.6 },
   'gpt-4o': { inputPerMillion: 2.5, outputPerMillion: 10 },
+  'gpt-4.1-nano': { inputPerMillion: 0.1, outputPerMillion: 0.4 },
   'gpt-4.1-mini': { inputPerMillion: 0.4, outputPerMillion: 1.6 },
   'gpt-4.1': { inputPerMillion: 2, outputPerMillion: 8 },
   // Anthropic

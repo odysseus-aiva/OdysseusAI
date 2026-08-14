@@ -132,22 +132,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         data-rail={callRail ? 'true' : undefined}
         aria-label={callRail ? 'Platform navigation (collapsed)' : 'Platform navigation'}
       >
-        <div
-          className="absolute top-0 left-4 right-4 h-px pointer-events-none"
-          style={{
-            background:
-              'linear-gradient(90deg, transparent, var(--color-accent-border) 40%, var(--color-accent-border) 60%, transparent)',
-          }}
-        />
-
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              'radial-gradient(ellipse 110% 35% at 50% 0%, var(--color-accent-subtle), transparent 65%)',
-          }}
-        />
-
         {/* Header — logo left, theme toggle right */}
         <motion.div
           className={`flex items-center gap-2 pb-5 pt-5 ${

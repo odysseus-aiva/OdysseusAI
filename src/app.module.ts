@@ -12,6 +12,7 @@ import { LlmModule } from './llm/llm.module';
 import { TtsModule } from './tts/tts.module';
 import { AgentsModule } from './agents/agents.module';
 import { TwilioModule } from './twilio/twilio.module';
+import { SuggestionsModule } from './suggestions/suggestions.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { TwilioModule } from './twilio/twilio.module';
     CallLogsModule,
     AgentsModule,
     TwilioModule,
+    SuggestionsModule,
     VoiceAgentModule,
     LivekitModule,
     SessionModule,

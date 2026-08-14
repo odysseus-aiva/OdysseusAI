@@ -35,7 +35,7 @@ export class OpenAiLlmProvider implements LlmProvider {
       );
       return {
         text: `I understand you said: "${request.userUtterance}". How can I help?`,
-        model: 'gpt-4.1',
+        model: 'gpt-4.1-nano',
         finishReason: 'stop',
       };
     }
@@ -43,10 +43,11 @@ export class OpenAiLlmProvider implements LlmProvider {
     const messages = this.buildOpenAiMessages(request);
 
     const body: Record<string, unknown> = {
-      model: 'gpt-4.1',
+      model: 'gpt-4.1-nano',
       messages,
       max_tokens: 400,
       temperature: 0.7,
+      service_tier: 'fast',
     };
 
     if (request.tools && request.tools.length > 0) {
@@ -108,7 +109,7 @@ export class OpenAiLlmProvider implements LlmProvider {
           : 'Sorry, I could not generate a response.'),
       toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       finishReason,
-      model: data.model ?? 'gpt-4o-mini',
+      model: data.model ?? 'gpt-4.1-nano',
       usage: data.usage
         ? {
             promptTokens: data.usage.prompt_tokens,

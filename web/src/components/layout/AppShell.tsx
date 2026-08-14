@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'motion/react';
@@ -18,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { useVoiceStore } from '@/features/voice/state/voice.store';
-
+import { APP_NAME } from '@/lib/env';
 const NAV_SECTIONS = [
   { href: '/', icon: Mic2, label: 'Voice', exact: true },
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -163,41 +164,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Logo */}
         <motion.div
-          className={`flex items-center gap-2.5 pb-5 pt-5 ${
+          className={`flex items-center gap-2 pb-5 pt-5 ${
             callRail ? 'justify-center px-0' : 'px-4 max-lg:justify-center max-lg:px-0'
           }`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.08, ease: 'easeOut' }}
         >
-          <div
-            className="relative flex items-center justify-center rounded-[9px] flex-shrink-0"
-            style={{
-              width: 30,
-              height: 30,
-              background:
-                'linear-gradient(145deg, var(--color-accent-soft), var(--color-accent-trace))',
-              border: '1px solid var(--color-accent-ring)',
-              boxShadow: '0 0 12px var(--color-accent-soft)',
-            }}
-          >
-            <Mic2 size={13} color="var(--color-accent)" strokeWidth={2.2} />
-          </div>
+          <Image
+            src="/dhvani-logo.png"
+            alt={`${APP_NAME} logo`}
+            width={18}
+            height={18}
+            className="flex-shrink-0 object-contain"
+            priority
+          />
           {!callRail && (
-            <div className="flex flex-col gap-0 max-lg:hidden">
-              <span
-                className="text-[13.5px] font-[650] tracking-[-0.03em] leading-none"
-                style={{ color: 'var(--color-text)' }}
-              >
-                Odysseus
-              </span>
-              <span
-                className="text-[10px] font-[450] tracking-[0.06em] leading-none mt-[3px]"
-                style={{ color: 'var(--color-text-faint)' }}
-              >
-                VOICE AI
-              </span>
-            </div>
+            <span
+              className="text-[13.5px] font-[650] tracking-[-0.03em] leading-none max-lg:hidden"
+              style={{ color: 'var(--color-text)' }}
+            >
+              {APP_NAME}
+            </span>
           )}
         </motion.div>
 

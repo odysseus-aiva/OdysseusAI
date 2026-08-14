@@ -23,8 +23,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: `${APP_NAME} — Voice AI`,
-  description: 'An intelligent voice assistant.',
+  title: APP_NAME,
+  description: 'Dhvani — intelligent voice agents for real conversations.',
 };
 
 export const viewport: Viewport = {

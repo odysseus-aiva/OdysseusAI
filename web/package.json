@@ -2,7 +2,7 @@
   "name": "odysseus-ai-web",
   "version": "0.1.0",
   "private": true,
-  "description": "Web interface for the OdysseusAI voice agent platform",
+  "description": "Web interface for the Dhvani voice agent platform",
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",

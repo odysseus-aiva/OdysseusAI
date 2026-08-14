@@ -1,6 +1,6 @@
-# OdysseusAI Web
+# Dhvani Web
 
-The web interface for the OdysseusAI voice agent platform. Phase 1 is a one-click
+The web interface for the Dhvani voice agent platform. Phase 1 is a one-click
 voice experience; the architecture is built to grow into history, analytics,
 multi-agent, and admin modules without a rewrite.
 

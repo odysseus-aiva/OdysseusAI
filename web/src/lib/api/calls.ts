@@ -40,6 +40,8 @@ export interface CallSummary {
   participantId?: string;
   agentId?: string;
   agentSnapshot?: AgentSnapshot;
+  /** Caller-supplied / SIP metadata (direction, from, to, channel, …). */
+  metadata?: Record<string, string | number | boolean>;
   status: CallStatus;
   endedBy?: CallEndedBy;
   endedAt?: number;

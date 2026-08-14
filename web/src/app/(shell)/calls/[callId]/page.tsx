@@ -23,6 +23,7 @@ import {
   Pause,
   Volume2,
   VolumeX,
+  TrendingDown,
 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
@@ -36,6 +37,7 @@ import {
   type ToolCallRecord,
 } from '@/lib/api/calls';
 import type { CallStatus } from '@/lib/types/call-log';
+import { OMNI_RATE_PER_MIN, COMPETITOR_RATES } from '@/lib/config/competitor-rates';
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -113,6 +115,24 @@ export default function CallDetailPage() {
           {hasLatency(call.latencyMetrics) && (
             <Section title="Latency" icon={<Activity size={14} strokeWidth={2} />}>
               <LatencyBreakdown metrics={call.latencyMetrics} />
+            </Section>
+          )}
+
+          {/* ── Cost & Savings ─────────────────────────────────── */}
+          {call.durationMs != null && (
+            <Section
+              title="Cost & Savings"
+              icon={<TrendingDown size={14} strokeWidth={2} />}
+              action={
+                <span
+                  className="rounded-[5px] px-1.5 py-0.5 text-[10.5px] font-[500]"
+                  style={{ background: 'rgb(251 191 36 / 0.08)', color: 'var(--color-state-warning)' }}
+                >
+                  Est. comparison
+                </span>
+              }
+            >
+              <CostSavingsCard durationMs={call.durationMs} />
             </Section>
           )}
 
@@ -277,6 +297,106 @@ function LatencyBreakdown({ metrics }: { metrics: CallSummary['latencyMetrics'] 
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Cost & Savings ───────────────────────────────────────────────────────────
+
+function CostSavingsCard({ durationMs }: { durationMs: number }) {
+  const durationMin = durationMs / 60000;
+  const omniCost = (durationMs / 1000) * (OMNI_RATE_PER_MIN / 60);
+
+  return (
+    <div
+      className="flex flex-col gap-4 rounded-[11px] p-4"
+      style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
+    >
+      {/* Headline stats */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10.5px] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>
+            Omni cost
+          </span>
+          <span className="text-[20px] font-[600] font-mono tracking-[-0.02em]" style={{ color: 'var(--color-text)' }}>
+            {formatUsd(omniCost)}
+          </span>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10.5px] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>
+            Rate
+          </span>
+          <span className="text-[20px] font-[600] font-mono tracking-[-0.02em]" style={{ color: 'var(--color-text)' }}>
+            $0.05/min
+          </span>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10.5px] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>
+            Duration
+          </span>
+          <span className="text-[20px] font-[600] font-mono tracking-[-0.02em]" style={{ color: 'var(--color-text)' }}>
+            {formatDuration(durationMs)}
+          </span>
+        </div>
+      </div>
+
+      {/* Comparison rows */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-3 px-1">
+          <span className="flex-1 text-[10.5px] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>
+            Platform
+          </span>
+          <span className="w-20 text-right text-[10.5px] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>
+            Est. cost
+          </span>
+          <span className="w-16 text-right text-[10.5px] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>
+            Saved
+          </span>
+          <span className="w-14 text-right text-[10.5px] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>
+            Savings
+          </span>
+        </div>
+        <div
+          className="flex flex-col overflow-hidden rounded-[8px]"
+          style={{ border: '1px solid var(--color-border)' }}
+        >
+          {COMPETITOR_RATES.map((c, i) => {
+            const estCost = durationMin * c.ratePerMin;
+            const savedAbs = estCost - omniCost;
+            const savedPct = Math.round((savedAbs / estCost) * 100);
+            return (
+              <div
+                key={c.name}
+                className="flex items-center gap-3 px-3 py-2.5"
+                style={{
+                  borderTop: i > 0 ? '1px solid var(--color-border)' : undefined,
+                  background: 'var(--color-surface)',
+                }}
+              >
+                <span className="flex-1 text-[12.5px] font-[500]" style={{ color: 'var(--color-text)' }}>
+                  {c.name}
+                </span>
+                <span className="w-20 text-right font-mono text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
+                  {formatUsd(estCost)}
+                </span>
+                <span className="w-16 text-right font-mono text-[12px]" style={{ color: 'var(--color-state-speaking)' }}>
+                  {formatUsd(savedAbs)}
+                </span>
+                <span
+                  className="w-14 text-right font-mono text-[12px] font-[600]"
+                  style={{ color: 'var(--color-state-speaking)' }}
+                >
+                  {savedPct}%
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <p className="text-[10.5px] leading-[1.4]" style={{ color: 'var(--color-text-faint)' }}>
+        Estimates based on public pricing as of August 2025. Actual costs vary by model selection, usage tier, and configuration.
+      </p>
     </div>
   );
 }

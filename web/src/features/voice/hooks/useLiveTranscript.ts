@@ -264,8 +264,11 @@ function useLocalCustomerCaptions(
  * Real-time captions: browser SpeechRecognition for Customer (instant) +
  * LiveKit data channel for Agent + server corrections.
  * Must run inside LiveKitRoom.
+ *
+ * `micEnabled` gates the browser mic captions — LiveKit mute alone does not
+ * stop SpeechRecognition, which opens its own capture stream.
  */
-export function useLiveTranscript(callId?: string) {
+export function useLiveTranscript(callId?: string, micEnabled = true) {
   const room = useRoomContext();
   const [lines, setLines] = useState<LiveLine[]>([]);
   const [toolEvents, setToolEvents] = useState<LiveToolEvent[]>([]);
@@ -373,7 +376,7 @@ export function useLiveTranscript(callId?: string) {
       },
       [apply],
     ),
-    Boolean(room),
+    Boolean(room) && micEnabled,
   );
 
   return { lines, ready: true, toolEvents, interrupted };

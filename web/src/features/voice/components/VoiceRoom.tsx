@@ -38,8 +38,11 @@ interface VoiceRoomProps {
 export function VoiceRoom({ agent, callId, onDisconnect, onReconnect }: VoiceRoomProps) {
   const liveState = useAgentVoiceState();
   const { audioTrack } = useVoiceAssistant();
-  const { microphoneTrack } = useLocalParticipant();
-  const { lines, ready, toolEvents, interrupted } = useLiveTranscript(callId);
+  const { microphoneTrack, isMicrophoneEnabled } = useLocalParticipant();
+  const { lines, ready, toolEvents, interrupted } = useLiveTranscript(
+    callId,
+    isMicrophoneEnabled,
+  );
 
   // A server barge signal briefly overrides the LiveKit-derived state so the
   // caller sees an explicit "Interrupted" flash before it settles to listening.
@@ -60,7 +63,10 @@ export function VoiceRoom({ agent, callId, onDisconnect, onReconnect }: VoiceRoo
   const micTrack = microphoneTrack?.track as LocalAudioTrack | undefined;
 
   const { level: agentLevel, dataRef: agentData } = useAudioLevel(agentTrack, isSpeaking);
-  const { level: micLevel, dataRef: micData } = useAudioLevel(micTrack, !isSpeaking);
+  const { level: micLevel, dataRef: micData } = useAudioLevel(
+    micTrack,
+    !isSpeaking && isMicrophoneEnabled,
+  );
   const audioLevel = isSpeaking ? agentLevel : micLevel;
   // Feed the orb the per-frame spectral data for whichever side is active.
   const audioData = isSpeaking ? agentData : micData;

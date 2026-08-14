@@ -541,7 +541,7 @@ function GreetingSuggestionPanel({
                 className="rounded-[7px] px-3 py-1.5 text-[12px] font-[500] transition-all duration-[140ms]"
                 style={{
                   background: text.trim() && !saving ? 'var(--color-accent)' : 'var(--color-surface-elevated)',
-                  color: '#000',
+                  color: text.trim() && !saving ? 'var(--fg-on-ink)' : 'var(--color-text)',
                   cursor: text.trim() && !saving ? 'pointer' : 'not-allowed',
                 }}
               >

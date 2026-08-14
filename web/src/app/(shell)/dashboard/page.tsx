@@ -123,9 +123,13 @@ function DashboardContent({ data, period }: { data: DashboardData; period: numbe
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
     >
-      {/* Row 1: KPI tiles */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      {/* Row 1: KPI strip */}
+      <div
+        className="flex overflow-hidden rounded-[10px]"
+        style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface-raised)' }}
+      >
         <HeroKPI
+          bare
           label="Total calls"
           value={stats.totalCalls}
           icon={Phone}
@@ -134,6 +138,7 @@ function DashboardContent({ data, period }: { data: DashboardData; period: numbe
           formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${d}`}
         />
         <HeroKPI
+          bare
           label="Engaged"
           value={formatPct(stats.engagementRate)}
           sub={`${engaged} conversed`}
@@ -143,6 +148,7 @@ function DashboardContent({ data, period }: { data: DashboardData; period: numbe
           formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${(d * 100).toFixed(1)}pp`}
         />
         <HeroKPI
+          bare
           label="No interaction"
           value={noInteraction}
           sub="connected, never spoke"
@@ -150,6 +156,7 @@ function DashboardContent({ data, period }: { data: DashboardData; period: numbe
           iconColor={noInteraction > 0 ? 'var(--color-state-warning)' : 'var(--color-text-faint)'}
         />
         <HeroKPI
+          bare
           label="p50 latency"
           value={formatMs(stats.p50LatencyMs)}
           valueColor={latencyColor(stats.p50LatencyMs)}
@@ -161,6 +168,7 @@ function DashboardContent({ data, period }: { data: DashboardData; period: numbe
           formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${Math.round(d)}ms`}
         />
         <HeroKPI
+          bare
           label="Cost / call"
           value={formatUsd(stats.avgCostUsd)}
           sub={`${formatUsd(stats.totalCostUsd)} total`}
@@ -317,15 +325,10 @@ function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void
 function DashboardSkeleton() {
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        {[...Array(5)].map((_, i) => (
-          <div
-            key={i}
-            className="h-[110px] animate-pulse rounded-[12px]"
-            style={{ background: 'var(--color-surface-raised)' }}
-          />
-        ))}
-      </div>
+      <div
+        className="h-[96px] animate-pulse rounded-[10px]"
+        style={{ background: 'var(--color-surface-raised)' }}
+      />
       <div
         className="h-[220px] animate-pulse rounded-[12px]"
         style={{ background: 'var(--color-surface-raised)' }}

@@ -24,6 +24,7 @@ export function CallHistoryView() {
     page,
     totalPages,
     pageSize,
+    updatePageSize,
     offset,
     filters,
     updateFilters,
@@ -70,14 +71,24 @@ export function CallHistoryView() {
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-8 py-5">
-        <div className="flex w-full flex-col gap-4">
-          <CallHistoryFiltersBar
-            filters={filters}
-            agents={agents}
-            onChange={updateFilters}
-          />
+      {/* Sticky filter strip — outside the scroll container */}
+      <div
+        className="flex-shrink-0 px-8 py-3"
+        style={{
+          background: 'var(--color-void)',
+          borderBottom: '1px solid var(--color-border)',
+        }}
+      >
+        <CallHistoryFiltersBar
+          filters={filters}
+          agents={agents}
+          onChange={updateFilters}
+        />
+      </div>
 
+      {/* Scrollable table area — pagination lives outside this container */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="px-8 py-4">
           {loading ? (
             <CallHistorySkeleton />
           ) : error ? (
@@ -85,24 +96,35 @@ export function CallHistoryView() {
           ) : calls.length === 0 ? (
             <CallHistoryEmpty />
           ) : (
-            <>
-              <CallTable
-                calls={calls}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-              />
-              <CallPagination
-                page={page}
-                totalPages={totalPages}
-                total={total}
-                pageSize={pageSize}
-                offset={offset}
-                onPrev={goPrev}
-                onNext={goNext}
-              />
-            </>
+            <CallTable
+              calls={calls}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
           )}
         </div>
+      </div>
+
+      {/* Pagination footer — height matches sidebar Settings footer so both border-tops align */}
+      <div
+        className="flex-shrink-0 flex items-center px-8"
+        style={{
+          height: 48,
+          boxSizing: 'border-box',
+          borderTop: '1px solid var(--color-border)',
+          background: 'var(--color-void)',
+        }}
+      >
+        <CallPagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          pageSize={pageSize}
+          offset={offset}
+          onPrev={goPrev}
+          onNext={goNext}
+          onPageSizeChange={updatePageSize}
+        />
       </div>
     </div>
   );

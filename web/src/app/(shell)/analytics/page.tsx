@@ -205,9 +205,13 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
     >
-      {/* Row 1: Hero KPI tiles */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* Row 1: Hero KPI strip */}
+      <div
+        className="flex overflow-hidden rounded-[10px]"
+        style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface-raised)' }}
+      >
         <HeroKPI
+          bare
           label="Total calls"
           value={stats.totalCalls}
           icon={TrendingUp}
@@ -216,6 +220,7 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
           formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${d}`}
         />
         <HeroKPI
+          bare
           label="Avg duration"
           value={formatDuration(stats.avgDurationMs)}
           icon={Clock}
@@ -226,6 +231,7 @@ function AnalyticsContent({ data, period }: { data: AnalyticsData; period: numbe
           sub={stats.avgTurnCount != null ? `Avg turns: ${stats.avgTurnCount.toFixed(1)}` : undefined}
         />
         <HeroKPI
+          bare
           label="P50 latency"
           value={formatMs(stats.p50LatencyMs)}
           valueColor={latencyColor(stats.p50LatencyMs)}
@@ -610,15 +616,10 @@ function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void
 function AnalyticsSkeleton() {
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-3 gap-4">
-        {[...Array(3)].map((_, i) => (
-          <div
-            key={i}
-            className="h-[110px] animate-pulse rounded-[12px]"
-            style={{ background: 'var(--color-surface-raised)' }}
-          />
-        ))}
-      </div>
+      <div
+        className="h-[100px] animate-pulse rounded-[10px]"
+        style={{ background: 'var(--color-surface-raised)' }}
+      />
       <div className="grid grid-cols-[2fr_1fr] gap-4">
         <div
           className="h-[240px] animate-pulse rounded-[12px]"

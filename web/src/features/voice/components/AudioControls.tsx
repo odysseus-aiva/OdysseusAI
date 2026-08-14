@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import { Track } from 'livekit-client';
-import { useLocalParticipant, useTrackToggle } from '@livekit/components-react';
+import { useLocalParticipant } from '@livekit/components-react';
 
 interface AudioControlsProps {
   onDisconnect: () => void;
@@ -26,12 +25,11 @@ export function AudioControls({
   onReconnect,
   micLevel = 0,
 }: AudioControlsProps) {
-  const { isMicrophoneEnabled } = useLocalParticipant();
-  const { toggle } = useTrackToggle({ source: Track.Source.Microphone });
+  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
 
   const toggleMic = useCallback(() => {
-    void toggle();
-  }, [toggle]);
+    void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled);
+  }, [localParticipant, isMicrophoneEnabled]);
 
   const level = Math.min(micLevel, 1);
 

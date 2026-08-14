@@ -13,6 +13,11 @@ export const voiceRoomOptions: RoomOptions = {
     echoCancellation: true,
     noiseSuppression: true,
   },
+  // Hard-stop the MediaStreamTrack on mute so the OS mic indicator clears and
+  // no residual capture reaches local analysers / captions while muted.
+  publishDefaults: {
+    stopMicTrackOnMute: true,
+  },
 };
 
 /** Identity prefix the backend uses for the agent participant. */

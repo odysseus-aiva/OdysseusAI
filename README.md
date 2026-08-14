@@ -9,7 +9,8 @@ Two engines run behind the same interface — a **swappable STT → LLM → TTS 
 speech-to-speech WebSocket. Switching an agent between them is a dropdown, and the
 dashboard prices both so you can see what the tradeoff actually costs.
 
-![OdysseusAI dashboard — call volume by outcome, p50 latency and cost per call](docs/images/dashboard.png)
+<img width="1509" height="738" alt="image" src="https://github.com/user-attachments/assets/cbace9b1-9335-4927-ba5f-49c8a3ccbcf1" />
+
 
 ## Five-minute setup
 

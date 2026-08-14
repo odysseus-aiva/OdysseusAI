@@ -60,7 +60,24 @@ interface ActiveSessionContext {
   greetingCaptionSent?: boolean;
 }
 
+/**
+ * Spoken when a session carries no authored greeting. Omni only greets when a
+ * greeting is present in its configure frame, so this has to be set on the
+ * config rather than applied at the pipeline's playback site alone.
+ */
+const DEFAULT_GREETING =
+  'Hello! I am your voice assistant. How can I help you today?';
+
+/**
+ * Applies only to sessions started without an agent profile — the Voice Console's
+ * "Default agent". Omni is the default engine there because it is the fastest
+ * path to a working conversation on a fresh install: one socket, no per-stage
+ * provider keys. Named agents are unaffected — the resolver always supplies
+ * their persisted engine, which overrides this.
+ */
 const DEFAULT_AGENT_CONFIG: AgentConfig = {
+  engine: 'omni',
+  greeting: DEFAULT_GREETING,
   systemPrompt: 'You are a helpful voice assistant.',
   turnSilenceMs: 1200,
   language: 'en',
@@ -177,8 +194,9 @@ export class VoiceAgentService {
 
     // Engine fork — the single seam between the modular pipeline and a fused
     // realtime engine. Everything above (session bookkeeping, call logs, cost,
-    // performance) is engine-agnostic and shared. Default is the pipeline, so
-    // every existing agent behaves exactly as before.
+    // performance) is engine-agnostic and shared. An agent's persisted engine
+    // always wins; DEFAULT_AGENT_ENGINE only covers records saved before the
+    // field existed.
     const engine = config.engine ?? DEFAULT_AGENT_ENGINE;
     if (engine === 'omni') {
       // Try Omni; on bring-up failure fall back to the pipeline so a PyAI
@@ -908,9 +926,7 @@ export class VoiceAgentService {
     const context = this.sessions.get(roomName);
     if (!context) return;
 
-    const greeting =
-      context.session.agentConfig.greeting ??
-      'Hello! I am your voice assistant. How can I help you today?';
+    const greeting = context.session.agentConfig.greeting ?? DEFAULT_GREETING;
 
     if (greeting === '') return;
 

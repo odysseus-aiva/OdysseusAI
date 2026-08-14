@@ -65,7 +65,7 @@ export function VoiceTab({
         title="Engine"
         description="How this agent runs. The pipeline chains swappable STT, LLM, and TTS providers. Omni is a single fused realtime engine that hears, reasons, and speaks over one connection."
       >
-        <div className="grid gap-2.5 sm:grid-cols-2">
+        <div role="radiogroup" aria-label="Engine" className="grid gap-3 sm:grid-cols-2">
           <EngineCard
             engine="pipeline"
             icon={Waypoints}
@@ -122,16 +122,28 @@ export function VoiceTab({
           title="Omni runtime"
           description="Omni manages transcription, reasoning, and speech internally — the individual STT/LLM/TTS providers below do not apply. Your prompt and enabled tools still drive its behavior."
         >
-          <Panel>
-            <div className="flex items-start gap-2.5">
-              <Cpu size={13} strokeWidth={2} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--color-accent)' }} />
-              <p className="text-[12px] leading-[1.6]" style={{ color: 'var(--color-text-muted)' }}>
-                This agent runs on PyAI Omni. Voice selection below is passed through to Omni; STT
-                and LLM provider choices are ignored. Tools configured under the Tools tab are
-                exposed to Omni and executed by this platform.
-              </p>
-            </div>
-          </Panel>
+          {/* An informational callout is chrome, so it is grey with a hairline —
+              never a tinted panel. */}
+          <div
+            className="flex items-start gap-3 rounded-md p-4"
+            style={{
+              background: 'var(--surface-recessed)',
+              border: '1px solid var(--line-hairline)',
+            }}
+          >
+            <Cpu
+              size={16}
+              strokeWidth={2}
+              aria-hidden="true"
+              className="mt-px flex-shrink-0"
+              style={{ color: 'var(--fg-muted)' }}
+            />
+            <p className="text-caption leading-body" style={{ color: 'var(--fg-body)' }}>
+              This agent runs on PyAI Omni. Voice selection below is passed through to Omni; STT
+              and LLM provider choices are ignored. Tools configured under the Tools tab are
+              exposed to Omni and executed by this platform.
+            </p>
+          </div>
         </Section>
       )}
 
@@ -231,11 +243,17 @@ export function VoiceTab({
           )}
 
           <div
-            className="mt-4 flex items-center gap-2.5 pt-3.5"
-            style={{ borderTop: '1px solid var(--color-border)' }}
+            className="mt-4 flex items-center gap-2 pt-4"
+            style={{ borderTop: '1px solid var(--line-hairline)' }}
           >
-            <Languages size={12} strokeWidth={2} style={{ color: 'var(--color-text-faint)' }} />
-            <p className="text-[11.5px]" style={{ color: 'var(--color-text-faint)' }}>
+            <Languages
+              size={16}
+              strokeWidth={2}
+              aria-hidden="true"
+              className="flex-shrink-0"
+              style={{ color: 'var(--fg-muted)' }}
+            />
+            <p className="text-caption leading-body" style={{ color: 'var(--fg-muted)' }}>
               {isOmni
                 ? 'Voice catalog fetched live from PyAI. Select a language first to filter by locale.'
                 : 'Voice preview and cloning arrive with the audio-sample endpoint. Start a voice session to hear the current configuration.'}
@@ -273,11 +291,8 @@ function ProviderPicker({
     <Panel>
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <Icon size={13} strokeWidth={2} style={{ color: 'var(--color-accent)' }} />
-          <span
-            className="text-[12px] font-[550] tracking-[-0.005em]"
-            style={{ color: 'var(--color-text)' }}
-          >
+          <Icon size={16} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--fg-muted)' }} />
+          <span className="text-caption font-medium" style={{ color: 'var(--fg-strong)' }}>
             {stage}
           </span>
         </div>
@@ -285,7 +300,7 @@ function ProviderPicker({
         <div
           role="radiogroup"
           aria-label={stage}
-          className="grid gap-2"
+          className="grid gap-3"
           style={{ gridTemplateColumns: `repeat(auto-fit, minmax(148px, 1fr))` }}
         >
           <ProviderCard
@@ -307,6 +322,39 @@ function ProviderPicker({
         </div>
       </div>
     </Panel>
+  );
+}
+
+/**
+ * Selected state on an option card is an ink border, a stepped grey fill, and an
+ * ink check badge — three monochrome signals. An accent border here is the most
+ * tempting colour-as-chrome move in the language; selection is chrome.
+ */
+const PICKER_BASE =
+  'flex cursor-pointer text-left transition-colors duration-[var(--duration-hover)] rounded-md border';
+
+function pickerStyle(selected: boolean): React.CSSProperties {
+  return {
+    borderColor: selected ? 'var(--fg-ink)' : 'var(--line-hairline)',
+    background: selected ? 'var(--surface-selected)' : 'var(--surface-card)',
+  };
+}
+
+/** 18px ink pill with an inverted glyph. Never a status colour — this is not "healthy". */
+function CheckBadge() {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex flex-shrink-0 items-center justify-center rounded-full"
+      style={{
+        width: 18,
+        height: 18,
+        background: 'var(--fg-ink)',
+        color: 'var(--fg-on-ink)',
+      }}
+    >
+      <Check size={12} strokeWidth={2.4} />
+    </span>
   );
 }
 
@@ -332,44 +380,31 @@ function EngineCard({
       role="radio"
       aria-checked={selected}
       onClick={onSelect}
-      className="group relative flex cursor-pointer items-start gap-3 rounded-[11px] px-4 py-3.5 text-left transition-all duration-[160ms]"
-      style={{
-        background: selected ? 'var(--color-accent-subtle)' : 'var(--color-surface-raised)',
-        border: `1px solid ${selected ? 'var(--color-accent-border)' : 'var(--color-border)'}`,
-      }}
-      onMouseEnter={(e) => {
-        if (!selected) e.currentTarget.style.borderColor = 'var(--color-border-strong)';
-      }}
-      onMouseLeave={(e) => {
-        if (!selected) e.currentTarget.style.borderColor = 'var(--color-border)';
-      }}
+      className={`${PICKER_BASE} items-start gap-3 p-4 ${
+        selected ? '' : 'hover:border-[var(--line-strong)]'
+      }`}
+      style={pickerStyle(selected)}
     >
       <span
-        className="flex flex-shrink-0 items-center justify-center rounded-[9px]"
+        className="flex flex-shrink-0 items-center justify-center rounded-sm"
         style={{
           width: 32,
           height: 32,
-          background: selected ? 'var(--color-accent-subtle)' : 'var(--color-surface)',
-          border: `1px solid ${selected ? 'var(--color-accent-hairline)' : 'var(--color-border)'}`,
+          background: 'var(--surface-recessed)',
+          border: '1px solid var(--line-hairline)',
+          color: selected ? 'var(--fg-ink)' : 'var(--fg-muted)',
         }}
       >
-        <Icon
-          size={15}
-          strokeWidth={2}
-          style={{ color: selected ? 'var(--color-accent)' : 'var(--color-text-faint)' }}
-        />
+        <Icon size={16} strokeWidth={2} aria-hidden="true" />
       </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex items-center justify-between gap-2">
-          <span
-            className="text-[13px] font-[550]"
-            style={{ color: selected ? 'var(--color-accent)' : 'var(--color-text)' }}
-          >
+          <span className="text-nav font-medium" style={{ color: 'var(--fg-ink)' }}>
             {title}
           </span>
-          {selected && <Check size={12} strokeWidth={2.8} style={{ color: 'var(--color-accent)' }} />}
+          {selected && <CheckBadge />}
         </span>
-        <span className="text-[11.5px] leading-[1.45]" style={{ color: 'var(--color-text-faint)' }}>
+        <span className="text-caption leading-body" style={{ color: 'var(--fg-muted)' }}>
           {note}
         </span>
       </span>
@@ -396,33 +431,18 @@ function ProviderCard({
       role="radio"
       aria-checked={selected}
       onClick={onSelect}
-      className="group relative flex cursor-pointer flex-col items-start gap-1 rounded-[9px] px-3 py-2.5 text-left transition-all duration-[160ms]"
-      style={{
-        background: selected ? 'var(--color-accent-subtle)' : 'var(--color-surface)',
-        border: `1px solid ${selected ? 'var(--color-accent-border)' : 'var(--color-border)'}`,
-      }}
-      onMouseEnter={(e) => {
-        if (!selected) e.currentTarget.style.borderColor = 'var(--color-border-strong)';
-      }}
-      onMouseLeave={(e) => {
-        if (!selected) e.currentTarget.style.borderColor = 'var(--color-border)';
-      }}
+      className={`${PICKER_BASE} flex-col items-start gap-1 px-3 py-3 ${
+        selected ? '' : 'hover:border-[var(--line-strong)]'
+      }`}
+      style={pickerStyle(selected)}
     >
       <span className="flex w-full items-center justify-between gap-2">
-        <span
-          className="text-[12.5px] font-[500]"
-          style={{ color: selected ? 'var(--color-accent)' : 'var(--color-text)' }}
-        >
+        <span className="text-nav font-medium" style={{ color: 'var(--fg-ink)' }}>
           {label}
         </span>
-        {selected && (
-          <Check size={11} strokeWidth={2.8} style={{ color: 'var(--color-accent)' }} />
-        )}
+        {selected && <CheckBadge />}
       </span>
-      <span
-        className="text-[11px] leading-[1.4]"
-        style={{ color: 'var(--color-text-faint)' }}
-      >
+      <span className="text-caption leading-body" style={{ color: 'var(--fg-muted)' }}>
         {note}
         {requiresKey && ' · needs key'}
       </span>

@@ -83,18 +83,19 @@ export function AreaChart({
         {[0.25, 0.5, 0.75, 1].map((frac) => (
           <line
             key={frac}
+            className="chart__gridline"
             x1={0} y1={padTop + chartH * (1 - frac)}
             x2={vw} y2={padTop + chartH * (1 - frac)}
-            stroke="rgba(255,255,255,0.035)"
-            strokeWidth={1}
           />
         ))}
 
+        {/* The crosshair has to out-read the gridlines it crosses, so it takes
+            the strong line rather than the hairline. */}
         {hovered !== null && (
           <line
             x1={xFor(hovered)} y1={padTop}
             x2={xFor(hovered)} y2={baseline}
-            stroke="rgba(255,255,255,0.1)"
+            stroke="var(--line-strong)"
             strokeWidth={1}
             strokeDasharray="3 3"
           />
@@ -130,7 +131,6 @@ export function AreaChart({
                 strokeLinejoin="round"
                 strokeLinecap="round"
                 vectorEffect="non-scaling-stroke"
-                opacity={0.9}
               />
               {hoveredPt && (
                 <circle
@@ -138,7 +138,7 @@ export function AreaChart({
                   cy={hoveredPt.y}
                   r={4}
                   fill={s.color}
-                  stroke="var(--color-surface)"
+                  stroke="var(--surface-card)"
                   strokeWidth={1.5}
                 />
               )}
@@ -165,12 +165,7 @@ export function AreaChart({
                 onMouseLeave={() => setHovered(null)}
               />
               {i % labelEvery === 0 && (
-                <text
-                  x={xFor(i)} y={height - 5}
-                  textAnchor="middle" fontSize={9}
-                  fill="rgba(255,255,255,0.24)"
-                  fontFamily="var(--font-mono-var, monospace)"
-                >
+                <text className="chart__tick" x={xFor(i)} y={height - 5} textAnchor="middle">
                   {formatShortDate(point.date)}
                 </text>
               )}
@@ -181,25 +176,22 @@ export function AreaChart({
 
       {hovered !== null && (
         <div
-          className="pointer-events-none absolute z-10 flex flex-col gap-1 whitespace-nowrap rounded-[8px] px-3 py-2 text-[11.5px]"
+          className="chart__tooltip"
+          role="status"
           style={{
             left: tooltipX,
             top: 0,
             transform: tooltipX > 200 ? 'translateX(-100%)' : 'translateX(4px)',
-            background: 'var(--color-surface-elevated)',
-            border: '1px solid var(--color-border-strong)',
-            boxShadow: '0 4px 16px rgb(0 0 0 / 0.28)',
-            color: 'var(--color-text)',
           }}
         >
-          <span className="font-[600]" style={{ color: 'var(--color-text-muted)' }}>
+          <span className="chart__tooltip-title" style={{ color: 'var(--fg-body)' }}>
             {formatShortDate(points[hovered].date)}
           </span>
           {series.map((s) => (
-            <span key={s.key} className="flex items-center gap-1.5">
-              <span className="flex-shrink-0 rounded-full" style={{ width: 6, height: 6, background: s.color }} />
-              <span style={{ color: 'var(--color-text-muted)' }}>{s.label}</span>
-              <span className="ml-auto pl-4 font-mono font-[600]">
+            <span key={s.key} className="flex items-center gap-2">
+              <span className="chart__swatch" style={{ background: s.color }} />
+              <span style={{ color: 'var(--fg-body)' }}>{s.label}</span>
+              <span className="num ml-auto pl-4" style={{ color: 'var(--fg-ink)' }}>
                 {format(points[hovered].values[s.key])}
               </span>
             </span>
@@ -207,11 +199,11 @@ export function AreaChart({
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+      <div className="chart__legend">
         {series.map((s) => (
-          <span key={s.key} className="flex items-center gap-1.5">
-            <span className="inline-block rounded-full" style={{ width: 7, height: 7, background: s.color }} />
-            <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)' }}>{s.label}</span>
+          <span key={s.key} className="flex items-center gap-2">
+            <span className="chart__swatch" style={{ background: s.color }} />
+            <span>{s.label}</span>
           </span>
         ))}
       </div>

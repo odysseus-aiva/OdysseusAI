@@ -104,10 +104,7 @@ export function PromptTab({
         title="System prompt"
         description="Defines the agent's role, tone, and boundaries. Written for speech — short sentences, no markdown."
         action={
-          <span
-            className="text-[11px] tabular-nums"
-            style={{ color: 'var(--color-text-faint)' }}
-          >
+          <span className="text-caption tabular-nums" style={{ color: 'var(--fg-muted)' }}>
             {charCount.toLocaleString()} chars · ~{tokenEstimate.toLocaleString()} tokens
           </span>
         }
@@ -123,24 +120,16 @@ export function PromptTab({
 
         {/* Variables the prompt references */}
         {variables.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11.5px]" style={{ color: 'var(--color-text-faint)' }}>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-caption" style={{ color: 'var(--fg-muted)' }}>
               Expects {variables.length === 1 ? 'variable' : 'variables'}:
             </span>
             {variables.map((v) => (
-              <code
-                key={v}
-                className="rounded-[5px] px-1.5 py-0.5 font-mono text-[11px]"
-                style={{
-                  background: 'var(--color-accent-subtle)',
-                  border: '1px solid var(--color-accent-hairline)',
-                  color: 'var(--color-accent)',
-                }}
-              >
+              <code key={v} className="badge font-mono">
                 {v}
               </code>
             ))}
-            <span className="text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
+            <span className="text-caption" style={{ color: 'var(--fg-muted)' }}>
               — supplied per call as dynamic variables.
             </span>
           </div>
@@ -151,7 +140,7 @@ export function PromptTab({
         title="Templates"
         description="Replace the prompt with a proven starting point, then edit."
       >
-        <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(196px, 1fr))' }}>
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(196px, 1fr))' }}>
           {TEMPLATES.map((template) => {
             const pendingConfirm = confirmTemplate === template.id;
             return (
@@ -160,52 +149,33 @@ export function PromptTab({
                 type="button"
                 onClick={() => applyTemplate(template.id)}
                 onBlur={() => pendingConfirm && setConfirmTemplate(null)}
-                className="group flex cursor-pointer flex-col items-start gap-1 rounded-[10px] px-3.5 py-3 text-left transition-all duration-[160ms]"
-                style={{
-                  background: pendingConfirm
-                    ? 'rgb(251 191 36 / 0.06)'
-                    : 'var(--color-surface-raised)',
-                  border: `1px solid ${
-                    pendingConfirm ? 'rgb(251 191 36 / 0.28)' : 'var(--color-border)'
-                  }`,
-                }}
-                onMouseEnter={(e) => {
-                  if (!pendingConfirm) {
-                    e.currentTarget.style.borderColor = 'var(--color-border-strong)';
-                    e.currentTarget.style.background = 'var(--color-surface-elevated)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!pendingConfirm) {
-                    e.currentTarget.style.borderColor = 'var(--color-border)';
-                    e.currentTarget.style.background = 'var(--color-surface-raised)';
-                  }
-                }}
+                /* Armed-to-replace is an ink border over a stepped grey fill —
+                   the same monochrome "selected" grammar the engine picker uses.
+                   The warning lives in the copy, not in a tint. */
+                className="card flex cursor-pointer flex-col items-start gap-2 text-left transition-colors duration-[var(--duration-hover)] hover:border-[var(--line-strong)]"
+                style={
+                  pendingConfirm
+                    ? {
+                        borderColor: 'var(--fg-ink)',
+                        background: 'var(--surface-selected)',
+                      }
+                    : undefined
+                }
               >
-                <span className="flex items-center gap-1.5">
+                <span className="flex items-center gap-2">
                   <FileText
-                    size={11.5}
+                    size={16}
                     strokeWidth={2}
-                    style={{
-                      color: pendingConfirm
-                        ? 'var(--color-state-warning)'
-                        : 'var(--color-text-faint)',
-                    }}
+                    aria-hidden="true"
+                    style={{ color: pendingConfirm ? 'var(--fg-ink)' : 'var(--fg-muted)' }}
                   />
-                  <span
-                    className="text-[12.5px] font-[500]"
-                    style={{
-                      color: pendingConfirm
-                        ? 'var(--color-state-warning)'
-                        : 'var(--color-text)',
-                    }}
-                  >
+                  <span className="text-nav font-medium" style={{ color: 'var(--fg-ink)' }}>
                     {template.label}
                   </span>
                 </span>
                 <span
-                  className="text-[11px] leading-[1.45]"
-                  style={{ color: 'var(--color-text-faint)' }}
+                  className="text-caption leading-body"
+                  style={{ color: pendingConfirm ? 'var(--fg-strong)' : 'var(--fg-muted)' }}
                 >
                   {pendingConfirm
                     ? 'Click again to replace your prompt'
@@ -238,19 +208,20 @@ export function PromptTab({
         title="Prompt versions"
         description="History, diffing, and rollback"
       >
-        <div className="flex items-start gap-2.5">
+        <div className="flex items-start gap-3">
           <History
-            size={13}
-            strokeWidth={1.9}
-            className="mt-0.5 flex-shrink-0"
-            style={{ color: 'var(--color-text-faint)' }}
+            size={16}
+            strokeWidth={1.8}
+            aria-hidden="true"
+            className="mt-px flex-shrink-0"
+            style={{ color: 'var(--fg-muted)' }}
           />
-          <div className="flex flex-col gap-1.5">
-            <p className="text-[12.5px] leading-[1.6]" style={{ color: 'var(--color-text-muted)' }}>
+          <div className="flex flex-col gap-2">
+            <p className="text-caption leading-body" style={{ color: 'var(--fg-body)' }}>
               Every save will create a version you can compare and roll back to, with A/B testing
               across live calls.
             </p>
-            <p className="text-[11.5px]" style={{ color: 'var(--color-text-faint)' }}>
+            <p className="text-caption leading-body" style={{ color: 'var(--fg-muted)' }}>
               Needs a <code className="font-mono">prompt_versions</code> collection and a revision
               endpoint. The current prompt saves directly to the agent record.
             </p>
@@ -259,15 +230,16 @@ export function PromptTab({
       </Collapsible>
 
       <Collapsible title="Test this prompt" description="Run a scripted conversation without placing a call">
-        <div className="flex items-start gap-2.5">
+        <div className="flex items-start gap-3">
           <Sparkles
-            size={13}
-            strokeWidth={1.9}
-            className="mt-0.5 flex-shrink-0"
-            style={{ color: 'var(--color-text-faint)' }}
+            size={16}
+            strokeWidth={1.8}
+            aria-hidden="true"
+            className="mt-px flex-shrink-0"
+            style={{ color: 'var(--fg-muted)' }}
           />
-          <div className="flex flex-col items-start gap-2.5">
-            <p className="text-[12.5px] leading-[1.6]" style={{ color: 'var(--color-text-muted)' }}>
+          <div className="flex flex-col items-start gap-3">
+            <p className="text-caption leading-body" style={{ color: 'var(--fg-body)' }}>
               Text-based prompt evaluation is not wired up yet. To verify behavior now, save your
               changes and start a voice session.
             </p>

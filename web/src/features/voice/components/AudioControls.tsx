@@ -3,7 +3,6 @@
 import { useCallback } from 'react';
 import { Track } from 'livekit-client';
 import { useLocalParticipant, useTrackToggle } from '@livekit/components-react';
-import { motion } from 'motion/react';
 
 interface AudioControlsProps {
   onDisconnect: () => void;
@@ -13,10 +12,14 @@ interface AudioControlsProps {
 }
 
 /**
- * In-call control dock: mute (with a live mic-level ring), reconnect (quiet
- * secondary), and a clearly separated, labeled End button so the destructive
- * action is never confused with mute. Mic state is read/toggled through LiveKit
- * hooks — no local mirror state.
+ * In-call control dock: mute (with a live mic-level ring), reconnect, and a
+ * clearly separated, labeled End button so the destructive action is never
+ * confused with mute. Mic state is read/toggled through LiveKit hooks — no local
+ * mirror state.
+ *
+ * End is a labeled danger button rather than a red circle: the word is what makes
+ * it unmistakable, and the tone is licensed because ending a call badly is a
+ * genuine status, not decoration.
  */
 export function AudioControls({
   onDisconnect,
@@ -30,113 +33,88 @@ export function AudioControls({
     void toggle();
   }, [toggle]);
 
+  const level = Math.min(micLevel, 1);
+
   return (
-    <div className="flex items-center gap-2.5">
-      {/* Mute — the ring pulses with real mic input while live */}
+    <div className="flex items-center" style={{ gap: 'var(--space-2)' }}>
+      {/* Mute — the ring reads real mic input while the track is open. A meter,
+          so it moves on opacity and scale and stays a neutral hairline: it is
+          chrome, and only the orb is licensed to be blue. */}
       <div className="relative flex items-center justify-center">
         {isMicrophoneEnabled && (
           <span
             aria-hidden
-            className="pointer-events-none absolute rounded-full"
+            className="pointer-events-none absolute"
             style={{
-              inset: -4,
-              border: '1.5px solid var(--color-accent)',
-              opacity: 0.18 + Math.min(micLevel, 1) * 0.6,
-              transform: `scale(${1 + Math.min(micLevel, 1) * 0.28})`,
-              transition: 'transform 90ms var(--ease-fluid), opacity 140ms var(--ease-fluid)',
+              inset: -3,
+              borderRadius: 'var(--radius-pill)',
+              border: '1px solid var(--line-strong)',
+              opacity: 0.2 + level * 0.6,
+              transform: `scale(${1 + level * 0.18})`,
+              transition:
+                'transform var(--duration-instant) var(--ease-standard), opacity var(--duration-hover) var(--ease-standard)',
             }}
           />
         )}
-        <CircleButton
+        <DockButton
           active={!isMicrophoneEnabled}
           label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
           onClick={toggleMic}
         >
           {isMicrophoneEnabled ? <MicIcon /> : <MicOffIcon />}
-        </CircleButton>
+        </DockButton>
       </div>
 
-      {/* Reconnect — quiet secondary */}
-      <CircleButton label="Reconnect" size={44} quiet onClick={onReconnect}>
+      <DockButton label="Reconnect" onClick={onReconnect}>
         <ReconnectIcon />
-      </CircleButton>
+      </DockButton>
 
       {/* Spacer keeps the destructive action visually apart from mute */}
-      <span aria-hidden style={{ width: 6 }} />
+      <span aria-hidden style={{ width: 'var(--space-2)' }} />
 
-      {/* End — labeled danger pill, unmistakable */}
-      <motion.button
+      <button
+        type="button"
         onClick={onDisconnect}
         aria-label="End conversation"
         title="End conversation"
-        whileHover={{ scale: 1.04 }}
-        whileTap={{ scale: 0.96 }}
-        transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-        className="flex h-[52px] cursor-pointer items-center gap-2 rounded-full px-5 text-[13px] font-[600]"
-        style={{
-          color: '#fff',
-          background: 'var(--color-state-error)',
-          boxShadow: '0 6px 20px rgb(251 113 133 / 0.28)',
-        }}
+        className="btn btn--danger"
       >
         <EndIcon />
         End
-      </motion.button>
+      </button>
     </div>
   );
 }
 
-function CircleButton({
+/**
+ * A 1:1 circle, which is one of the shapes a full radius is reserved for — the
+ * transport controls read as round because they are round, not because they are
+ * pills. Muted is signalled by the glyph, `aria-pressed` and a neutral held
+ * fill; a red mute button would claim something has gone wrong.
+ */
+function DockButton({
   children,
   label,
   onClick,
   active = false,
-  quiet = false,
-  size = 52,
 }: {
   children: React.ReactNode;
   label: string;
   onClick: () => void;
   active?: boolean;
-  quiet?: boolean;
-  size?: number;
 }) {
-  const accent = active ? 'var(--color-state-error)' : 'var(--color-text)';
-  const hoverBorder = active ? 'rgb(251 113 133 / 0.5)' : 'var(--color-accent-border)';
-
   return (
-    <motion.button
+    <button
+      type="button"
       onClick={onClick}
       aria-label={label}
       aria-pressed={active}
       title={label}
-      whileHover={{ scale: 1.08 }}
-      whileTap={{ scale: 0.92 }}
-      transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-      className="relative flex cursor-pointer items-center justify-center rounded-full border backdrop-blur-xl"
-      style={{
-        width: size,
-        height: size,
-        color: quiet ? 'var(--color-text-muted)' : accent,
-        background: active ? 'rgb(251 113 133 / 0.08)' : 'var(--color-glass)',
-        borderColor: active ? 'rgb(251 113 133 / 0.35)' : 'var(--color-glass-border)',
-        transition: 'border-color 180ms var(--ease-fluid), background 180ms var(--ease-fluid)',
-      }}
-      onPointerEnter={(e) => {
-        e.currentTarget.style.borderColor = hoverBorder;
-        e.currentTarget.style.background = 'var(--color-glass-hover)';
-      }}
-      onPointerLeave={(e) => {
-        e.currentTarget.style.borderColor = active
-          ? 'rgb(251 113 133 / 0.35)'
-          : 'var(--color-glass-border)';
-        e.currentTarget.style.background = active
-          ? 'rgb(251 113 133 / 0.08)'
-          : 'var(--color-glass)';
-      }}
+      className="icon-btn icon-btn--bordered icon-btn--round"
+      style={active ? { background: 'var(--surface-selected)', color: 'var(--fg-ink)' } : undefined}
     >
       {children}
-    </motion.button>
+    </button>
   );
 }
 
@@ -144,7 +122,7 @@ function CircleButton({
 
 function MicIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
       <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
       <line x1="12" y1="19" x2="12" y2="22" />
@@ -154,7 +132,7 @@ function MicIcon() {
 
 function MicOffIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <line x1="2" y1="2" x2="22" y2="22" />
       <path d="M18.89 13.23A7 7 0 0 0 19 11v-1" />
       <path d="M5 10v1a7 7 0 0 0 12 5" />
@@ -177,7 +155,7 @@ function ReconnectIcon() {
 
 function EndIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67" />
       <line x1="22" y1="2" x2="2" y2="22" />
     </svg>

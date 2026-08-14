@@ -1,7 +1,6 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
 import { ChevronRight } from 'lucide-react';
 
 /**
@@ -27,23 +26,11 @@ export function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className={`flex flex-col gap-3.5 ${className}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h2
-            className="text-[13px] font-[600] tracking-[-0.015em]"
-            style={{ color: 'var(--color-text)' }}
-          >
-            {title}
-          </h2>
-          {description && (
-            <p
-              className="max-w-[64ch] text-[12px] leading-[1.55]"
-              style={{ color: 'var(--color-text-faint)' }}
-            >
-              {description}
-            </p>
-          )}
+    <section className={`section ${className}`}>
+      <div className="section__head">
+        <div>
+          <h2 className="section__title">{title}</h2>
+          {description && <p className="section__desc max-w-[64ch]">{description}</p>}
         </div>
         {action && <div className="flex-shrink-0">{action}</div>}
       </div>
@@ -60,14 +47,7 @@ export function Panel({
   ...rest
 }: React.HTMLAttributes<HTMLDivElement> & { flush?: boolean }) {
   return (
-    <div
-      className={`rounded-[11px] ${flush ? '' : 'p-4'} ${className}`}
-      style={{
-        background: 'var(--color-surface-raised)',
-        border: '1px solid var(--color-border)',
-      }}
-      {...rest}
-    >
+    <div className={`card ${flush ? 'p-0' : ''} ${className}`} {...rest}>
       {children}
     </div>
   );
@@ -76,6 +56,10 @@ export function Panel({
 /**
  * Collapsed-by-default disclosure. Advanced and destructive settings live here
  * so the common path stays short.
+ *
+ * The disclosure does not animate its height. Nothing in this language animates
+ * layout — only background, colour and transform get transitions — and a
+ * height tween on a panel full of form controls reflows everything below it.
  */
 export function Collapsible({
   title,
@@ -92,67 +76,35 @@ export function Collapsible({
   const panelId = useId();
 
   return (
-    <div
-      className="rounded-[11px] overflow-hidden"
-      style={{
-        background: 'var(--color-surface-raised)',
-        border: '1px solid var(--color-border)',
-      }}
-    >
+    <div className="card overflow-hidden p-0">
       <button
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full cursor-pointer items-center gap-2.5 px-4 py-3 text-left transition-colors duration-[140ms]"
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'var(--color-surface-elevated)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'transparent';
-        }}
+        className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left transition-colors duration-[120ms] hover:bg-[var(--surface-hover)]"
       >
-        <motion.span
-          animate={{ rotate: open ? 90 : 0 }}
-          transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-          className="flex flex-shrink-0 items-center"
-        >
-          <ChevronRight size={13} strokeWidth={2} style={{ color: 'var(--color-text-faint)' }} />
-        </motion.span>
-        <span className="flex min-w-0 flex-col gap-0.5">
-          <span
-            className="text-[12.5px] font-[500] tracking-[-0.01em]"
-            style={{ color: 'var(--color-text)' }}
-          >
-            {title}
-          </span>
-          {description && (
-            <span className="text-[11.5px]" style={{ color: 'var(--color-text-faint)' }}>
-              {description}
-            </span>
-          )}
+        <ChevronRight
+          size={16}
+          strokeWidth={2}
+          aria-hidden="true"
+          className="flex-shrink-0 transition-transform duration-[120ms]"
+          style={{
+            color: 'var(--fg-muted)',
+            transform: open ? 'rotate(90deg)' : undefined,
+          }}
+        />
+        <span className="flex min-w-0 flex-col">
+          <span className="section__title">{title}</span>
+          {description && <span className="section__desc">{description}</span>}
         </span>
       </button>
 
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            id={panelId}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-            style={{ overflow: 'hidden' }}
-          >
-            <div
-              className="px-4 pb-4 pt-1"
-              style={{ borderTop: '1px solid var(--color-border)' }}
-            >
-              <div className="pt-3.5">{children}</div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {open && (
+        <div id={panelId} className="px-4 pb-4" style={{ borderTop: '1px solid var(--line-hairline)' }}>
+          <div className="pt-4">{children}</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -161,6 +113,10 @@ export function Collapsible({
  * Empty / reserved state. Used both for genuinely empty lists and for tabs
  * whose backend does not exist yet, so unbuilt areas read as intentional
  * rather than broken.
+ *
+ * There is no display type in an empty state here: title and body are both
+ * 15px and hierarchy comes from weight and colour alone. The border is solid
+ * and hairline-weight — a dashed strong border reads as a drop target.
  */
 export function EmptyState({
   icon: Icon,
@@ -177,53 +133,25 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div
-      className="flex flex-col items-center gap-4 rounded-[12px] px-6 py-14 text-center"
-      style={{ border: '1px dashed var(--color-border)' }}
-    >
-      <div
-        className="flex items-center justify-center rounded-[12px]"
-        style={{
-          width: 42,
-          height: 42,
-          background: 'var(--color-surface-raised)',
-          border: '1px solid var(--color-border)',
-        }}
-      >
-        <Icon size={17} strokeWidth={1.7} style={{ color: 'var(--color-text-faint)' }} />
-      </div>
+    <div className="empty-state">
+      <span className="empty-state__tile" aria-hidden="true">
+        <Icon size={20} strokeWidth={1.7} />
+      </span>
 
-      <div className="flex flex-col gap-1.5">
-        <p className="text-[13.5px] font-[550]" style={{ color: 'var(--color-text)' }}>
-          {title}
-        </p>
-        <p
-          className="max-w-[46ch] text-[12.5px] leading-[1.6]"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
-          {description}
-        </p>
-      </div>
+      <h3 className="empty-state__title">{title}</h3>
+      <p className="empty-state__body">{description}</p>
 
       {planned && planned.length > 0 && (
-        <ul className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+        <ul className="mb-4 flex flex-wrap items-center justify-center gap-2">
           {planned.map((item) => (
-            <li
-              key={item}
-              className="rounded-[6px] px-2 py-1 text-[11px] font-[450]"
-              style={{
-                background: 'var(--color-surface-raised)',
-                border: '1px solid var(--color-border)',
-                color: 'var(--color-text-faint)',
-              }}
-            >
+            <li key={item} className="badge">
               {item}
             </li>
           ))}
         </ul>
       )}
 
-      {action}
+      {action && <div className="empty-state__actions">{action}</div>}
     </div>
   );
 }
@@ -240,12 +168,12 @@ export function DataRow({
 }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-2">
-      <span className="flex-shrink-0 text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
+      <span className="flex-shrink-0 text-[13px]" style={{ color: 'var(--fg-muted)' }}>
         {label}
       </span>
       <span
-        className={`min-w-0 truncate text-right text-[12px] ${mono ? 'font-mono' : ''}`}
-        style={{ color: 'var(--color-text)' }}
+        className={`min-w-0 truncate text-right text-[13px] ${mono ? 'font-mono' : ''}`}
+        style={{ color: 'var(--fg-ink)' }}
       >
         {children}
       </span>

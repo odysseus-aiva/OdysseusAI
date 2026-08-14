@@ -4,12 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { LiveKitRoom } from '@livekit/components-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useTheme } from '@/components/ThemeProvider';
 import { fetchAgents, type Agent } from '@/lib/api/agents';
 import { voiceRoomOptions } from '@/lib/livekit/config';
 import { useVoiceSession } from '../hooks/useVoiceSession';
 import { resolveHero } from '../hero-content';
-import { resolveOrbState } from '../orb-states';
 import type { VoiceState } from '../types';
 import { ParticleOrb } from './ParticleOrb';
 import { ScrambleText } from './ScrambleText';
@@ -17,11 +15,10 @@ import { StatusIndicator, type StatusDetail } from './StatusIndicator';
 import { VoiceConsole } from './VoiceConsole';
 import { VoiceRoom } from './VoiceRoom';
 
-const ENTER = { duration: 0.72, ease: [0.22, 1, 0.36, 1] as const };
+const ENTER = { duration: 0.38, ease: [0.22, 1, 0.36, 1] as const };
 
 export function VoiceExperience() {
   const searchParams = useSearchParams();
-  const { theme } = useTheme();
   const { phase, connection, error, start, stop, signalAgentError } = useVoiceSession();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [agentsLoaded, setAgentsLoaded] = useState(false);
@@ -106,74 +103,8 @@ export function VoiceExperience() {
     return hero.providers.map((p) => ({ label: p.label, value: p.value }));
   }, [hero.providers]);
 
-  const ambientColor = resolveOrbState(landingState, theme).colorBase;
-
   return (
     <div className="relative h-full w-full overflow-hidden">
-      {/* Ambient scene — a breathing gradient field, separate from the orb.
-          Its hue follows the active state so the whole page shifts together. */}
-      <motion.div
-        className="pointer-events-none absolute inset-0"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: mounted ? 1 : 0 }}
-        transition={{ duration: 1.8, ease: 'easeOut' }}
-      >
-        {/* Permanent orb spotlight — always-on, gives field something to contrast */}
-        <div
-          className="absolute"
-          style={{
-            width: 600,
-            height: 600,
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -52%)',
-            background: `radial-gradient(circle, ${ambientColor}0e 0%, transparent 55%)`,
-            filter: 'blur(1px)',
-            transition: 'background 900ms var(--ease-fluid)',
-          }}
-        />
-
-        {/* Breathing primary bloom — amplifies orb rhythm */}
-        <motion.div
-          className="absolute"
-          style={{
-            width: 800,
-            height: 800,
-            top: '50%',
-            left: '50%',
-            x: '-50%',
-            y: '-52%',
-            background: `radial-gradient(circle, ${ambientColor}0a 0%, transparent 52%)`,
-            transition: 'background 900ms var(--ease-fluid)',
-          }}
-          animate={{ scale: [1, 1.1, 1], opacity: [0.6, 1, 0.6] }}
-          transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
-        />
-
-        {/* Secondary bloom — violet floor warmth */}
-        <motion.div
-          className="absolute"
-          style={{
-            width: 560,
-            height: 560,
-            bottom: '-8%',
-            right: '-6%',
-            background: 'radial-gradient(circle, rgb(139 92 246 / 0.055) 0%, transparent 58%)',
-          }}
-          animate={{ scale: [1, 1.12, 1], opacity: [0.5, 0.9, 0.5] }}
-          transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
-        />
-        {/* Horizon gradient — barely visible, implies depth floor */}
-        <div
-          className="absolute w-full"
-          style={{
-            height: 80,
-            bottom: '20%',
-            background: 'linear-gradient(0deg, rgb(56 232 255 / 0.018) 0%, transparent 100%)',
-          }}
-        />
-      </motion.div>
-
       <AnimatePresence mode="wait">
         {isConnected ? (
           <motion.div
@@ -182,7 +113,7 @@ export function VoiceExperience() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.22, ease: ENTER.ease }}
           >
             <LiveKitRoom
               serverUrl={connection.serverUrl}
@@ -202,48 +133,47 @@ export function VoiceExperience() {
         ) : (
           <motion.div
             key="landing"
-            className="absolute inset-0 flex flex-col items-center justify-center overflow-y-auto px-6 py-10"
+            className="absolute inset-0 flex flex-col items-center justify-center overflow-y-auto px-6 py-8"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0, scale: 0.97 }}
-            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.22, ease: ENTER.ease }}
           >
             {/* ── Hero ── */}
-            <div className="flex flex-col items-center gap-4 mb-12 text-center">
-              {/* Eyebrow — live status dot + decoding state label */}
+            <div className="mb-8 flex flex-col items-center gap-4 text-center">
+              {/* Eyebrow — a caption, not a status: the dot and the state label
+                  live in the StatusIndicator under the orb. */}
               <motion.div
-                className="flex items-center gap-2.5"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: mounted ? 1 : 0, y: mounted ? 0 : 10 }}
                 transition={{ ...ENTER, delay: 0.08 }}
               >
-                <motion.span
-                  className="h-[6px] w-[6px] rounded-full"
-                  style={{
-                    background: ambientColor,
-                    boxShadow: `0 0 8px ${ambientColor}`,
-                    transition: 'background 500ms var(--ease-fluid)',
-                  }}
-                  animate={{ opacity: [1, 0.35, 1], scale: [1, 0.82, 1] }}
-                  transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-                />
                 <ScrambleText
                   key={hero.eyebrow}
-                  text={hero.eyebrow.toUpperCase()}
+                  text={hero.eyebrow}
                   delay={mounted ? 0 : 280}
                   duration={620}
-                  className="text-[10.5px] font-[600] uppercase tracking-[0.3em]"
-                  style={{ color: ambientColor, transition: 'color 500ms var(--ease-fluid)' }}
+                  style={{
+                    fontSize: 'var(--text-caption)',
+                    fontWeight: 'var(--weight-medium)',
+                    color: 'var(--fg-muted)',
+                  }}
                 />
               </motion.div>
 
               {/* Headline — word-by-word slide-up, re-keyed so it re-animates
-                  when the context (and therefore the copy) changes */}
+                  when the context (and therefore the copy) changes. The display
+                  face is licensed for this one line and nothing else. */}
               <h1
-                className="flex flex-wrap items-baseline justify-center gap-x-[0.24em] font-[600] leading-[1.04] tracking-[-0.045em]"
+                className="flex flex-wrap items-baseline justify-center gap-x-[0.2em]"
                 style={{
-                  color: 'var(--color-text)',
-                  fontSize: 'clamp(28px, 5vw, 44px)',
+                  margin: 0,
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 'var(--text-display-xl)',
+                  fontWeight: 'var(--weight-light)',
+                  letterSpacing: 'var(--tracking-display)',
+                  lineHeight: 'var(--leading-display)',
+                  color: 'var(--fg-ink)',
                 }}
               >
                 {hero.headline.map((word, i) => (
@@ -255,7 +185,7 @@ export function VoiceExperience() {
                       className="inline-block"
                       initial={{ y: '115%' }}
                       animate={{ y: mounted ? '0%' : '115%' }}
-                      transition={{ ...ENTER, delay: 0.16 + i * 0.07 }}
+                      transition={{ ...ENTER, delay: 0.12 + i * 0.05 }}
                     >
                       {word}
                     </motion.span>
@@ -264,20 +194,22 @@ export function VoiceExperience() {
               </h1>
 
               {/* Subline — swaps with the context, cross-faded */}
-              <div className="flex min-h-[42px] items-start justify-center">
+              <div className="flex min-h-12 items-start justify-center">
                 <AnimatePresence mode="wait">
                   <motion.p
                     key={hero.subline}
-                    className="max-w-[42ch] text-[13.5px] font-[400] leading-[1.6]"
                     style={{
-                      color: phase === 'error'
-                        ? 'var(--color-state-error)'
-                        : 'var(--color-text-muted)',
+                      margin: 0,
+                      maxWidth: 'var(--measure-prose)',
+                      fontSize: 'var(--text-body)',
+                      lineHeight: 'var(--leading-body)',
+                      color:
+                        phase === 'error' ? 'var(--status-error)' : 'var(--fg-body)',
                     }}
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: mounted ? 1 : 0, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
-                    transition={{ ...ENTER, delay: mounted ? 0 : 0.44, duration: 0.44 }}
+                    transition={{ ...ENTER, delay: mounted ? 0 : 0.44, duration: 0.22 }}
                   >
                     {hero.subline}
                   </motion.p>
@@ -288,19 +220,19 @@ export function VoiceExperience() {
             {/* ── Orb — state-aware WebGL particle sphere ── */}
             <motion.div
               className="flex w-full max-w-[320px] justify-center"
-              initial={{ opacity: 0, scale: 0.82, filter: 'blur(18px)' }}
-              animate={{ opacity: mounted ? 1 : 0, scale: 1, filter: 'blur(0px)' }}
-              transition={{ duration: 1.05, delay: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              initial={{ opacity: 0, scale: 0.86 }}
+              animate={{ opacity: mounted ? 1 : 0, scale: 1 }}
+              transition={{ duration: 0.38, delay: 0.16, ease: ENTER.ease }}
             >
               <ParticleOrb size={320} state={landingState} />
             </motion.div>
 
             {/* ── Status + console — one vertical stack under the orb ── */}
-            <div className="mt-11 flex flex-col items-center gap-7">
+            <div className="mt-8 flex flex-col items-center gap-6">
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: mounted ? 1 : 0, y: mounted ? 0 : 10 }}
-                transition={{ ...ENTER, delay: 0.4 }}
+                transition={{ ...ENTER, delay: 0.28 }}
               >
                 <StatusIndicator state={landingState} details={statusDetails} />
               </motion.div>
@@ -308,7 +240,7 @@ export function VoiceExperience() {
               <motion.div
                 initial={{ opacity: 0, y: 14 }}
                 animate={{ opacity: mounted ? 1 : 0, y: mounted ? 0 : 14 }}
-                transition={{ ...ENTER, delay: 0.48 }}
+                transition={{ ...ENTER, delay: 0.34 }}
               >
                 {agentsLoaded && (
                   <VoiceConsole

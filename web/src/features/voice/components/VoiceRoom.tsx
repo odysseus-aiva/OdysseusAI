@@ -18,6 +18,8 @@ import { StatusIndicator } from './StatusIndicator';
 import { AudioControls } from './AudioControls';
 import { LiveTranscriptPanel } from './LiveTranscriptPanel';
 
+const ENTER_EASE = [0.22, 1, 0.36, 1] as const;
+
 interface VoiceRoomProps {
   /** Resolved agent for the session — drives call meta + engine chip. */
   agent?: Agent | null;
@@ -29,9 +31,9 @@ interface VoiceRoomProps {
 
 /**
  * Rendered INSIDE the LiveKit RoomContext. A bounded "call stage": an orb hero
- * column (identity + seated orb + state + control dock) paired with a
- * full-height live-transcript rail. RoomAudioRenderer transparently plays the
- * agent's audio track — the user hears the agent with zero manual wiring.
+ * column (identity + orb + state + control dock) paired with a full-height
+ * live-transcript rail. RoomAudioRenderer transparently plays the agent's audio
+ * track — the user hears the agent with zero manual wiring.
  */
 export function VoiceRoom({ agent, callId, onDisconnect, onReconnect }: VoiceRoomProps) {
   const liveState = useAgentVoiceState();
@@ -71,8 +73,8 @@ export function VoiceRoom({ agent, callId, onDisconnect, onReconnect }: VoiceRoo
       {/* Plays all remote (agent) audio automatically */}
       <RoomAudioRenderer />
 
-      <div className="mx-auto flex h-full w-full max-w-[1180px] flex-col px-5 py-5 sm:px-6 lg:py-7">
-        <div className="flex min-h-0 flex-1 flex-col gap-6 lg:flex-row lg:gap-9">
+      <div className="mx-auto flex h-full w-full max-w-[1180px] flex-col px-5 py-5 sm:px-6 lg:py-6">
+        <div className="flex min-h-0 flex-1 flex-col gap-6 lg:flex-row lg:gap-8">
           {/* ── Orb hero column ── */}
           <div className="flex min-h-0 flex-1 flex-col items-center gap-5">
             <CallMeta
@@ -82,30 +84,39 @@ export function VoiceRoom({ agent, callId, onDisconnect, onReconnect }: VoiceRoo
               live={voiceState !== 'disconnected' && voiceState !== 'error'}
             />
 
-            {/* Center stage — grows to absorb space so nothing floats */}
+            {/* Center stage — grows to absorb space so nothing floats. The orb
+                brings its own wash, halo and hairline ring, so there is nothing
+                to seat it on here. */}
             <div className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-6">
-              <OrbStage level={audioLevel} active={voiceState === 'listening' || isSpeaking}>
+              <div
+                className="flex aspect-square w-full items-center justify-center"
+                style={{ maxWidth: 300 }}
+              >
                 <ParticleOrb
                   size={264}
                   state={voiceState}
                   audioLevel={audioLevel}
                   audioData={audioData}
                 />
-              </OrbStage>
+              </div>
 
               <StatusIndicator state={voiceState} />
             </div>
 
-            {/* Control dock — pinned to the bottom of the column */}
+            {/* Control dock — pinned to the bottom of the column. It sits in the
+                column rather than floating over it, so it separates with a
+                hairline: the composer and the orb are the only two things in
+                this language that cast anything. */}
             <motion.div
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-              className="flex items-center rounded-full px-3 py-2.5"
+              transition={{ delay: 0.12, duration: 0.38, ease: ENTER_EASE }}
+              className="flex items-center"
               style={{
-                background: 'var(--color-glass)',
-                border: '1px solid var(--color-glass-border)',
-                backdropFilter: 'blur(14px)',
+                padding: 'var(--space-1)',
+                background: 'var(--surface-card)',
+                border: '1px solid var(--line-hairline)',
+                borderRadius: 'var(--radius-lg)',
               }}
             >
               <AudioControls
@@ -121,7 +132,7 @@ export function VoiceRoom({ agent, callId, onDisconnect, onReconnect }: VoiceRoo
             className="flex min-h-0 w-full flex-1 items-start lg:w-[380px] lg:flex-none"
             initial={{ opacity: 0, x: 18 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.28, duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ delay: 0.18, duration: 0.38, ease: ENTER_EASE }}
           >
             <LiveTranscriptPanel
               lines={lines}
@@ -156,101 +167,59 @@ function CallMeta({
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.38, ease: ENTER_EASE }}
       className="flex items-center gap-3"
     >
       <span
-        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-[10px]"
+        className="flex h-8 w-8 flex-shrink-0 items-center justify-center"
         style={{
-          background: 'var(--color-accent-soft)',
-          border: '1px solid var(--color-accent-ring)',
+          background: 'var(--surface-selected)',
+          border: '1px solid var(--line-hairline)',
+          borderRadius: 'var(--radius-md)',
         }}
       >
-        <Bot size={15} strokeWidth={2} style={{ color: 'var(--color-accent)' }} />
+        <Bot size={16} strokeWidth={2} aria-hidden="true" style={{ color: 'var(--fg-ink)' }} />
       </span>
       <div className="flex min-w-0 flex-col">
         <span
-          className="truncate text-[13.5px] font-[600] leading-tight tracking-[-0.01em]"
-          style={{ color: 'var(--color-text)' }}
+          className="truncate"
+          style={{
+            fontSize: 'var(--text-nav)',
+            fontWeight: 'var(--weight-medium)',
+            lineHeight: 'var(--leading-nav)',
+            color: 'var(--fg-ink)',
+          }}
         >
           {agentName}
         </span>
-        <span
-          className="text-[10px] font-[500] uppercase tracking-[0.11em]"
-          style={{ color: 'var(--color-text-faint)' }}
-        >
+        <span style={{ fontSize: 'var(--text-caption)', color: 'var(--fg-muted)' }}>
           {engineLabel}
         </span>
       </div>
 
-      <span aria-hidden className="h-6 w-px" style={{ background: 'var(--color-border)' }} />
+      <span
+        aria-hidden="true"
+        className="h-6 w-px"
+        style={{ background: 'var(--line-hairline)' }}
+      />
 
-      <div className="flex items-center gap-1.5">
-        <span className="relative flex h-1.5 w-1.5" aria-hidden style={{ opacity: live ? 1 : 0.4 }}>
-          {live && (
-            <span
-              className="absolute inset-0 animate-ping rounded-full opacity-60"
-              style={{ background: 'var(--color-state-error)' }}
-            />
-          )}
-          <span
-            className="relative h-1.5 w-1.5 rounded-full"
-            style={{ background: live ? 'var(--color-state-error)' : 'var(--color-text-faint)' }}
-          />
-        </span>
+      {/* The live signal is the dot's rhythm, not its hue — a red dot next to a
+          healthy call reads as a fault. */}
+      <div className="flex items-center gap-2">
         <span
-          className="font-mono text-[13px] tabular-nums tracking-[0.02em]"
-          style={{ color: 'var(--color-text-muted)' }}
+          aria-hidden="true"
+          className={`chip__dot chip__dot--${live ? 'success' : 'neutral'}`}
+          style={live ? { animation: 'dotPulse 2.4s var(--ease-standard) infinite' } : undefined}
+        />
+        <span className="sr-only">{live ? 'Call in progress' : 'Call ended'}</span>
+        <span
+          className="num"
+          style={{ fontSize: 'var(--text-caption)', color: 'var(--fg-body)' }}
         >
           {elapsed}
         </span>
       </div>
     </motion.div>
-  );
-}
-
-// ─── Orb stage ────────────────────────────────────────────────────────────────
-
-/** Seats the orb on a soft radial stage that breathes with live audio. */
-function OrbStage({
-  children,
-  level,
-  active,
-}: {
-  children: React.ReactNode;
-  level: number;
-  active: boolean;
-}) {
-  const glow = active ? 0.35 + Math.min(level, 1) * 0.5 : 0.28;
-  return (
-    <div className="relative flex aspect-square w-full max-w-[300px] items-center justify-center">
-      {/* Ambient stage glow behind the orb — grounds it instead of floating */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute rounded-full"
-        style={{
-          inset: '6%',
-          background:
-            'radial-gradient(circle at 50% 52%, var(--color-accent-soft), transparent 62%)',
-          opacity: glow,
-          filter: 'blur(14px)',
-          transition: 'opacity 200ms var(--ease-fluid)',
-        }}
-      />
-      {/* Faint seating ring */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute rounded-full"
-        style={{
-          inset: '2%',
-          border: '1px solid var(--color-accent-hairline)',
-          opacity: 0.5,
-        }}
-      />
-      <div className="relative z-10 flex h-full w-full items-center justify-center">
-        {children}
-      </div>
-    </div>
   );
 }
 

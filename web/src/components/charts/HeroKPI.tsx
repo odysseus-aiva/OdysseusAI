@@ -30,11 +30,6 @@ export function HeroKPI({
   const improved = lowerIsBetter
     ? delta != null && delta.absolute < 0
     : delta != null && delta.absolute > 0;
-  const deltaColor = showDelta
-    ? improved
-      ? 'var(--color-state-speaking)'
-      : 'var(--color-state-error)'
-    : 'var(--color-text-faint)';
 
   const deltaText =
     showDelta && delta
@@ -45,85 +40,52 @@ export function HeroKPI({
           : `${delta.absolute > 0 ? '+' : ''}${Math.round(delta.absolute * 100) / 100}`
       : null;
 
+  /* `valueColor` and `iconColor` are accepted for call-site compatibility and
+     deliberately ignored: a metric value is not a status, and a coloured
+     numeral is the loudest possible colour-as-chrome violation. Direction is
+     carried by the delta arrow, which is the one thing here allowed a hue. */
+  const foot = (
+    <div className="stat__foot flex-wrap gap-x-2 gap-y-1">
+      {showDelta && deltaText && (
+        <span
+          className="stat__delta inline-flex items-center gap-1"
+          data-direction={improved ? 'up' : 'down'}
+        >
+          <span aria-hidden="true">{delta!.absolute > 0 ? '↑' : '↓'}</span> {deltaText}
+        </span>
+      )}
+      {sub && <span>{sub}</span>}
+    </div>
+  );
+
+  const head = (
+    <div className="flex items-center justify-between">
+      <span className="stat__label">{label}</span>
+      <Icon size={16} strokeWidth={1.75} aria-hidden="true" style={{ color: 'var(--fg-muted)' }} />
+    </div>
+  );
+
   if (bare) {
     return (
       <div
         className="flex flex-1 flex-col gap-2 px-6 py-4"
-        style={{ borderRight: '1px solid var(--color-border)' }}
+        style={{ borderRight: '1px solid var(--line-hairline)' }}
       >
-        <div className="flex items-center justify-between">
-          <span
-            className="text-[11px] font-[500] uppercase tracking-[0.07em]"
-            style={{ color: 'var(--color-text-faint)' }}
-          >
-            {label}
-          </span>
-          <Icon size={13} strokeWidth={1.75} style={{ color: iconColor }} />
-        </div>
-        <div className="flex flex-col gap-1">
-          <span
-            className="text-[28px] font-[600] leading-none tracking-[-0.04em]"
-            style={{ color: valueColor ?? 'var(--color-text)' }}
-          >
-            {value}
-          </span>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            {showDelta && deltaText && (
-              <span
-                className="inline-flex items-center gap-0.5 font-mono text-[11px] font-[600]"
-                style={{ color: deltaColor }}
-              >
-                {delta!.absolute > 0 ? '↑' : '↓'} {deltaText}
-              </span>
-            )}
-            {sub && (
-              <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-                {sub}
-              </span>
-            )}
-          </div>
+        {head}
+        <div>
+          <div className="stat__value mt-0">{value}</div>
+          {foot}
         </div>
       </div>
     );
   }
 
   return (
-    <div
-      className="flex flex-col gap-3 rounded-[12px] p-5"
-      style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
-    >
-      <div className="flex items-center justify-between">
-        <span
-          className="text-[11px] font-[500] uppercase tracking-[0.07em]"
-          style={{ color: 'var(--color-text-faint)' }}
-        >
-          {label}
-        </span>
-        <Icon size={14} strokeWidth={1.75} style={{ color: iconColor }} />
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <span
-          className="text-[36px] font-[600] leading-none tracking-[-0.04em]"
-          style={{ color: valueColor ?? 'var(--color-text)' }}
-        >
-          {value}
-        </span>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          {showDelta && deltaText && (
-            <span
-              className="inline-flex items-center gap-0.5 font-mono text-[11px] font-[600]"
-              style={{ color: deltaColor }}
-            >
-              {delta!.absolute > 0 ? '↑' : '↓'} {deltaText}
-            </span>
-          )}
-          {sub && (
-            <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-              {sub}
-            </span>
-          )}
-        </div>
+    <div className="stat flex flex-col gap-3">
+      {head}
+      <div>
+        <div className="stat__value mt-0">{value}</div>
+        {foot}
       </div>
     </div>
   );

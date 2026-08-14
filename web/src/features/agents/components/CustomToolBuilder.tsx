@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Plus, Trash2, Play, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Play } from 'lucide-react';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
 import { Field, Input, Textarea, Select, Switch } from '@/components/ui/Field';
@@ -172,15 +172,11 @@ export function CustomToolBuilder({
             Cancel
           </Button>
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={handleTest} disabled={isTesting}>
-              {isTesting ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                <Play size={13} strokeWidth={2} />
-              )}
+            <Button variant="secondary" size="sm" onClick={handleTest} loading={isTesting}>
+              {!isTesting && <Play size={16} strokeWidth={2} aria-hidden="true" />}
               Test
             </Button>
-            <Button size="sm" onClick={handleSave}>
+            <Button variant="primary" size="sm" onClick={handleSave}>
               {editing ? 'Save changes' : 'Add function'}
             </Button>
           </div>
@@ -188,18 +184,20 @@ export function CustomToolBuilder({
       }
     >
       <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="field__row">
           <Field label="Function name" hint="How the model refers to the tool" error={nameError}>
             <Input
               value={name}
               disabled={editing}
               placeholder="lookup_customer"
+              aria-invalid={nameError ? true : undefined}
               onChange={(e) => setName(e.target.value)}
             />
           </Field>
           <Field label="Timeout (ms)" hint="Max 30000">
             <Input
               type="number"
+              inputMode="numeric"
               value={timeoutMs}
               onChange={(e) => setTimeoutMs(e.target.value)}
             />
@@ -217,7 +215,11 @@ export function CustomToolBuilder({
 
         <div className="grid grid-cols-[110px_1fr] gap-3">
           <Field label="Method">
-            <Select value={method} onChange={(e) => setMethod(e.target.value as CustomToolHttpMethod)}>
+            <Select
+              aria-label="HTTP method"
+              value={method}
+              onChange={(e) => setMethod(e.target.value as CustomToolHttpMethod)}
+            >
               {METHODS.map((m) => (
                 <option key={m} value={m}>
                   {m}
@@ -253,21 +255,21 @@ export function CustomToolBuilder({
         {bodyAllowed && (
           <Field label="Request body template (JSON)" hint="{{arg}} placeholders are interpolated">
             <Textarea
+              mono
               rows={4}
               value={bodyText}
               placeholder={'{\n  "query": "{{q}}"\n}'}
               onChange={(e) => setBodyText(e.target.value)}
-              style={{ fontFamily: 'var(--font-mono)' }}
             />
           </Field>
         )}
 
         <Field label="Input schema (JSON Schema)" hint="Arguments the model must produce">
           <Textarea
+            mono
             rows={6}
             value={schemaText}
             onChange={(e) => setSchemaText(e.target.value)}
-            style={{ fontFamily: 'var(--font-mono)' }}
           />
         </Field>
 
@@ -280,7 +282,10 @@ export function CustomToolBuilder({
           valuePlaceholder="current.temperature_2m"
         />
 
-        <Field label="How the agent should use the result" hint="Optional guidance appended to the tool output">
+        <Field
+          label="How the agent should use the result"
+          hint="Optional guidance appended to the tool output"
+        >
           <Textarea
             rows={2}
             value={resultInstruction}
@@ -289,10 +294,7 @@ export function CustomToolBuilder({
           />
         </Field>
 
-        <div
-          className="flex flex-col gap-3 rounded-[10px] p-3"
-          style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface-raised)' }}
-        >
+        <div className="card flex flex-col gap-3">
           <Switch
             checked={speak}
             onChange={setSpeak}
@@ -311,37 +313,27 @@ export function CustomToolBuilder({
         </div>
 
         {/* Test harness */}
-        <div className="flex flex-col gap-2 pt-1">
+        <div className="flex flex-col gap-2">
           <Field label="Test arguments (JSON)" hint="Sent as the tool's input when you press Test">
             <Textarea
+              mono
               rows={3}
               value={argsText}
               onChange={(e) => setArgsText(e.target.value)}
-              style={{ fontFamily: 'var(--font-mono)' }}
             />
           </Field>
           {testResult && (
-            <pre
-              className="max-h-64 overflow-auto rounded-[8px] p-3 text-[11.5px]"
-              style={{
-                background: 'var(--color-surface)',
-                border: '1px solid var(--color-border)',
-                color: 'var(--color-text-muted)',
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
-              {testResult}
-            </pre>
+            <pre className="code-block max-h-64">{testResult}</pre>
           )}
         </div>
 
         {formError && (
-          <p className="text-[12px]" style={{ color: 'var(--color-state-error)' }}>
+          <p role="alert" className="field__error">
             {formError}
           </p>
         )}
         {headers.some((h) => h.value === SECRET_MASK) && (
-          <p className="text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
+          <p className="text-caption leading-body" style={{ color: 'var(--fg-muted)' }}>
             Masked header values are kept as-is unless you replace them.
           </p>
         )}
@@ -372,38 +364,39 @@ function KeyValueEditor({
 
   return (
     <Field label={label} hint={hint}>
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         {rows.map((row, i) => (
-          <div key={i} className="flex items-center gap-1.5">
+          <div key={i} className="flex items-center gap-2">
             <Input
               value={row.key}
               placeholder={keyPlaceholder}
+              aria-label={`${label} name ${i + 1}`}
               onChange={(e) => update(i, { key: e.target.value })}
             />
             <Input
               value={row.value}
               type={secret ? 'password' : 'text'}
+              autoComplete={secret ? 'off' : undefined}
               placeholder={valuePlaceholder}
+              aria-label={`${label} value ${i + 1}`}
               onChange={(e) => update(i, { value: e.target.value })}
             />
             <button
               type="button"
-              aria-label="Remove row"
+              aria-label={`Remove ${label.toLowerCase()} row ${i + 1}`}
               onClick={() => onChange(rows.filter((_, idx) => idx !== i))}
-              className="flex flex-shrink-0 items-center justify-center rounded-[6px]"
-              style={{ width: 30, height: 30, color: 'var(--color-text-faint)' }}
+              className="icon-btn"
             >
-              <Trash2 size={13} strokeWidth={2} />
+              <Trash2 size={16} strokeWidth={2} aria-hidden="true" />
             </button>
           </div>
         ))}
         <button
           type="button"
           onClick={() => onChange([...rows, { key: '', value: '' }])}
-          className="flex items-center gap-1.5 self-start rounded-[7px] px-2 py-1 text-[12px]"
-          style={{ color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}
+          className="btn btn--secondary btn--sm self-start"
         >
-          <Plus size={12} strokeWidth={2.2} />
+          <Plus size={16} strokeWidth={2} aria-hidden="true" />
           Add
         </button>
       </div>

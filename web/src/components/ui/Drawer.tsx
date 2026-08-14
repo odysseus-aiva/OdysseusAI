@@ -101,12 +101,13 @@ export function Drawer({
     <AnimatePresence>
       {open && (
         <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={title}>
-          {/* Scrim */}
+          {/* On light the scrim bleaches rather than dims — a translucent
+              neutral, not black at 50%. The --scrim token carries that. */}
           <motion.button
             type="button"
             aria-label="Close panel"
             className="absolute inset-0 cursor-default"
-            style={{ background: 'rgb(3 4 8 / 0.62)', backdropFilter: 'blur(2px)' }}
+            style={{ background: 'var(--scrim)', backdropFilter: 'blur(3px)' }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -114,71 +115,48 @@ export function Drawer({
             onClick={onClose}
           />
 
-          {/* Panel */}
+          {/* A sheet genuinely floats, so it is one of the few things licensed
+              to carry both a hairline and a shadow. */}
           <motion.div
             ref={panelRef}
             className="relative flex h-full flex-col"
             style={{
               width: `min(${width}px, 100vw)`,
-              background: 'var(--color-surface)',
-              borderLeft: '1px solid var(--color-border-strong)',
-              boxShadow: '-24px 0 60px rgb(0 0 0 / 0.45)',
+              background: 'var(--surface-card)',
+              borderLeft: '1px solid var(--line-hairline)',
+              boxShadow: 'var(--shadow-modal)',
             }}
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.24, ease: [0.4, 0, 0.2, 1] }}
           >
-            {/* Header */}
             <header
               className="flex flex-shrink-0 items-start gap-3 px-5 py-4"
-              style={{ borderBottom: '1px solid var(--color-border)' }}
+              style={{ borderBottom: '1px solid var(--line-hairline)' }}
             >
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <h2
-                  className="truncate text-[14px] font-[600] tracking-[-0.02em]"
-                  style={{ color: 'var(--color-text)' }}
-                >
-                  {title}
-                </h2>
-                {subtitle && (
-                  <div className="text-[11.5px]" style={{ color: 'var(--color-text-faint)' }}>
-                    {subtitle}
-                  </div>
-                )}
+              <div className="flex min-w-0 flex-1 flex-col">
+                <h2 className="section__title truncate">{title}</h2>
+                {subtitle && <div className="section__desc">{subtitle}</div>}
               </div>
 
               {headerAction}
 
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close panel"
-                className="flex flex-shrink-0 cursor-pointer items-center justify-center rounded-[7px] transition-colors duration-[140ms]"
-                style={{ width: 26, height: 26, color: 'var(--color-text-faint)' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'var(--color-surface-elevated)';
-                  e.currentTarget.style.color = 'var(--color-text)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = 'var(--color-text-faint)';
-                }}
-              >
-                <X size={14} strokeWidth={2} />
+              <button type="button" onClick={onClose} aria-label="Close panel" className="icon-btn">
+                <X size={16} strokeWidth={2} />
               </button>
             </header>
 
-            {/* Body */}
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">{children}</div>
 
-            {/* Footer */}
+            {/* Secondary first, primary last: a disabled primary leaves the tab
+                order, so trailing it can't strand focus. */}
             {footer && (
               <footer
-                className="flex flex-shrink-0 flex-wrap items-center gap-2 px-5 py-3.5"
+                className="flex flex-shrink-0 flex-wrap items-center gap-2 px-5 py-4"
                 style={{
-                  borderTop: '1px solid var(--color-border)',
-                  background: 'var(--color-surface-raised)',
+                  borderTop: '1px solid var(--line-hairline)',
+                  background: 'var(--surface-recessed)',
                 }}
               >
                 {footer}

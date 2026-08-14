@@ -62,15 +62,16 @@ function NavItem({
             style={{
               background: 'var(--color-nav-active-bg)',
               border: '1px solid var(--color-accent-hairline)',
-              boxShadow: 'inset 0 1px 0 rgb(255 255 255 / 0.04)',
             }}
             transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
           />
         )}
 
+        {/* A hardcoded white veil vanishes on a white canvas — the hover wash
+            has to come from a token so it inverts with the theme. */}
         <span
           className="absolute inset-0 rounded-[8px] opacity-0 group-hover:opacity-100 transition-opacity duration-[140ms] pointer-events-none"
-          style={{ background: 'rgb(255 255 255 / 0.035)' }}
+          style={{ background: 'var(--surface-hover)' }}
         />
 
         <span className="relative z-10 flex-shrink-0 transition-colors duration-[140ms]">
@@ -83,7 +84,7 @@ function NavItem({
 
         {!rail && (
           <span
-            className="relative z-10 text-[13px] font-[450] leading-none tracking-[-0.01em] transition-colors duration-[140ms] group-hover:text-[--color-text] max-lg:hidden"
+            className="relative z-10 text-[13px] font-[450] leading-none tracking-[-0.01em] transition-colors duration-[140ms] group-hover:text-(--color-text) max-lg:hidden"
             style={{ color: active ? 'var(--color-accent)' : undefined }}
           >
             {label}
@@ -94,12 +95,7 @@ function NavItem({
           <motion.span
             layoutId="nav-stripe"
             className="absolute left-0 top-1/2 -translate-y-1/2 rounded-full"
-            style={{
-              width: 2.5,
-              height: 16,
-              background: 'var(--color-accent)',
-              boxShadow: '0 0 6px var(--color-accent-ring)',
-            }}
+            style={{ width: 2.5, height: 16, background: 'var(--color-accent)' }}
             transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
           />
         )}
@@ -290,30 +286,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* ── Breadcrumb ── */
+/* ── Breadcrumb ──
+   A dim parent, a chevron, and a current crumb that is deliberately *not* a
+   link and carries no affordance — that inertness is what tells the reader
+   where they already are. Marked up as an ordered list so a screen reader
+   announces the depth. */
 export function PageBreadcrumb({ items }: { items: { label: string; href?: string }[] }) {
+  const last = items.length - 1;
+
   return (
-    <nav className="flex items-center gap-1.5" aria-label="Breadcrumb">
-      {items.map((item, i) => (
-        <span key={item.label} className="flex items-center gap-1.5">
-          {i > 0 && (
-            <ChevronRight size={10} strokeWidth={2} style={{ color: 'var(--color-text-faint)' }} />
-          )}
-          {item.href ? (
-            <Link
-              href={item.href}
-              className="text-[12px] font-[450] hover:text-[--color-text] transition-colors duration-[140ms]"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
-              {item.label}
-            </Link>
-          ) : (
-            <span className="text-[12px] font-[450]" style={{ color: 'var(--color-text)' }}>
-              {item.label}
-            </span>
-          )}
-        </span>
-      ))}
+    <nav className="crumbs" aria-label="Breadcrumb">
+      <ol>
+        {items.map((item, i) => (
+          <li key={item.label}>
+            {i > 0 && (
+              <ChevronRight className="crumbs__sep" size={14} strokeWidth={1.75} aria-hidden="true" />
+            )}
+            {item.href && i !== last ? (
+              <Link href={item.href} className="crumbs__link">
+                {item.label}
+              </Link>
+            ) : (
+              <span className="crumbs__current" aria-current={i === last ? 'page' : undefined}>
+                {item.label}
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
     </nav>
   );
 }
@@ -334,39 +334,42 @@ export function PageHeader({
   compact?: boolean;
 }) {
   return (
+    /* No divider under the header: the title runs straight into the content,
+       and where a tab strip follows, that strip's own hairline closes the
+       block. Two rules 40px apart is the thing to avoid.
+
+       Opacity and translate only — animating height or padding would reflow
+       every page on mount. */
     <motion.header
-      className={`flex items-start justify-between gap-6 px-8 ${
-        compact ? 'pb-3.5 pt-4' : 'pb-5 pt-7'
-      }`}
-      style={{ borderBottom: '1px solid var(--color-border)' }}
+      className="page__header"
+      style={
+        compact ? { padding: 'var(--space-4) var(--space-6) var(--space-3)' } : undefined
+      }
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
     >
-      <div className={`flex flex-col ${compact ? 'gap-1' : 'gap-1.5'}`}>
+      <div className="flex min-w-0 flex-col" style={{ gap: 'var(--space-1)' }}>
         {breadcrumb && <PageBreadcrumb items={breadcrumb} />}
+        {/* Inter 500, not the 300 display face: Space Grotesk stands in for
+            Waldenburg and is licensed for the 48px voice headline alone. Using
+            it on a page title imports the marketing system. */}
         <h1
-          className={`font-[600] leading-tight ${
-            compact
-              ? 'text-[17px] tracking-[-0.025em]'
-              : 'text-[22px] tracking-[-0.035em]'
-          }`}
-          style={{ color: 'var(--color-text)' }}
+          className="page__title"
+          style={compact ? { fontSize: 'var(--text-title-md)' } : undefined}
         >
           {title}
         </h1>
         {description && (
           <p
-            className={`font-[400] leading-snug ${compact ? 'text-[12px]' : 'text-[13px]'}`}
-            style={{ color: 'var(--color-text-muted)' }}
+            className="page__meta"
+            style={{ margin: 0, maxWidth: 'var(--measure-form)', lineHeight: 'var(--leading-body)' }}
           >
             {description}
           </p>
         )}
       </div>
-      {actions && (
-        <div className="flex flex-shrink-0 items-center gap-2 pt-0.5">{actions}</div>
-      )}
+      {actions && <div className="flex flex-shrink-0 items-center gap-2">{actions}</div>}
     </motion.header>
   );
 }

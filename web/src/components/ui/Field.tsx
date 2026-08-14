@@ -19,20 +19,12 @@ import { AnimatePresence, motion } from 'motion/react';
 /**
  * Shared form primitives for configuration surfaces.
  *
- * Every control is uncontrolled-agnostic and forwards refs so it can be driven
- * by any state layer. Focus styling lives in CSS (`:focus` via the `peer`
- * pattern is avoided in favor of a data attribute) so there are no inline
- * onFocus/onBlur handlers duplicated at each call site.
+ * Every control forwards refs so it can be driven by any state layer, and every
+ * visual state lives in CSS (`.input`, `.textarea`, `.select` in globals.css)
+ * rather than in inline focus/blur handlers that mutate style. That matters
+ * beyond tidiness: the previous version reset `borderColor` to a literal on
+ * blur, which silently broke the light theme.
  */
-
-const CONTROL_BASE =
-  'w-full text-[13px] leading-[1.5] rounded-[8px] outline-none transition-[border-color,background,box-shadow] duration-[140ms]';
-
-const CONTROL_STYLE: React.CSSProperties = {
-  background: 'var(--color-surface)',
-  border: '1px solid var(--color-border)',
-  color: 'var(--color-text)',
-};
 
 /** Label + optional hint/error wrapper. Associates ids for screen readers. */
 export function Field({
@@ -54,15 +46,13 @@ export function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`flex flex-col gap-1.5 ${className}`}>
+    /* Deliberately not `.field`: that class only carries an adjacent-sibling
+       margin, and call sites already own their spacing through flex gaps. */
+    <div className={className}>
       {(label || action) && (
-        <div className="flex items-baseline justify-between gap-3">
+        <div className="mb-2 flex items-baseline justify-between gap-3">
           {label && (
-            <label
-              htmlFor={htmlFor}
-              className="text-[12px] font-[500] tracking-[-0.005em]"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
+            <label htmlFor={htmlFor} className="field__label mb-0">
               {label}
             </label>
           )}
@@ -71,63 +61,29 @@ export function Field({
       )}
       {children}
       {error ? (
-        <span className="text-[11px] leading-[1.5]" style={{ color: 'var(--color-state-error)' }}>
-          {error}
-        </span>
+        <span className="field__error">{error}</span>
       ) : hint ? (
-        <span className="text-[11px] leading-[1.5]" style={{ color: 'var(--color-text-faint)' }}>
-          {hint}
-        </span>
+        <span className="field__hint">{hint}</span>
       ) : null}
     </div>
   );
 }
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
-  function Input({ className = '', style, ...props }, ref) {
-    return (
-      <input
-        ref={ref}
-        {...props}
-        className={`${CONTROL_BASE} px-3 py-2 ${className}`}
-        style={{ ...CONTROL_STYLE, ...style }}
-        onFocus={(e) => {
-          e.currentTarget.style.borderColor = 'var(--color-border-focus)';
-          e.currentTarget.style.background = 'var(--color-surface-raised)';
-          props.onFocus?.(e);
-        }}
-        onBlur={(e) => {
-          e.currentTarget.style.borderColor = 'var(--color-border)';
-          e.currentTarget.style.background = 'var(--color-surface)';
-          props.onBlur?.(e);
-        }}
-      />
-    );
-  },
+  function Input({ className = '', ...props }, ref) {
+    return <input ref={ref} {...props} className={`input ${className}`} />;
+  }
 );
 
 export const Textarea = forwardRef<
   HTMLTextAreaElement,
   TextareaHTMLAttributes<HTMLTextAreaElement> & { mono?: boolean }
->(function Textarea({ className = '', style, mono = false, ...props }, ref) {
+>(function Textarea({ className = '', mono = false, ...props }, ref) {
   return (
     <textarea
       ref={ref}
       {...props}
-      className={`${CONTROL_BASE} resize-none px-3 py-2.5 leading-[1.65] ${
-        mono ? 'font-mono text-[12.5px]' : ''
-      } ${className}`}
-      style={{ ...CONTROL_STYLE, ...style }}
-      onFocus={(e) => {
-        e.currentTarget.style.borderColor = 'var(--color-border-focus)';
-        e.currentTarget.style.background = 'var(--color-surface-raised)';
-        props.onFocus?.(e);
-      }}
-      onBlur={(e) => {
-        e.currentTarget.style.borderColor = 'var(--color-border)';
-        e.currentTarget.style.background = 'var(--color-surface)';
-        props.onBlur?.(e);
-      }}
+      className={`textarea ${mono ? 'font-mono text-[13px]' : ''} ${className}`}
     />
   );
 });
@@ -140,12 +96,16 @@ interface OptionItem {
 }
 
 /**
- * Custom select — styled to the design system, with a portal-based dropdown
- * that escapes overflow:hidden containers.
+ * Custom select — a portal-based dropdown that escapes overflow:hidden
+ * containers.
  *
  * API is a drop-in replacement for the native <select>: pass <option> children
  * and `value`/`onChange` exactly as before. onChange receives a synthetic event
  * with `e.target.value` so existing handlers work without changes.
+ *
+ * The list genuinely floats, so it is one of the few things in this language
+ * that earns a shadow. The selected row is a flat grey fill plus an ink check —
+ * not a tinted fill, and not a glowing dot.
  */
 export function Select({
   className = '',
@@ -155,7 +115,6 @@ export function Select({
   onChange,
   disabled,
   'aria-label': ariaLabel,
-  ...props
 }: SelectHTMLAttributes<HTMLSelectElement>) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -167,7 +126,9 @@ export function Select({
     width: number;
   } | null>(null);
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Parse <option> children into a flat list.
   const options = useMemo<OptionItem[]>(() => {
@@ -191,7 +152,7 @@ export function Select({
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
     const spaceBelow = window.innerHeight - rect.bottom - 8;
-    const dropHeight = Math.min(options.length * 34 + 10, 216);
+    const dropHeight = Math.min(options.length * 32 + 8, 216);
     // Ensure dropdown is at least 160px wide, then clamp so it never overflows
     // the right edge of the viewport (8px margin).
     const dropWidth = Math.max(rect.width, 160);
@@ -217,7 +178,8 @@ export function Select({
       if (
         !triggerRef.current?.contains(e.target as Node) &&
         !listRef.current?.contains(e.target as Node)
-      ) setOpen(false);
+      )
+        setOpen(false);
     };
     const closeOnScroll = () => setOpen(false);
     document.addEventListener('mousedown', close);
@@ -245,12 +207,18 @@ export function Select({
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       for (let i = idx + 1; i < options.length; i++) {
-        if (!options[i].disabled) { pick(options[i].value); break; }
+        if (!options[i].disabled) {
+          pick(options[i].value);
+          break;
+        }
       }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       for (let i = idx - 1; i >= 0; i--) {
-        if (!options[i].disabled) { pick(options[i].value); break; }
+        if (!options[i].disabled) {
+          pick(options[i].value);
+          break;
+        }
       }
     } else if (e.key === 'Enter') {
       e.preventDefault();
@@ -271,28 +239,23 @@ export function Select({
         aria-label={ariaLabel}
         onKeyDown={handleKeyDown}
         onClick={() => (open ? setOpen(false) : openList())}
-        className={`${CONTROL_BASE} cursor-pointer py-2 pl-3 pr-8 text-left relative ${className}`}
-        style={{ ...CONTROL_STYLE, ...style }}
-        onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--color-border-focus)'; }}
-        onBlur={(e) => {
-          // Don't reset if focus is moving to the dropdown list.
-          if (!listRef.current?.contains(e.relatedTarget as Node)) {
-            e.currentTarget.style.borderColor = 'var(--color-border)';
-          }
-        }}
+        className={`select relative pr-8 text-left ${className}`}
+        style={style}
       >
-        <span className="block truncate" style={{ color: selectedLabel ? 'var(--color-text)' : 'var(--color-text-faint)' }}>
+        <span
+          className="block truncate"
+          style={{ color: selectedLabel ? 'var(--fg-ink)' : 'var(--fg-muted)' }}
+        >
           {selectedLabel || ''}
         </span>
-        {/* Chevron — rotates when open */}
         <svg
           aria-hidden
           viewBox="0 0 12 12"
-          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 transition-transform duration-[140ms]"
+          className="pointer-events-none absolute right-3 top-1/2 transition-transform duration-[120ms]"
           style={{
-            width: 10,
-            height: 10,
-            color: 'var(--color-text-faint)',
+            width: 12,
+            height: 12,
+            color: 'var(--fg-muted)',
             transform: `translateY(-50%) rotate(${open ? '180deg' : '0deg'})`,
           }}
         >
@@ -316,10 +279,10 @@ export function Select({
                 ref={listRef}
                 role="listbox"
                 aria-label={ariaLabel}
-                initial={{ opacity: 0, scale: 0.97, y: -4 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.97, y: -4 }}
-                transition={{ duration: 0.13, ease: [0.22, 1, 0.36, 1] }}
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.12, ease: [0.4, 0, 0.2, 1] }}
                 style={{
                   position: 'fixed',
                   top: dropPos.top,
@@ -328,13 +291,11 @@ export function Select({
                   zIndex: 1000,
                   maxHeight: 216,
                   overflowY: 'auto',
-                  background: 'var(--color-surface)',
-                  border: '1px solid var(--color-border-strong)',
-                  borderRadius: 10,
-                  padding: 4,
-                  // Layered shadows: ambient + focused lift
-                  boxShadow:
-                    '0 4px 6px rgb(0 0 0 / 0.06), 0 10px 32px rgb(0 0 0 / 0.18), 0 0 0 1px rgb(0 0 0 / 0.04)',
+                  background: 'var(--surface-card)',
+                  border: '1px solid var(--line-hairline)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: 'var(--space-1)',
+                  boxShadow: 'var(--shadow-modal)',
                 }}
               >
                 {options.map((opt) => {
@@ -345,59 +306,26 @@ export function Select({
                       role="option"
                       aria-selected={active}
                       aria-disabled={opt.disabled}
+                      className="select-option"
                       onMouseDown={(e) => {
                         e.preventDefault();
                         if (!opt.disabled) pick(opt.value);
                       }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '7px 10px 7px 8px',
-                        borderRadius: 7,
-                        fontSize: 13,
-                        lineHeight: 1.4,
-                        cursor: opt.disabled ? 'not-allowed' : 'pointer',
-                        background: active ? 'var(--color-accent-subtle)' : 'transparent',
-                        color: opt.disabled
-                          ? 'var(--color-text-faint)'
-                          : active
-                          ? 'var(--color-text)'
-                          : 'var(--color-text-muted)',
-                        transition: 'background 80ms',
-                        userSelect: 'none',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!opt.disabled && !active)
-                          (e.currentTarget as HTMLDivElement).style.background =
-                            'var(--color-surface-raised)';
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!opt.disabled && !active)
-                          (e.currentTarget as HTMLDivElement).style.background = 'transparent';
-                      }}
                     >
-                      {/* Active indicator dot */}
-                      <span
-                        style={{
-                          width: 14,
-                          height: 14,
-                          flexShrink: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
+                      {/* The slot is reserved whether or not the row is
+                          selected, so the labels stay on one left edge. */}
+                      <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center">
                         {active && (
-                          <span
-                            style={{
-                              width: 5,
-                              height: 5,
-                              borderRadius: '50%',
-                              background: 'var(--color-accent)',
-                              boxShadow: '0 0 4px var(--color-accent-ring)',
-                            }}
-                          />
+                          <svg viewBox="0 0 12 12" width={12} height={12} aria-hidden>
+                            <path
+                              d="M2.5 6.5 5 9l4.5-5.5"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.6"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
                         )}
                       </span>
                       <span className="truncate">{opt.label}</span>
@@ -407,7 +335,7 @@ export function Select({
               </motion.div>
             )}
           </AnimatePresence>,
-          document.body,
+          document.body
         )}
     </>
   );
@@ -416,6 +344,10 @@ export function Select({
 /**
  * Accessible switch. Used for tool enable/disable and boolean config, so the
  * affordance is identical everywhere a boolean is edited.
+ *
+ * ON is an ink track with an inverted knob — the same inversion the primary
+ * button uses, which is why it flips correctly between themes. Never an accent
+ * track: a coloured toggle is chrome wearing colour.
  */
 export function Switch({
   checked,
@@ -431,10 +363,11 @@ export function Switch({
   disabled?: boolean;
   size?: 'sm' | 'md';
 }) {
-  const track = size === 'sm' ? { w: 28, h: 17, knob: 11 } : { w: 34, h: 20, knob: 14 };
-  const inset = (track.h - 2 - track.knob) / 2;
-  const travel = track.w - 2 - track.knob - inset * 2;
-
+  /* Track, knob and travel all live in the `.switch` rule, derived from the
+     --switch-* tokens, so the two sizes are three numbers rather than two sets
+     of geometry that can drift apart. `aria-checked` drives the visual state
+     directly, which makes it impossible to render an ON switch that doesn't
+     announce as one. */
   return (
     <button
       type="button"
@@ -443,33 +376,16 @@ export function Switch({
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="relative flex-shrink-0 rounded-full transition-colors duration-[180ms] disabled:cursor-not-allowed disabled:opacity-40"
-      style={{
-        width: track.w,
-        height: track.h,
-        background: checked ? 'var(--color-accent)' : 'var(--color-surface-elevated)',
-        border: '1px solid',
-        borderColor: checked ? 'transparent' : 'var(--color-border-strong)',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-      }}
-    >
-      <span
-        className="absolute rounded-full transition-transform duration-[180ms]"
-        style={{
-          top: inset,
-          left: inset,
-          width: track.knob,
-          height: track.knob,
-          background: checked ? 'var(--color-void)' : 'var(--color-text-faint)',
-          transform: checked ? `translateX(${travel}px)` : 'translateX(0)',
-        }}
-      />
-    </button>
+      className={`switch ${size === 'sm' ? 'switch--sm' : ''}`.trim()}
+    />
   );
 }
 
 /**
  * Segmented control for small mutually-exclusive choices (2–4 options).
+ *
+ * The active thumb is one of the five places in the system licensed to cast a
+ * shadow: it has to read as sitting on top of the recessed track.
  */
 export function SegmentedControl<T extends string>({
   value,
@@ -485,15 +401,7 @@ export function SegmentedControl<T extends string>({
   const groupId = useId();
 
   return (
-    <div
-      role="radiogroup"
-      aria-label={label}
-      className="inline-flex items-center gap-0.5 rounded-[9px] p-0.5"
-      style={{
-        background: 'var(--color-surface)',
-        border: '1px solid var(--color-border)',
-      }}
-    >
+    <div role="radiogroup" aria-label={label} className="segmented">
       {options.map((opt) => {
         const active = opt.value === value;
         return (
@@ -503,13 +411,9 @@ export function SegmentedControl<T extends string>({
             type="button"
             role="radio"
             aria-checked={active}
+            data-active={active || undefined}
             onClick={() => onChange(opt.value)}
-            className="cursor-pointer rounded-[7px] px-2.5 py-1 text-[12px] font-[500] transition-all duration-[140ms]"
-            style={{
-              background: active ? 'var(--color-surface-elevated)' : 'transparent',
-              color: active ? 'var(--color-text)' : 'var(--color-text-faint)',
-              border: `1px solid ${active ? 'var(--color-border-strong)' : 'transparent'}`,
-            }}
+            className="segmented__item"
           >
             {opt.label}
           </button>

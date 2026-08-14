@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Search, Phone, Check, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useId } from 'react';
+import { X, Search, Phone, Check, AlertCircle, ChevronDown } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import {
   searchAvailableNumbers,
   purchaseNumber,
@@ -16,6 +17,9 @@ const COUNTRY_OPTIONS = [
   { code: 'DE', label: 'Germany' },
   { code: 'FR', label: 'France' },
 ];
+
+/** Hairline-bordered list container. Rows are flush; only the box has a rule. */
+const LIST_BOX = 'overflow-hidden rounded-md border border-[var(--line-hairline)]';
 
 function CountrySelect({
   value,
@@ -55,60 +59,72 @@ function CountrySelect({
       <button
         ref={triggerRef}
         type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Country"
         onClick={open ? () => setOpen(false) : openDropdown}
-        className="flex w-full items-center justify-between rounded-[8px] px-3 py-2 text-[13px] outline-none transition-all duration-[140ms]"
-        style={{
-          background: 'var(--color-surface-raised)',
-          border: `1px solid ${open ? 'var(--color-border-strong)' : 'var(--color-border)'}`,
-          color: 'var(--color-text)',
-        }}
+        className="input flex cursor-pointer items-center justify-between text-left hover:bg-[var(--surface-hover)]"
       >
         <span>{selected.label}</span>
         <ChevronDown
-          size={13}
+          size={16}
           strokeWidth={2}
+          aria-hidden="true"
           style={{
-            color: 'var(--color-text-faint)',
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'transform 150ms ease',
+            color: 'var(--fg-muted)',
+            transform: open ? 'rotate(180deg)' : undefined,
+            transition: 'transform var(--duration-hover) var(--ease-standard)',
           }}
         />
       </button>
 
+      {/* A popover genuinely floats, so it is one of the few things that earns
+          a shadow. */}
       {open && (
         <div
+          role="listbox"
           onMouseDown={(e) => e.stopPropagation()}
           style={{
             ...dropdownStyle,
-            background: 'var(--color-surface-raised)',
-            border: '1px solid var(--color-border-strong)',
-            borderRadius: 10,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
-            overflow: 'hidden',
+            background: 'var(--surface-card)',
+            border: '1px solid var(--line-hairline)',
+            borderRadius: 8,
+            padding: 4,
+            boxShadow: 'var(--shadow-modal)',
           }}
         >
-          {COUNTRY_OPTIONS.map((c) => (
-            <button
-              key={c.code}
-              type="button"
-              onMouseDown={() => {
-                onChange(c.code);
-                setOpen(false);
-              }}
-              className="flex w-full items-center justify-between px-3 py-2.5 text-[13px] transition-colors duration-[100ms]"
-              style={{
-                color: c.code === value ? 'var(--color-accent)' : 'var(--color-text)',
-                background: 'transparent',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-surface-elevated)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-            >
-              {c.label}
-              {c.code === value && (
-                <Check size={12} strokeWidth={2.5} style={{ color: 'var(--color-accent)' }} />
-              )}
-            </button>
-          ))}
+          {COUNTRY_OPTIONS.map((c) => {
+            const active = c.code === value;
+            return (
+              <button
+                key={c.code}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => {
+                  onChange(c.code);
+                  setOpen(false);
+                  triggerRef.current?.focus();
+                }}
+                className="focus-inset flex w-full cursor-pointer items-center justify-between gap-3 rounded-sm px-2 text-left text-nav transition-colors duration-[var(--duration-hover)] hover:bg-[var(--surface-hover)]"
+                style={{
+                  height: 32,
+                  color: 'var(--fg-ink)',
+                  background: active ? 'var(--surface-selected)' : 'transparent',
+                }}
+              >
+                {c.label}
+                {active && (
+                  <Check
+                    size={16}
+                    strokeWidth={2}
+                    aria-hidden="true"
+                    style={{ color: 'var(--fg-ink)', flexShrink: 0 }}
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -133,6 +149,46 @@ export function BuyNumberModal({ onClose, onPurchased }: BuyNumberModalProps) {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const hintId = useId();
+
+  // Escape closes, Tab cycles inside the panel, and focus returns to whatever
+  // opened the modal.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusables = panel.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0]!;
+      const last = focusables[focusables.length - 1]!;
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      opener?.focus?.();
+    };
+  }, [onClose]);
 
   const handleSearch = async () => {
     setSearching(true);
@@ -175,150 +231,130 @@ export function BuyNumberModal({ onClose, onPurchased }: BuyNumberModalProps) {
   };
 
   return (
-    <div
-      ref={overlayRef}
-      onClick={handleOverlayClick}
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)' }}
-    >
+    <div ref={overlayRef} onClick={handleOverlayClick} className="scrim">
+      {/* Padding lives on the three regions, not the panel, so the header stays
+          pinned while the body scrolls. */}
       <div
-        className="relative flex w-full max-w-[520px] flex-col rounded-[14px] shadow-2xl"
-        style={{
-          background: 'var(--color-surface)',
-          border: '1px solid var(--color-border)',
-          maxHeight: '85vh',
-        }}
+        ref={panelRef}
+        className="modal flex max-h-[85dvh] flex-col p-0"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={hintId}
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between px-5 py-4"
-          style={{ borderBottom: '1px solid var(--color-border)' }}
+          className="flex flex-shrink-0 items-start justify-between gap-4 p-5"
+          style={{ borderBottom: '1px solid var(--line-hairline)' }}
         >
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[14px] font-[600]" style={{ color: 'var(--color-text)' }}>
+          <div className="flex min-w-0 flex-col gap-1">
+            <h2 id={titleId} className="modal__title">
               Buy a number
-            </span>
-            <span className="text-[11.5px]" style={{ color: 'var(--color-text-faint)' }}>
+            </h2>
+            <p id={hintId} className="modal__hint">
               Search available Twilio numbers and purchase one
-            </span>
+            </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex items-center justify-center rounded-[7px] p-1.5 transition-colors duration-[120ms]"
-            style={{ color: 'var(--color-text-faint)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-surface-raised)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-          >
-            <X size={15} strokeWidth={2} />
+          <button type="button" onClick={onClose} aria-label="Close" className="icon-btn">
+            <X size={16} strokeWidth={2} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="flex flex-col gap-4 overflow-y-auto p-5">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
           {step === 'search' && (
             <>
               {/* Search controls */}
-              <div className="flex gap-2.5">
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <label className="text-[11px] font-[600] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>
-                    Country
-                  </label>
+              <div className="flex items-end gap-3">
+                <div className="min-w-0 flex-1">
+                  {/* A <label for> cannot name a button, so the trigger carries
+                      its own accessible name. */}
+                  <span className="field__label">Country</span>
                   <CountrySelect value={country} onChange={setCountry} />
                 </div>
-                <div className="flex w-[120px] flex-col gap-1.5">
-                  <label className="text-[11px] font-[600] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>
+                <div className="w-[120px] flex-shrink-0">
+                  <label className="field__label" htmlFor="buy-area-code">
                     Area code
                   </label>
                   <input
+                    id="buy-area-code"
                     type="text"
+                    inputMode="numeric"
                     value={areaCode}
                     onChange={(e) => setAreaCode(e.target.value.replace(/\D/g, '').slice(0, 3))}
                     placeholder="415"
-                    className="rounded-[8px] px-3 py-2 text-[13px] outline-none transition-all duration-[140ms]"
-                    style={{
-                      background: 'var(--color-surface-raised)',
-                      border: '1px solid var(--color-border)',
-                      color: 'var(--color-text)',
-                    }}
+                    className="input font-mono"
                     onKeyDown={(e) => { if (e.key === 'Enter') void handleSearch(); }}
                   />
                 </div>
-                <div className="flex flex-col justify-end">
-                  <button
-                    type="button"
-                    onClick={() => void handleSearch()}
-                    disabled={searching}
-                    className="flex items-center gap-1.5 rounded-[8px] px-3.5 py-2 text-[12.5px] font-[500] transition-all duration-[140ms] disabled:opacity-50"
-                    style={{
-                      background: 'var(--color-accent-subtle)',
-                      border: '1px solid var(--color-accent-border)',
-                      color: 'var(--color-accent)',
-                    }}
-                  >
-                    {searching ? <Loader2 size={13} strokeWidth={2} className="animate-spin" /> : <Search size={13} strokeWidth={2} />}
-                    Search
-                  </button>
-                </div>
+                <Button
+                  variant="secondary"
+                  className="flex-shrink-0"
+                  onClick={() => void handleSearch()}
+                  loading={searching}
+                >
+                  {!searching && <Search size={16} strokeWidth={2} aria-hidden="true" />}
+                  Search
+                </Button>
               </div>
 
               {/* Error */}
-              {searchError && (
-                <div className="flex items-center gap-2 rounded-[8px] px-3 py-2.5 text-[12px]"
-                  style={{ background: 'var(--color-state-error-subtle, rgba(239,68,68,0.08))', color: 'var(--color-state-error, #ef4444)', border: '1px solid rgba(239,68,68,0.2)' }}>
-                  <AlertCircle size={13} strokeWidth={2} className="flex-shrink-0" />
-                  {searchError}
-                </div>
-              )}
+              {searchError && <FormAlert message={searchError} />}
 
               {/* Results */}
               {results.length > 0 && (
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[11px] font-[600] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>
-                    {results.length} numbers available
+                <div className="flex flex-col gap-2">
+                  <span
+                    className="text-caption"
+                    style={{ color: 'var(--fg-muted)' }}
+                    aria-live="polite"
+                  >
+                    <span className="num">{results.length}</span> numbers available
                   </span>
-                  <div className="flex flex-col gap-1">
-                    {results.map((n) => (
-                      <button
+                  <ul className={LIST_BOX}>
+                    {results.map((n, i) => (
+                      <li
                         key={n.phoneNumber}
-                        type="button"
-                        onClick={() => handleSelect(n)}
-                        className="flex items-center justify-between rounded-[9px] px-3.5 py-2.5 text-left transition-all duration-[140ms]"
-                        style={{
-                          background: 'var(--color-surface-raised)',
-                          border: '1px solid var(--color-border)',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = 'var(--color-accent-border)';
-                          e.currentTarget.style.background = 'var(--color-accent-subtle)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = 'var(--color-border)';
-                          e.currentTarget.style.background = 'var(--color-surface-raised)';
-                        }}
+                        style={{ borderTop: i === 0 ? undefined : '1px solid var(--line-hairline)' }}
                       >
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-mono text-[13px] font-[550]" style={{ color: 'var(--color-text)' }}>
-                            {n.phoneNumber}
+                        <button
+                          type="button"
+                          onClick={() => handleSelect(n)}
+                          className="flex w-full cursor-pointer items-center justify-between gap-4 px-3 py-3 text-left transition-colors duration-[var(--duration-hover)] hover:bg-[var(--surface-hover)]"
+                        >
+                          <span className="flex min-w-0 flex-col gap-1">
+                            <span
+                              className="font-mono text-nav font-medium"
+                              style={{ color: 'var(--fg-ink)' }}
+                            >
+                              {n.phoneNumber}
+                            </span>
+                            <span className="text-caption" style={{ color: 'var(--fg-muted)' }}>
+                              {[n.locality, n.region].filter(Boolean).join(', ') || n.isoCountry}
+                            </span>
                           </span>
-                          <span className="text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
-                            {[n.locality, n.region].filter(Boolean).join(', ') || n.isoCountry}
+                          <span
+                            className="flex-shrink-0 text-caption font-medium"
+                            style={{ color: 'var(--fg-body)' }}
+                          >
+                            Select
                           </span>
-                        </div>
-                        <span className="text-[11.5px] font-[500]" style={{ color: 'var(--color-accent)' }}>
-                          Select →
-                        </span>
-                      </button>
+                        </button>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 </div>
               )}
 
               {/* Empty prompt */}
               {results.length === 0 && !searching && !searchError && (
-                <div className="flex flex-col items-center gap-2 py-6" style={{ color: 'var(--color-text-faint)' }}>
-                  <Phone size={24} strokeWidth={1.4} />
-                  <p className="text-[12.5px]">Choose a country and click Search to find available numbers.</p>
+                <div className="empty-state empty-state--bare">
+                  <span className="empty-state__tile" aria-hidden="true">
+                    <Phone size={20} strokeWidth={1.7} />
+                  </span>
+                  <p className="empty-state__body" style={{ marginBottom: 0 }}>
+                    Choose a country and click Search to find available numbers.
+                  </p>
                 </div>
               )}
             </>
@@ -326,91 +362,87 @@ export function BuyNumberModal({ onClose, onPurchased }: BuyNumberModalProps) {
 
           {step === 'confirm' && selected && (
             <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2 rounded-[10px] px-4 py-4"
-                style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}>
-                <span className="text-[11px] font-[600] uppercase tracking-[0.07em]" style={{ color: 'var(--color-text-faint)' }}>
+              <div
+                className="flex flex-col gap-2 rounded-md p-4"
+                style={{
+                  background: 'var(--surface-recessed)',
+                  border: '1px solid var(--line-hairline)',
+                }}
+              >
+                <span className="text-caption" style={{ color: 'var(--fg-muted)' }}>
                   Selected number
                 </span>
-                <span className="font-mono text-[20px] font-[600]" style={{ color: 'var(--color-text)' }}>
+                <span className="font-mono text-title-md font-medium" style={{ color: 'var(--fg-ink)' }}>
                   {selected.phoneNumber}
                 </span>
-                <span className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
+                <span className="text-caption" style={{ color: 'var(--fg-body)' }}>
                   {[selected.locality, selected.region, selected.isoCountry].filter(Boolean).join(', ')}
                 </span>
               </div>
 
-              <p className="text-[12.5px] leading-[1.55]" style={{ color: 'var(--color-text-muted)' }}>
+              <p className="text-caption leading-body" style={{ color: 'var(--fg-body)' }}>
                 This will purchase the number on your Twilio account and attach it to your SIP trunk.
               </p>
 
-              {purchaseError && (
-                <div className="flex items-center gap-2 rounded-[8px] px-3 py-2.5 text-[12px]"
-                  style={{ background: 'rgba(239,68,68,0.08)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)' }}>
-                  <AlertCircle size={13} strokeWidth={2} className="flex-shrink-0" />
-                  {purchaseError}
-                </div>
-              )}
+              {purchaseError && <FormAlert message={purchaseError} />}
 
-              <div className="flex gap-2.5">
-                <button
-                  type="button"
+              {/* Secondary first, primary last. */}
+              <div className="modal__actions">
+                <Button
+                  variant="secondary"
                   onClick={() => { setStep('search'); setPurchaseError(null); }}
-                  className="flex-1 rounded-[8px] py-2 text-[13px] font-[500] transition-colors duration-[140ms]"
-                  style={{
-                    background: 'var(--color-surface-raised)',
-                    border: '1px solid var(--color-border)',
-                    color: 'var(--color-text-muted)',
-                  }}
                 >
                   Back
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handlePurchase()}
-                  disabled={purchasing}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-[8px] py-2 text-[13px] font-[500] transition-colors duration-[140ms] disabled:opacity-50"
-                  style={{
-                    background: 'var(--color-accent)',
-                    border: '1px solid var(--color-accent)',
-                    color: '#fff',
-                  }}
-                >
-                  {purchasing && <Loader2 size={13} strokeWidth={2} className="animate-spin" />}
+                </Button>
+                <Button variant="primary" onClick={() => void handlePurchase()} loading={purchasing}>
                   {purchasing ? 'Purchasing…' : 'Purchase & Attach'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
 
           {step === 'success' && selected && (
-            <div className="flex flex-col items-center gap-4 py-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full"
-                style={{ background: 'var(--color-state-success-subtle, rgba(34,197,94,0.12))' }}>
-                <Check size={22} strokeWidth={2.5} style={{ color: 'var(--color-state-speaking, #22c55e)' }} />
-              </div>
-              <div className="flex flex-col items-center gap-1">
-                <span className="text-[14px] font-[600]" style={{ color: 'var(--color-text)' }}>Number purchased!</span>
-                <span className="font-mono text-[13px]" style={{ color: 'var(--color-text-muted)' }}>{selected.phoneNumber}</span>
-              </div>
-              <p className="text-center text-[12px]" style={{ color: 'var(--color-text-faint)' }}>
-                The number has been added to your phone numbers. Go to Phone Numbers to attach it to an agent.
+            <div className="empty-state empty-state--bare">
+              <span className="empty-state__tile" aria-hidden="true">
+                <Check size={20} strokeWidth={2.2} style={{ color: 'var(--status-success)' }} />
+              </span>
+              <h3 className="empty-state__title">Number purchased</h3>
+              <p className="mb-2 font-mono text-caption" style={{ color: 'var(--fg-body)' }}>
+                {selected.phoneNumber}
               </p>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-[8px] px-5 py-2 text-[13px] font-[500] transition-colors duration-[140ms]"
-                style={{
-                  background: 'var(--color-accent-subtle)',
-                  border: '1px solid var(--color-accent-border)',
-                  color: 'var(--color-accent)',
-                }}
-              >
-                Done
-              </button>
+              <p className="empty-state__body">
+                The number has been added to your phone numbers. Go to Phone Numbers to attach it to
+                an agent.
+              </p>
+              <div className="empty-state__actions">
+                <Button variant="primary" onClick={onClose}>
+                  Done
+                </Button>
+              </div>
             </div>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Form-level failure. A real failure is status, which is the one thing licensed
+ * to carry a tint — but it still gets text and an icon, never colour alone.
+ */
+function FormAlert({ message }: { message: string }) {
+  return (
+    <div
+      role="alert"
+      className="flex items-start gap-2 rounded-md p-3 text-caption leading-body"
+      style={{
+        background: 'var(--status-pill-error-bg)',
+        color: 'var(--status-pill-error-fg)',
+      }}
+    >
+      <AlertCircle size={16} strokeWidth={2} aria-hidden="true" className="mt-px flex-shrink-0" />
+      {message}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { EmptyChart } from './ChartCard';
+import { BAR_FILL, TRACK_FILL } from './format';
 
 export interface HBarRow {
   label: string;
@@ -20,7 +21,10 @@ export function HBarList({
   rows,
   labelWidth = 150,
   emptyLabel,
-  barColor = 'rgba(56,232,255,0.55)',
+  /* Neutral ink, not accent: a stack of bars covers far more area than a line,
+     and at this count an accent bar field would take over the page. Callers
+     pass `row.color` only where the value is a genuine status. */
+  barColor = BAR_FILL,
 }: {
   rows: HBarRow[];
   labelWidth?: number;
@@ -35,39 +39,42 @@ export function HBarList({
     <div className="flex flex-col gap-2.5">
       {rows.map((row) => (
         <div key={row.label} className="flex items-center gap-3">
+          {/* A category name is prose, not a numeral — mono is for figures. */}
           <span
-            className="flex-shrink-0 truncate font-mono text-[12px]"
-            style={{ color: 'var(--color-text-muted)', width: labelWidth }}
+            className="flex-shrink-0 truncate text-[13px]"
+            style={{ color: 'var(--fg-body)', width: labelWidth }}
             title={row.label}
           >
             {row.label}
           </span>
 
           <div
-            className="h-[6px] flex-1 overflow-hidden rounded-full"
-            style={{ background: 'var(--color-border)' }}
+            className="h-[6px] flex-1 overflow-hidden rounded-[2px]"
+            style={{ background: TRACK_FILL }}
           >
             <div
-              className="h-full w-full origin-left rounded-full"
+              className="h-full w-full origin-left rounded-[2px]"
               style={{
                 transform: `scaleX(${row.value / max})`,
                 background: row.color ?? barColor,
-                transition: 'transform 400ms cubic-bezier(0.22, 1, 0.36, 1)',
+                transition: 'transform var(--duration-slow) var(--ease-out)',
               }}
             />
           </div>
 
+          {/* Tabular figures so the column edge stays straight; the value is
+              ink, never tinted to match its bar. */}
           <span
-            className="flex-shrink-0 text-right font-mono text-[12px] font-[600]"
-            style={{ color: row.color ?? 'var(--color-text)', minWidth: 56 }}
+            className="num flex-shrink-0 text-right text-[13px]"
+            style={{ color: 'var(--fg-ink)', minWidth: 56 }}
           >
             {row.display ?? row.value}
           </span>
 
           {row.note && (
             <span
-              className="flex-shrink-0 text-right font-mono text-[10.5px]"
-              style={{ color: 'var(--color-text-faint)', minWidth: 52 }}
+              className="num flex-shrink-0 text-right text-[12px]"
+              style={{ color: 'var(--fg-muted)', minWidth: 52 }}
             >
               {row.note}
             </span>
@@ -95,7 +102,7 @@ export function CompositionBar({ segments }: { segments: CompositionSegment[] })
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex h-[10px] overflow-hidden rounded-full" style={{ background: 'var(--color-border)' }}>
+      <div className="flex h-[10px] overflow-hidden rounded-[3px]" style={{ background: TRACK_FILL }}>
         {segments.map((seg) =>
           seg.value > 0 ? (
             <div
@@ -110,20 +117,32 @@ export function CompositionBar({ segments }: { segments: CompositionSegment[] })
         )}
       </div>
 
+      {/* The swatch is the legend's whole job — it is the one place a series
+          colour is allowed to appear outside the plot. Everything else in the
+          row is ink. Segments come from the ink ladder in `format.ts`, so a
+          hairline keeps the lightest step visible against the card. */}
       <div className="flex flex-col gap-2">
         {segments.map((seg) => (
           <div key={seg.label} className="flex items-center gap-2">
-            <span className="flex-shrink-0 rounded-full" style={{ width: 7, height: 7, background: seg.color }} />
-            <span className="text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
+            <span
+              className="flex-shrink-0 rounded-[2px]"
+              style={{
+                width: 8,
+                height: 8,
+                background: seg.color,
+                boxShadow: '0 0 0 1px var(--line-hairline)',
+              }}
+            />
+            <span className="text-[13px]" style={{ color: 'var(--fg-body)' }}>
               {seg.label}
             </span>
             <span className="ml-auto flex items-baseline gap-2 pl-3">
-              <span className="font-mono text-[12px] font-[600]" style={{ color: 'var(--color-text)' }}>
+              <span className="num text-[13px]" style={{ color: 'var(--fg-ink)' }}>
                 {seg.display ?? seg.value}
               </span>
               <span
-                className="font-mono text-[10.5px]"
-                style={{ color: 'var(--color-text-faint)', minWidth: 34, textAlign: 'right' }}
+                className="num text-[12px]"
+                style={{ color: 'var(--fg-muted)', minWidth: 34, textAlign: 'right' }}
               >
                 {Math.round((seg.value / total) * 100)}%
               </span>

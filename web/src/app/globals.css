@@ -1,159 +1,357 @@
 @import 'tailwindcss';
 
-/*
- * Design system — single source of truth for the platform visual language.
- * All surfaces, motion, color, and type reference these tokens.
- * A future light theme is a second token set on [data-theme="light"].
- */
+/* ══════════════════════════════════════════════════════════════════════════
+   ElevenLabs product-UI design language.
+
+   Four rules, in priority order:
+
+     1. Neutral, high-contrast.       #111111 canvas, #1d1d1d rail, near-white
+                                      ink. No warm tint, no cool blue-grey.
+     2. Hairlines, not shadows.       Borders separate. Elevation is reserved
+                                      for things that genuinely float.
+     3. Colour is never chrome.       Hue is licensed in exactly two places —
+                                      status, and product visuals (the orb,
+                                      chart data marks). Never UI text,
+                                      borders, hover states, active nav rows,
+                                      tab underlines, or focus rings.
+     4. Compact.                      32px nav rows, 14px labels, 16px icons,
+                                      48px top bar, 36px buttons.
+
+   Two kinds of token live here and the split is load-bearing:
+
+     SCALES     complete ramps (type, space, radii, weights). Spare rungs are
+                fine; a scale with holes is worse than one with unused steps.
+                Theme-independent — they never flip.
+     SEMANTIC   a named decision (--bg-app, --fg-body). Every one must be
+                referenced by something. Only these flip in light mode, which
+                is why the second theme is ~30 overrides and not a second
+                stylesheet.
+
+   The app ships dark, so :root carries the dark values and light is the
+   override. Note the elevation relationship inverts between themes: the rail
+   is *lighter* than the canvas on dark and *darker* on light. Surfaces move
+   toward the viewer in both, which is not the same as moving toward white.
+
+   NB: the ElevenLabs *marketing* site is warm (eggshell canvas, warm ink,
+   full-pill buttons). This is the *product* language — neutral grey, 6-8px
+   radii. Don't mix the two.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── SEMANTIC: dark (the shipped default) ──────────────────────────────── */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --bg-app: #111111;
+  --bg-sidebar: #1d1d1d;
+  --surface-card: #1d1d1d;
+  --surface-recessed: #141414;
+  --surface-selected: #303030;
+  --surface-hover: #272727;
+  --surface-press: #333333;
+
+  /* Ink. --fg-ink is near-white here, so anything built as
+     `background: var(--fg-ink); color: var(--fg-on-ink)` inverts for free. */
+  --fg-ink: #f5f5f5;
+  --fg-ink-hover: #ffffff;
+  --fg-strong: #e5e5e5;
+  --fg-body: #a3a3a3;
+  --fg-muted: #737373;
+  /* Interactive muted: --fg-muted fails AA (3.98:1), so idle *interactive*
+     labels and glyphs use this instead. Decorative icons may stay muted. */
+  --fg-interactive-muted: #7d7d7d;
+  --fg-on-ink: #111111;
+  /* Secondary text *on* an ink fill — a count inside an active chip, a hint
+     inside the primary button. --fg-muted is unreadable there, and dropping
+     opacity fades the glyph edges instead of the colour. */
+  --fg-on-ink-muted: #575757;
+
+  /* Lines */
+  --line-hairline: #2a2a2a;
+  --line-strong: #3d3d3d;
+
+  /* Status — lifted to hold contrast against near-black */
+  --status-success: #22c55e;
+  --status-warning: #fbbf24;
+  --status-error: #f87171;
+
+  /* Status washes and inks. The measured badge fills are ~10-18% veils of the
+     hue over the canvas — never the hue at full strength, which is a
+     marketing-site move. Mixing against --bg-app means the whole set flips
+     with the theme for free. No dark badge exists anywhere in the reference
+     library, so both dark rungs are derived: wash at 18% over canvas, ink
+     lifted toward white far enough to clear 4.5:1 on it. */
+  --status-success-wash: color-mix(in srgb, var(--status-success) 18%, var(--bg-app));
+  --status-success-ink: color-mix(in srgb, var(--status-success) 72%, #ffffff);
+  --status-warning-wash: color-mix(in srgb, var(--status-warning) 18%, var(--bg-app));
+  --status-warning-ink: color-mix(in srgb, var(--status-warning) 78%, #ffffff);
+  --status-error-wash: color-mix(in srgb, var(--status-error) 18%, var(--bg-app));
+  --status-error-ink: color-mix(in srgb, var(--status-error) 80%, #ffffff);
+
+  /* ─── Product accent ───
+     Product visuals ONLY: the orb, chart line series, waveforms. Never UI
+     text, borders, hover states, active nav rows, or focus rings. Every blue
+     on screen derives from this one value via color-mix(), so recolouring the
+     product visual is a single edit. #0447ff is lifted here because it sits
+     too close to near-black to read on a #111111 canvas. */
+  --product-accent: #2b62ff;
+
+  --accent-wash: color-mix(in srgb, var(--product-accent) 9%, transparent);
+  --accent-wash-soft: color-mix(in srgb, var(--product-accent) 3%, transparent);
+  --accent-veil: color-mix(in srgb, var(--product-accent) 13%, transparent);
+  --accent-veil-soft: color-mix(in srgb, var(--product-accent) 4.5%, transparent);
+  --accent-glow: color-mix(in srgb, var(--product-accent) 26%, transparent);
+  --accent-tint-1: color-mix(in srgb, var(--product-accent) 15%, #ffffff);
+  --accent-tint-2: color-mix(in srgb, var(--product-accent) 42%, #ffffff);
+  --accent-tint-3: color-mix(in srgb, var(--product-accent) 78%, #ffffff);
+  /* Shades bottom out in navy, not black, which would dissolve into #111111. */
+  --accent-shade-1: color-mix(in srgb, var(--product-accent) 92%, #0a1030);
+  --accent-shade-2: color-mix(in srgb, var(--product-accent) 74%, #0a1030);
+
+  /* Elevation — shadow does less work on dark, so the alphas run higher and
+     the hairline carries more. box-shadow is rationed: overlays, the floating
+     composer, the active segmented thumb, and the orb. Nothing else. */
+  --shadow-soft: 0 4px 16px rgb(0 0 0 / 0.45);
+  --shadow-modal: 0 24px 64px rgb(0 0 0 / 0.6);
+  --scrim: rgb(0 0 0 / 0.65);
+  --shadow-orb:
+    0 22px 52px var(--accent-glow), 0 0 0 1px rgb(255 255 255 / 0.14) inset,
+    inset 0 -16px 40px rgb(2 10 40 / 0.5);
+  --orb-ring: rgb(255 255 255 / 0.28);
+
+  /* Focus — ink, never the accent. A blue focus ring is the most common
+     colour-as-chrome violation in this language. */
+  --focus-ring-width: 2px;
+  --focus-ring-color: var(--fg-ink);
+  --focus-ring-offset: 2px;
+}
+
+/* ─── SEMANTIC: light ───────────────────────────────────────────────────────
+   Only semantic tokens appear here. No scale changes, no component CSS. */
+[data-theme='light'] {
+  color-scheme: light;
+
+  --bg-app: #ffffff;
+  --bg-sidebar: #fafafa;
+  --surface-card: #ffffff;
+  --surface-recessed: #f7f7f7;
+  --surface-selected: #efefef;
+  --surface-hover: #f4f4f4;
+  --surface-press: #eaeaea;
+
+  --fg-ink: #171717;
+  --fg-ink-hover: #000000;
+  --fg-strong: #404040;
+  --fg-body: #525252;
+  --fg-muted: #8f8f8f;
+  --fg-interactive-muted: #6f6f6f;
+  --fg-on-ink: #ffffff;
+  --fg-on-ink-muted: #b0b0b0;
+
+  --line-hairline: #ececec;
+  --line-strong: #dcdcdc;
+
+  --status-success: #16a34a;
+  --status-warning: #d97706;
+  --status-error: #dc2626;
+
+  /* Light runs the asymmetry the other way: a deep shade of the hue on a pale
+     tint. #16a34a on its own 16% tint is only 2.85:1, which is why the step
+     toward black exists here and the step toward white exists in dark. The two
+     success values are the measured pair off the reference; the rest derive. */
+  --status-success-wash: #dcfde9;
+  --status-success-ink: #254632;
+  --status-warning-wash: color-mix(in srgb, var(--status-warning) 16%, var(--bg-app));
+  --status-warning-ink: color-mix(in srgb, var(--status-warning) 62%, #000000);
+  --status-error-wash: #fee2e2;
+  --status-error-ink: color-mix(in srgb, var(--status-error) 62%, #000000);
+
+  --product-accent: #0447ff;
+  --accent-wash: color-mix(in srgb, var(--product-accent) 4.5%, transparent);
+  --accent-wash-soft: color-mix(in srgb, var(--product-accent) 1.2%, transparent);
+  --accent-glow: color-mix(in srgb, var(--product-accent) 16%, transparent);
+  --accent-shade-1: color-mix(in srgb, var(--product-accent) 90%, #000000);
+  --accent-shade-2: color-mix(in srgb, var(--product-accent) 68%, #000000);
+
+  --shadow-soft: 0 4px 16px rgb(0 0 0 / 0.04);
+  --shadow-modal: 0 24px 64px rgb(0 0 0 / 0.18);
+  /* Light scrims bleach rather than dim: a translucent neutral grey, not
+     black at 50%. Ship rgba(0,0,0,.5) and every white value is right while
+     the whole page reads wrong. */
+  --scrim: rgb(213 213 213 / 0.42);
+  --shadow-orb:
+    0 22px 52px var(--accent-glow), 0 0 0 1px rgb(255 255 255 / 0.22) inset,
+    inset 0 -16px 40px rgb(6 30 96 / 0.24);
+  --orb-ring: rgb(255 255 255 / 0.34);
+}
+
 @theme {
-  /* ─── Core palette ─── */
-  --color-void: #05060a;
-  --color-abyss: #090913;
-  --color-surface: #0d1018;
-  --color-surface-raised: #111520;
-  --color-surface-elevated: #161c2a;
-  --color-glass: rgb(255 255 255 / 0.03);
-  --color-glass-hover: rgb(255 255 255 / 0.055);
-  --color-glass-border: rgb(255 255 255 / 0.08);
+  /* ═══════════════════════════ SCALES ═══════════════════════════ */
 
-  /* ─── Borders ─── */
-  --color-border: rgb(255 255 255 / 0.07);
-  --color-border-strong: rgb(255 255 255 / 0.13);
-  --color-border-focus: rgb(56 232 255 / 0.55);
+  /* Type. Inter runs the entire UI. Space Grotesk (standing in for the
+     proprietary Waldenburg 300) is the display face and is used for exactly
+     one thing: the 48px voice-stage headline. Using it for a page title
+     imports the marketing system. */
+  --font-sans: var(--font-inter), 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-grotesk), 'Space Grotesk', var(--font-sans);
+  --font-mono: var(--font-mono-var), ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
 
-  /* ─── Neon accent (cyan → violet) ─── */
-  --color-accent: #38e8ff;
-  --color-accent-2: #8b5cf6;
-  --color-accent-soft: rgb(56 232 255 / 0.12);
-  --color-accent-subtle: rgb(56 232 255 / 0.05);
-  /*
-   * Semantic cyan alpha ladder — use these instead of raw rgb(56 232 255 / x)
-   * literals in components (anti-pattern: raw hex/rgb in components).
-   */
-  --color-accent-hairline: rgb(56 232 255 / 0.14);
-  --color-accent-border: rgb(56 232 255 / 0.28);
-  --color-accent-border-hover: rgb(56 232 255 / 0.5);
-  --color-accent-ring: rgb(56 232 255 / 0.22);
-  --color-accent-glow: rgb(56 232 255 / 0.28);
+  --text-display-xl: 48px;
+  --text-display-lg: 28px;
+  --text-title-md: 20px;
+  --text-body: 15px;
+  --text-nav: 14px;
+  --text-button: 14px;
+  --text-caption: 13px;
+  --text-micro: 12px;
+  --text-overline: 11px;
 
-  /* ─── Text ─── */
-  --color-text: #e8eeff;
-  --color-text-muted: #7a849d;
-  /* Faint = decorative labels only; never below-4.5:1 body copy. */
-  --color-text-faint: rgb(255 255 255 / 0.34);
+  --weight-light: 300;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
 
-  /* ─── Navigation ─── */
-  --color-nav-active-bg: rgb(56 232 255 / 0.06);
-  --color-sidebar: #060810;
+  --leading-display: 1.08;
+  --leading-body: 1.5;
+  --leading-nav: 1.4;
+  --leading-tight: 1.2;
+  --leading-flat: 1;
 
-  /* ─── Voice state hues ─── */
-  --color-state-listening: #38e8ff;
-  --color-state-thinking: #8b5cf6;
-  --color-state-speaking: #4ade80;
-  --color-state-error: #fb7185;
-  --color-state-warning: #fbbf24;
+  --tracking-display: -0.02em;
+  --tracking-wordmark: -0.01em;
+  --tracking-overline: 0.04em;
 
-  /* ─── Typography ─── */
-  --font-sans: var(--font-display), ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: var(--font-mono-var), 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
-  /*
-   * Type scale (Space Grotesk). Weight carries hierarchy alongside size:
-   *   eyebrow  11–12px / 600 / tracking 0.28–0.32em   (labels)
-   *   body     13–15px / 400                           (copy)
-   *   label    13px    / 500                           (UI)
-   *   title    22px    / 600 / tracking -0.035em       (page headers)
-   *   display  clamp(30,5.5vw,46) / 600 / -0.045em     (hero)
-   */
+  /* Space — 4px base */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
 
-  /* ─── Layout dimensions ─── */
-  --width-sidebar-rail: 52px;
-  --width-sidebar-full: 220px;
-  --width-content-max: 1200px;
-  --width-prose-max: 720px;
-
-  /* ─── Border radius ─── */
-  --radius-sm: 4px;
+  /* Radii. --radius-pill is reserved for status chips, dots, switch tracks
+     and 1:1 circles. A pill-shaped button is the marketing system; every
+     button in the product is a rounded rect. */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
   --radius-2xl: 24px;
+  --radius-pill: 9999px;
   --radius-full: 9999px;
 
-  /* ─── Accent alpha extensions ─── */
-  /* A near-zero accent tint used for sidebar ambient glows and logo box fill. */
-  --color-accent-trace: rgb(56 232 255 / 0.04);
+  /* Layout constants. Semantic, not a scale — do not derive control heights
+     from the space ramp. */
+  --width-sidebar-rail: 52px;
+  --width-sidebar-full: 220px;
+  --width-content-max: 1200px;
+  --width-prose-max: 720px;
+  --topbar-height: 48px;
+  --nav-item-height: 32px;
+  --nav-item-gap: 12px;
+  --button-height: 36px;
+  --input-height: 36px;
+  --icon-button-size: 28px;
+  --chip-height: 28px;
+  --chip-height-sm: 22px;
+  /* 22px, not 18px: 18 cannot hold 11px text with any breathing room, and the
+     measured status bboxes are 21.7 and 23.6. */
+  --badge-height: 22px;
+  --tab-height: 40px;
+  --tab-indicator: 2px;
+  --switch-width: 36px;
+  --switch-height: 20px;
+  --switch-knob: 14px;
+  --dot-size: 6px;
+  --play-size: 28px;
+  --control-height: 52px;
+  --row-height: 56px;
+  --empty-tile-size: 44px;
+  --modal-width: 520px;
+  --measure-form: 720px;
+  --measure-prose: 420px;
 
-  /* ─── Motion ─── */
+  /* Motion — two durations, one easing. */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-fluid: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1, 0.64, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --duration-instant: 80ms;
+  --duration-hover: 120ms;
   --duration-fast: 140ms;
   --duration-base: 220ms;
+  --duration-sidebar: 200ms;
   --duration-slow: 380ms;
+
+  /* ═══════════════════════ SEMANTIC ALIASES ═══════════════════════
+     The platform's original token names, re-pointed at the semantic layer
+     above. Components keep referencing var(--color-*) and restyle for free.
+
+     The consequential one is --color-accent → var(--fg-ink). It was a neon
+     cyan and it drove the chrome: active nav rows, tab indicators, selected
+     checkmarks, switch tracks, focus rings. Pointing it at ink makes all of
+     that monochrome in one line, which is rule 3. Product visuals that
+     genuinely earn colour reference --product-accent explicitly instead. */
+  --color-void: var(--bg-app);
+  --color-abyss: var(--bg-app);
+  --color-sidebar: var(--bg-sidebar);
+  --color-surface: var(--surface-card);
+  --color-surface-raised: var(--surface-card);
+  --color-surface-elevated: var(--surface-selected);
+  --color-surface-recessed: var(--surface-recessed);
+
+  --color-glass: var(--surface-card);
+  --color-glass-hover: var(--surface-hover);
+  --color-glass-border: var(--line-hairline);
+
+  --color-border: var(--line-hairline);
+  --color-border-strong: var(--line-strong);
+  --color-border-focus: var(--fg-ink);
+
+  --color-accent: var(--fg-ink);
+  --color-accent-2: var(--fg-body);
+  --color-accent-soft: var(--surface-selected);
+  --color-accent-subtle: var(--surface-hover);
+  --color-accent-hairline: var(--line-hairline);
+  --color-accent-border: var(--line-strong);
+  --color-accent-border-hover: var(--fg-ink);
+  --color-accent-ring: var(--line-strong);
+  --color-accent-glow: transparent;
+  --color-accent-trace: transparent;
+
+  --color-text: var(--fg-ink);
+  --color-text-strong: var(--fg-strong);
+  --color-text-muted: var(--fg-body);
+  --color-text-faint: var(--fg-muted);
+
+  --color-nav-active-bg: var(--surface-selected);
+
+  /* Voice state hues. `listening` is the orb — a product visual, so it keeps
+     the accent. The rest resolve to status or neutral: a violet "thinking"
+     label is chrome wearing colour. */
+  --color-state-listening: var(--product-accent);
+  --color-state-thinking: var(--fg-body);
+  --color-state-speaking: var(--status-success);
+  --color-state-warning: var(--status-warning);
+  --color-state-error: var(--status-error);
+  --color-state-success-subtle: var(--status-success-wash);
+  --color-state-warning-subtle: var(--status-warning-wash);
+  --color-state-error-subtle: var(--status-error-wash);
+
+  /* Retained so the older --status-pill-* spelling in feature code keeps
+     resolving. Both names point at the same canonical wash/ink pair. */
+  --status-pill-success-bg: var(--status-success-wash);
+  --status-pill-success-fg: var(--status-success-ink);
+  --status-pill-warning-bg: var(--status-warning-wash);
+  --status-pill-warning-fg: var(--status-warning-ink);
+  --status-pill-error-bg: var(--status-error-wash);
+  --status-pill-error-fg: var(--status-error-ink);
 }
 
-/* ─── Light theme ─────────────────────────────────────────────────────────── */
-/*
- * Design intent: same futuristic, technical register — just running in a
- * well-lit environment. The cyan accent shifts to a readable cyan-600 value
- * (#0891b2) that preserves brand identity without sacrificing contrast.
- * WCAG AAA (≥7:1) is met for all body text on the respective surfaces.
- */
-[data-theme="light"] {
-  --color-void: #f1f4ff;
-  --color-abyss: #eaeefd;
-  --color-surface: #ffffff;
-  --color-surface-raised: #edf1fc;
-  --color-surface-elevated: #e3eaf9;
-  --color-glass: rgb(0 0 0 / 0.025);
-  --color-glass-hover: rgb(0 0 0 / 0.05);
-  --color-glass-border: rgb(0 0 0 / 0.09);
-
-  --color-border: rgb(0 0 0 / 0.09);
-  --color-border-strong: rgb(0 0 0 / 0.15);
-  --color-border-focus: rgb(8 145 178 / 0.65);
-
-  /* Cyan-600 — still reads as the brand cyan, contrast ≥4.75:1 on white. */
-  --color-accent: #0891b2;
-  --color-accent-2: #7c3aed;
-  --color-accent-soft: rgb(8 145 178 / 0.12);
-  --color-accent-subtle: rgb(8 145 178 / 0.07);
-  --color-accent-hairline: rgb(8 145 178 / 0.15);
-  --color-accent-border: rgb(8 145 178 / 0.3);
-  --color-accent-border-hover: rgb(8 145 178 / 0.55);
-  --color-accent-ring: rgb(8 145 178 / 0.22);
-  --color-accent-glow: rgb(8 145 178 / 0.2);
-  --color-accent-trace: rgb(8 145 178 / 0.04);
-
-  --color-text: #0c1120;
-  --color-text-muted: #47567a;
-  --color-text-faint: rgb(0 0 0 / 0.38);
-
-  --color-nav-active-bg: rgb(8 145 178 / 0.08);
-  --color-sidebar: #e8edf8;
-
-  /* State colors — darker shades for readability on light surfaces. */
-  --color-state-listening: #0891b2;
-  --color-state-thinking: #7c3aed;
-  --color-state-speaking: #16a34a;
-  --color-state-error: #dc2626;
-  --color-state-warning: #b45309;
-}
-
-[data-theme="light"] body {
-  background: var(--color-void);
-}
-
-[data-theme="light"] .ambient-backdrop {
-  background:
-    radial-gradient(ellipse 90% 70% at 62% 38%, rgb(209 224 255 / 0.6), transparent 68%),
-    radial-gradient(ellipse 55% 45% at 62% 30%, rgb(8 145 178 / 0.04), transparent 58%),
-    radial-gradient(ellipse 70% 55% at 62% 85%, rgb(124 58 237 / 0.025), transparent 62%),
-    var(--color-void);
-}
-
-/* ─── Reset ─── */
+/* ─── Reset ─────────────────────────────────────────────────────────────── */
 *,
 *::before,
 *::after {
@@ -168,78 +366,1290 @@ body {
 }
 
 body {
-  background: var(--color-void);
-  color: var(--color-text);
+  background: var(--bg-app);
+  color: var(--fg-ink);
   font-family: var(--font-sans);
-  font-feature-settings: 'cv01', 'cv02', 'cv03';
+  font-size: var(--text-nav);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
 }
 
-/* ─── Ambient radial backdrop ─── */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* The canvas is flat. It used to carry three radial gradients plus a particle
+   field and a film grain; all of that is decoration this language does not
+   have, and it broke rule 1 harder than anything else in the app. Kept as a
+   class so the element in layout.tsx stays harmless. */
 .ambient-backdrop {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  /*
-   * Three gradients:
-   *   1. Large deep-blue wash — creates depth even before the orb renders
-   *   2. Tight cyan pinpoint at top — where the orb "lives"
-   *   3. Violet floor — adds warm shadow that prevents pure-black flatness
-   */
-  background:
-    radial-gradient(
-      ellipse 90% 70% at 62% 38%,
-      rgb(13 20 42 / 0.9),
-      transparent 68%
-    ),
-    radial-gradient(
-      ellipse 55% 45% at 62% 30%,
-      rgb(56 232 255 / 0.055),
-      transparent 58%
-    ),
-    radial-gradient(
-      ellipse 70% 55% at 62% 85%,
-      rgb(139 92 246 / 0.06),
-      transparent 62%
-    ),
-    var(--color-void);
+  background: var(--bg-app);
 }
 
-/* ─── Focus ring ─── */
-.focus-ring:focus-visible,
-a:focus-visible,
-button:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
+/* Focus — :focus-visible only, never bare :focus (which fires on click).
+   No border-radius here: the outline already follows whatever radius the
+   element has, and because this rule is unlayered it would otherwise beat
+   every Tailwind `rounded-*` utility and reshape controls on focus. */
+:focus-visible,
+.focus-ring:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
 }
 
-/* ─── Scrollbar ─── */
+/* A positive outline-offset is clipped by any scroll container, so controls
+   inside one need the ring drawn inward. */
+.focus-inset:focus-visible {
+  outline-offset: calc(-1 * var(--focus-ring-offset));
+}
+
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-glass-border);
-  border-radius: 3px;
+  background: var(--line-strong);
+  border: 3px solid transparent;
+  border-radius: var(--radius-pill);
+  background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-border-strong);
+  background: var(--fg-muted);
+  background-clip: content-box;
 }
 
-/* ─── Selection ─── */
 ::selection {
-  background: var(--color-accent-soft);
-  color: var(--color-text);
+  background: var(--surface-selected);
+  color: var(--fg-ink);
 }
 
-/* ─── Reduced motion ─── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Figures in a column — metric values, durations, costs, counts. Inter's
+   tabular set, not the mono face: mono is for identifiers and transcripts,
+   where the reader is looking at characters rather than quantities. Both
+   features are needed; `tnum` alone still lets a `1` sit narrow. */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings:
+    'tnum' 1,
+    'cv01' 1;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Primitives — the reusable half of the language, in @layer components so a
+   Tailwind utility on the same element still wins.
+   ══════════════════════════════════════════════════════════════════════════ */
+@layer components {
+  /* ── Buttons ──
+     36px, 8px radius. The only filled control is ink, which is why the
+     primary inverts to white-on-dark in light mode with zero extra CSS. */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    height: var(--button-height);
+    padding: 0 var(--space-4);
+    /* Reserves the box so --secondary doesn't resize on variant swap. */
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    background: transparent;
+    font-family: inherit;
+    font-size: var(--text-button);
+    font-weight: var(--weight-medium);
+    line-height: var(--leading-flat);
+    color: var(--fg-ink);
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background var(--duration-hover) ease,
+      border-color var(--duration-hover) ease,
+      color var(--duration-hover) ease;
+  }
+
+  .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .btn--primary {
+    background: var(--fg-ink);
+    color: var(--fg-on-ink);
+  }
+
+  .btn--primary:hover:not(:disabled) {
+    background: var(--fg-ink-hover);
+  }
+
+  .btn--secondary {
+    border-color: var(--line-strong);
+    color: var(--fg-ink);
+  }
+
+  .btn--secondary:hover:not(:disabled) {
+    background: var(--surface-hover);
+  }
+
+  .btn--ghost {
+    color: var(--fg-strong);
+  }
+
+  .btn--ghost:hover:not(:disabled) {
+    background: var(--surface-hover);
+    color: var(--fg-ink);
+  }
+
+  .btn--danger {
+    color: var(--status-error);
+  }
+
+  .btn--danger:hover:not(:disabled) {
+    background: var(--status-error-wash);
+  }
+
+  .btn--secondary:active:not(:disabled),
+  .btn--ghost:active:not(:disabled),
+  .btn--danger:active:not(:disabled) {
+    background: var(--surface-press);
+  }
+
+  .btn--sm {
+    height: var(--icon-button-size);
+    padding: 0 var(--space-3);
+    font-size: var(--text-caption);
+  }
+
+  .btn--block {
+    width: 100%;
+  }
+
+  /* ── Icon button ── 28px square, 6px radius, muted glyph. */
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: var(--icon-button-size);
+    height: var(--icon-button-size);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--fg-interactive-muted);
+    cursor: pointer;
+    transition:
+      background var(--duration-hover) ease,
+      color var(--duration-hover) ease;
+  }
+
+  .icon-btn:hover:not(:disabled) {
+    background: var(--surface-hover);
+    color: var(--fg-ink);
+  }
+
+  .icon-btn:active:not(:disabled) {
+    background: var(--surface-press);
+  }
+
+  .icon-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .icon-btn--bordered {
+    border: 1px solid var(--line-hairline);
+  }
+
+  .icon-btn--round {
+    border-radius: var(--radius-pill);
+  }
+
+  /* ── Status chip ── after the app's `● Active calls: 0` pill. One of the
+     three legitimate full pills, alongside .chip__dot and a 1:1 circle. */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: var(--chip-height);
+    padding: 0 var(--space-3) 0 var(--space-2);
+    border: 1px solid var(--line-hairline);
+    border-radius: var(--radius-pill);
+    background: var(--surface-card);
+    font-size: var(--text-caption);
+    font-weight: var(--weight-medium);
+    color: var(--fg-body);
+    white-space: nowrap;
+  }
+
+  .chip--sm {
+    height: var(--chip-height-sm);
+    padding: 0 var(--space-2);
+    gap: var(--space-1);
+    font-size: var(--text-overline);
+  }
+
+  .chip__dot {
+    flex: 0 0 auto;
+    width: var(--dot-size);
+    height: var(--dot-size);
+    border-radius: var(--radius-pill);
+    background: currentColor;
+  }
+
+  .chip__dot--success {
+    background: var(--status-success);
+  }
+  .chip__dot--warning {
+    background: var(--status-warning);
+  }
+  .chip__dot--error {
+    background: var(--status-error);
+  }
+  .chip__dot--neutral {
+    background: var(--fg-muted);
+  }
+
+  /* ── Badge ── the in-table status label, and the same component that carries
+     a `New` / `Alpha` / `⎇ Main` marker. 22px, 6px radius, borderless, a wash
+     fill under a deep ink of the same hue.
+
+     Rounded rect, NOT a pill, and never a dot — the bordered pill with a
+     coloured dot is `.chip`, a different component for the standalone
+     dashboard status. A badge is a label and therefore has no states at all:
+     no hover, no focus, no press.
+
+     `.status-pill` is the same component under the name the app already
+     threads through its call and agent tables. One rule, two selectors, so the
+     two can never drift apart. */
+  .badge,
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    /* The reference's 12px leading icon needs this. */
+    gap: var(--space-1);
+    height: var(--badge-height);
+    padding: 0 var(--space-2);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: var(--surface-hover);
+    font-size: var(--text-overline);
+    font-weight: var(--weight-medium);
+    letter-spacing: var(--tracking-overline);
+    line-height: var(--leading-flat);
+    color: var(--fg-strong);
+    white-space: nowrap;
+  }
+
+  /* A neutral badge sits on the same value as the row's hover wash and would
+     vanish under the cursor. Stepping the fill is the fix; a border the
+     reference does not have is not.
+
+     :where() keeps this at one-class specificity so the tone variants below
+     still win on a hovered row — they carry their own wash and must not be
+     stepped. */
+  :where(.listing__row:hover, .data-table tbody tr:hover) .badge,
+  :where(.listing__row:hover, .data-table tbody tr:hover) .status-pill {
+    background: var(--surface-press);
+  }
+
+  .badge--success,
+  .status-pill--success {
+    background: var(--status-success-wash);
+    color: var(--status-success-ink);
+  }
+  .badge--warning,
+  .status-pill--warning {
+    background: var(--status-warning-wash);
+    color: var(--status-warning-ink);
+  }
+  .badge--error,
+  .status-pill--error {
+    background: var(--status-error-wash);
+    color: var(--status-error-ink);
+  }
+  /* There is deliberately no `--neutral` rule: neutral IS the base, and
+     re-declaring the same fill here would out-specify the hover step above and
+     make the badge disappear on a hovered row. `.status-pill--neutral` in the
+     markup is an inert, self-documenting no-op. */
+  .status-pill--running {
+    background: var(--fg-ink);
+    color: var(--fg-on-ink);
+  }
+
+  /* ── Inputs ── */
+  .input,
+  .textarea,
+  .select {
+    width: 100%;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+    font-family: inherit;
+    font-size: var(--text-nav);
+    color: var(--fg-ink);
+    transition: border-color var(--duration-hover) ease;
+  }
+
+  .input,
+  .select {
+    height: var(--input-height);
+  }
+
+  .textarea {
+    min-height: 120px;
+    padding: var(--space-3);
+    line-height: var(--leading-body);
+    resize: vertical;
+  }
+
+  .input::placeholder,
+  .textarea::placeholder {
+    color: var(--fg-muted);
+  }
+
+  .input:focus,
+  .textarea:focus,
+  .select:focus {
+    border-color: var(--fg-ink);
+    outline: none;
+  }
+
+  .input:read-only,
+  .textarea:read-only {
+    color: var(--fg-body);
+    background: var(--surface-recessed);
+  }
+
+  .input[aria-invalid='true'],
+  .textarea[aria-invalid='true'] {
+    border-color: var(--status-error);
+  }
+
+  .select {
+    appearance: none;
+    padding-right: var(--space-8);
+    font-weight: var(--weight-medium);
+    cursor: pointer;
+  }
+
+  .select:hover:not(:disabled) {
+    background: var(--surface-hover);
+  }
+
+  .select:disabled,
+  .input:disabled,
+  .textarea:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .select-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .select-wrap > svg {
+    position: absolute;
+    right: var(--space-2);
+    color: var(--fg-muted);
+    pointer-events: none;
+  }
+
+  /* A row in the portalled select list. The selected row is a flat grey fill
+     plus an ink check — not a tinted fill, and not a glowing dot. */
+  .select-option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: var(--nav-item-height);
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font-size: var(--text-nav);
+    color: var(--fg-body);
+    cursor: pointer;
+    user-select: none;
+    transition: background var(--duration-hover) ease;
+  }
+
+  .select-option:hover {
+    background: var(--surface-hover);
+  }
+
+  .select-option[aria-selected='true'] {
+    background: var(--surface-selected);
+    color: var(--fg-ink);
+  }
+
+  .select-option[aria-disabled='true'] {
+    color: var(--fg-muted);
+    background: transparent;
+    cursor: not-allowed;
+  }
+
+  /* ── Field stack ── */
+  .field + .field {
+    margin-top: var(--space-4);
+  }
+
+  .field__label {
+    display: block;
+    margin-bottom: var(--space-2);
+    font-size: var(--text-caption);
+    font-weight: var(--weight-medium);
+    color: var(--fg-strong);
+  }
+
+  .field__hint {
+    display: block;
+    margin-top: var(--space-2);
+    font-size: var(--text-caption);
+    line-height: var(--leading-body);
+    color: var(--fg-muted);
+  }
+
+  .field__error {
+    display: block;
+    margin-top: var(--space-2);
+    font-size: var(--text-caption);
+    line-height: var(--leading-body);
+    color: var(--status-error);
+  }
+
+  .field__row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
+  }
+
+  /* ── Card ── hairline and radius. Never a shadow. */
+  .card {
+    padding: var(--space-4);
+    border: 1px solid var(--line-hairline);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+  }
+
+  /* ── Code block ── verbatim payloads, request previews, JSON responses.
+     Recessed rather than tinted: on light the fill has to step *down*, and a
+     black alpha would grey the surface instead. Mono is correct here — this is
+     one of the two places it belongs, alongside identifiers.
+
+     `overflow-wrap: anywhere` on top of the scroll so a single unbroken token
+     (a base64 blob, a long URL) can't force the whole panel wider. */
+  .code-block {
+    margin: 0;
+    padding: var(--space-3);
+    overflow: auto;
+    border: 1px solid var(--line-hairline);
+    border-radius: var(--radius-sm);
+    background: var(--surface-recessed);
+    font-family: var(--font-mono);
+    font-size: var(--text-micro);
+    line-height: var(--leading-body);
+    color: var(--fg-body);
+    overflow-wrap: anywhere;
+  }
+
+  /* ── Section ── */
+  .section + .section {
+    margin-top: var(--space-8);
+  }
+
+  .section__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+  }
+
+  .section__title {
+    margin: 0;
+    font-size: var(--text-nav);
+    font-weight: var(--weight-semibold);
+    color: var(--fg-ink);
+  }
+
+  .section__desc {
+    margin: var(--space-1) 0 0;
+    font-size: var(--text-caption);
+    line-height: var(--leading-body);
+    color: var(--fg-muted);
+  }
+
+  /* The rail's group headings: sentence case and grey, never uppercase and
+     tracked out. */
+  .section-label {
+    padding: var(--space-2) var(--space-2) var(--space-1);
+    font-size: var(--text-overline);
+    font-weight: var(--weight-medium);
+    color: var(--fg-muted);
+  }
+
+  /* ── Tabs ──
+     The active indicator is 2px of INK. An accent underline is the single
+     most tempting colour-as-chrome violation in the language. The active
+     label goes darker, never bolder: switching weight reflows the row. */
+  .tabs {
+    display: flex;
+    gap: var(--space-4);
+    border-bottom: 1px solid var(--line-hairline);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: 0 0 auto;
+    height: var(--tab-height);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-family: inherit;
+    font-size: var(--text-nav);
+    font-weight: var(--weight-medium);
+    color: var(--fg-interactive-muted);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color var(--duration-hover) ease;
+  }
+
+  .tab::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: var(--tab-indicator);
+    background: transparent;
+    transition: background var(--duration-hover) ease;
+  }
+
+  .tab:hover {
+    color: var(--fg-strong);
+  }
+
+  .tab[data-active] {
+    color: var(--fg-ink);
+  }
+
+  .tab[data-active]::after {
+    background: var(--fg-ink);
+  }
+
+  /* ── Switch ──
+     ON is an ink track with an inverted knob — the same inversion .btn--primary
+     uses, which is why it flips between themes for nothing. Never an accent
+     track: a coloured toggle is chrome wearing colour.
+
+     The three locals are a component's own geometry, which is the one case
+     where declaring custom properties inside a rule is allowed. They exist so
+     --sm is three numbers rather than a second copy of every declaration, and
+     so the knob's travel stays derived from them instead of hardcoded. */
+  .switch {
+    --sw: var(--switch-width);
+    --sh: var(--switch-height);
+    --sk: var(--switch-knob);
+    --inset: calc((var(--sh) - var(--sk)) / 2);
+
+    position: relative;
+    flex: 0 0 auto;
+    width: var(--sw);
+    height: var(--sh);
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: var(--line-strong);
+    cursor: pointer;
+    transition: background var(--duration-hover) ease;
+  }
+
+  .switch--sm {
+    --sw: 30px;
+    --sh: 18px;
+    --sk: 12px;
+  }
+
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: var(--inset);
+    left: var(--inset);
+    width: var(--sk);
+    height: var(--sk);
+    border-radius: var(--radius-pill);
+    background: var(--surface-card);
+    transition: transform var(--duration-hover) var(--ease-standard);
+  }
+
+  .switch[aria-checked='true'] {
+    background: var(--fg-ink);
+  }
+
+  .switch[aria-checked='true']::after {
+    background: var(--fg-on-ink);
+    transform: translateX(calc(var(--sw) - var(--sk) - 2 * var(--inset)));
+  }
+
+  .switch:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* ── Segmented control ── */
+  .segmented {
+    display: inline-flex;
+    gap: var(--space-1);
+    padding: var(--space-1);
+    border: 1px solid var(--line-hairline);
+    border-radius: var(--radius-md);
+    background: var(--surface-recessed);
+  }
+
+  .segmented__item {
+    flex: 1 1 auto;
+    height: var(--icon-button-size);
+    padding: 0 var(--space-3);
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font-family: inherit;
+    font-size: var(--text-caption);
+    font-weight: var(--weight-medium);
+    color: var(--fg-body);
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background var(--duration-hover) ease,
+      color var(--duration-hover) ease;
+  }
+
+  .segmented__item:hover:not(:disabled) {
+    color: var(--fg-ink);
+  }
+
+  .segmented__item:active:not(:disabled) {
+    background: var(--surface-press);
+  }
+
+  .segmented__item:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .segmented__item[data-active] {
+    background: var(--surface-card);
+    color: var(--fg-ink);
+    box-shadow: var(--shadow-soft);
+  }
+
+  /* On dark, --shadow-soft is a black blur on a near-black track and reads as
+     nothing, so the active thumb needs an actual edge. Selecting on
+     :not([data-theme='light']) rather than [data-theme='dark'] because the boot
+     script leaves the attribute off when the system preference already is
+     dark — keyed the other way, the thumb would lose its edge until hydration. */
+  :root:not([data-theme='light']) .segmented__item[data-active] {
+    box-shadow: 0 0 0 1px var(--line-strong);
+  }
+
+  /* ══ Page scaffolding ══ */
+  .page__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-6) var(--space-6) var(--space-5);
+  }
+
+  /* 28px Inter 500 — not the 300 display face, which belongs to the 48px
+     voice-stage headline alone. */
+  .page__title {
+    margin: 0;
+    font-size: var(--text-display-lg);
+    font-weight: var(--weight-medium);
+    letter-spacing: var(--tracking-wordmark);
+    line-height: var(--leading-tight);
+    color: var(--fg-ink);
+  }
+
+  .page__meta {
+    font-size: var(--text-caption);
+    color: var(--fg-muted);
+  }
+
+  .page__body {
+    padding: 0 var(--space-6) var(--space-12);
+  }
+
+  /* ── Top bar ── 48px, canvas fill (it belongs to the canvas, not the rail),
+     one closing hairline. */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: 0 0 auto;
+    height: var(--topbar-height);
+    padding: 0 var(--space-3);
+    background: var(--bg-app);
+    border-bottom: 1px solid var(--line-hairline);
+  }
+
+  /* Never two hairlines: a tab strip under the bar closes the block itself. */
+  .topbar[data-flush] {
+    border-bottom: 0;
+  }
+
+  /* ── Breadcrumbs ── `›` with a dim parent means hierarchy. The current crumb
+     is never a link and carries no affordance. */
+  .crumbs {
+    min-width: 0;
+    font-size: var(--text-nav);
+    font-weight: var(--weight-medium);
+  }
+
+  .crumbs ol,
+  .crumbs li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .crumbs__link {
+    color: var(--fg-body);
+    transition: color var(--duration-hover) ease;
+  }
+
+  .crumbs__link:hover {
+    color: var(--fg-ink);
+  }
+
+  .crumbs__sep {
+    flex: 0 0 auto;
+    color: var(--fg-muted);
+  }
+
+  .crumbs__current {
+    min-width: 0;
+    color: var(--fg-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ══ Listing ══
+     No container, no filled header band, no row dividers. One hairline under
+     the column headers is the only rule on screen; rows cohere through a
+     fixed 56px pitch on a shared grid. Row dividers are the Log variant —
+     a different species, deliberately not this one. */
+  .listing-scroll {
+    margin-inline: calc(-1 * var(--space-3));
+    overflow-x: auto;
+  }
+
+  .listing {
+    min-width: var(--listing-min-width, 0);
+  }
+
+  .listing__head,
+  .listing__row {
+    display: grid;
+    grid-template-columns: var(--listing-columns, 1fr);
+    align-items: center;
+    gap: var(--space-4);
+    padding: 0 var(--space-3);
+  }
+
+  .listing__head {
+    height: var(--nav-item-height);
+    border-bottom: 1px solid var(--line-hairline);
+    font-size: var(--text-caption);
+    font-weight: var(--weight-medium);
+    color: var(--fg-muted);
+  }
+
+  .listing__row {
+    min-height: var(--row-height);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-nav);
+    color: var(--fg-body);
+    transition: background var(--duration-hover) ease;
+  }
+
+  .listing__row:hover {
+    background: var(--surface-hover);
+  }
+
+  .listing__row[data-selected] {
+    background: var(--surface-selected);
+  }
+
+  .listing__right {
+    text-align: right;
+    justify-content: flex-end;
+  }
+
+  .listing__muted {
+    color: var(--fg-muted);
+  }
+
+  .listing__strong {
+    color: var(--fg-ink);
+    font-weight: var(--weight-medium);
+  }
+
+  .listing__empty {
+    margin: 0;
+    padding: var(--space-6) var(--space-3);
+    font-size: var(--text-nav);
+    color: var(--fg-muted);
+  }
+
+  /* Sorting lives in the column header, never in a toolbar dropdown. Weight
+     plus caret is the whole signal — never colour or underline it. */
+  .listing__sort {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: var(--weight-medium);
+    color: inherit;
+    cursor: pointer;
+    transition: color var(--duration-hover) ease;
+  }
+
+  .listing__sort:hover,
+  .listing__sort[data-active] {
+    color: var(--fg-strong);
+  }
+
+  .listing__caret {
+    transition: transform var(--duration-hover) ease;
+  }
+
+  .listing__caret[data-direction='asc'] {
+    transform: rotate(180deg);
+  }
+
+  /* ── Data table ── the semantic-HTML sibling of .listing, for short static
+     tabulations. Same rule: hairline under the header only. */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-nav);
+  }
+
+  .data-table th {
+    padding: 0 var(--space-3) var(--space-2);
+    border-bottom: 1px solid var(--line-hairline);
+    font-size: var(--text-caption);
+    font-weight: var(--weight-medium);
+    color: var(--fg-muted);
+    text-align: left;
+  }
+
+  .data-table td {
+    height: var(--row-height);
+    padding: var(--space-3);
+    color: var(--fg-body);
+    vertical-align: middle;
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--surface-hover);
+  }
+
+  .data-table__strong {
+    color: var(--fg-ink);
+    font-weight: var(--weight-medium);
+  }
+
+  .data-table__right {
+    text-align: right;
+  }
+
+  /* Occupies its slot permanently and only fades in, so revealing it on hover
+     costs zero layout shift. Stays focusable. */
+  .play-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: var(--play-size);
+    height: var(--play-size);
+    padding: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-pill);
+    background: var(--surface-card);
+    color: var(--fg-ink);
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      opacity var(--duration-hover) ease,
+      background var(--duration-hover) ease,
+      border-color var(--duration-hover) ease,
+      color var(--duration-hover) ease;
+  }
+
+  /* --static opts out of the reveal entirely: outside a table row there is no
+     hover to reveal against, and where the button's *presence* is data rather
+     than an affordance, hiding it hides the data. */
+  .listing__row:hover .play-btn,
+  .data-table tr:hover .play-btn,
+  .play-btn--static,
+  .play-btn:focus-visible,
+  .play-btn[data-playing] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .play-btn:hover,
+  .play-btn[data-playing] {
+    background: var(--fg-ink);
+    border-color: var(--fg-ink);
+    color: var(--fg-on-ink);
+  }
+
+  .play-btn:active {
+    background: var(--surface-press);
+    border-color: var(--line-strong);
+    color: var(--fg-ink);
+  }
+
+  /* ── Empty state ──
+     There is no display type in an ElevenLabs empty state: title and body are
+     both 15px and hierarchy is carried entirely by weight and colour. Solid
+     hairline, never dashed. */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--space-8) var(--space-6);
+    border: 1px solid var(--line-hairline);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+    text-align: center;
+  }
+
+  .empty-state--bare {
+    padding: var(--space-8) 0;
+    border: 0;
+    background: none;
+  }
+
+  .empty-state__tile {
+    display: grid;
+    place-items: center;
+    width: var(--empty-tile-size);
+    height: var(--empty-tile-size);
+    margin-bottom: var(--space-4);
+    border-radius: var(--radius-lg);
+    background: var(--surface-selected);
+    color: var(--fg-ink);
+  }
+
+  .empty-state--bare .empty-state__tile {
+    background: var(--surface-card);
+    color: var(--fg-muted);
+  }
+
+  .empty-state__title {
+    margin: 0 0 var(--space-1);
+    font-size: var(--text-body);
+    font-weight: var(--weight-semibold);
+    color: var(--fg-ink);
+  }
+
+  /* The 4px title→body gap looks like a mistake and is not: widen it and the
+     two lines stop reading as one paragraph. */
+  .empty-state__body {
+    margin: 0 0 var(--space-4);
+    max-width: var(--measure-prose);
+    font-size: var(--text-body);
+    line-height: var(--leading-body);
+    color: var(--fg-muted);
+  }
+
+  .empty-state__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    justify-content: center;
+  }
+
+  /* ── Stat tile ── colour here is confined to a 12px arrow. Never tint the
+     fill or the border by status. */
+  .stat {
+    padding: var(--space-4);
+    border: 1px solid var(--line-hairline);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+  }
+
+  .stat__label {
+    font-size: var(--text-caption);
+    color: var(--fg-muted);
+  }
+
+  .stat__value {
+    margin-top: var(--space-2);
+    font-size: var(--text-display-lg);
+    font-weight: var(--weight-medium);
+    letter-spacing: var(--tracking-wordmark);
+    line-height: var(--leading-tight);
+    color: var(--fg-ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* A smaller muted span inside the value, sharing its baseline — not a
+     second line. */
+  .stat__unit {
+    font-size: var(--text-caption);
+    font-weight: var(--weight-regular);
+    color: var(--fg-body);
+  }
+
+  .stat__foot {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-top: var(--space-2);
+    font-size: var(--text-caption);
+    color: var(--fg-muted);
+  }
+
+  .stat__delta[data-direction='up'] {
+    color: var(--status-success);
+  }
+
+  .stat__delta[data-direction='down'] {
+    color: var(--status-error);
+  }
+
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-3);
+  }
+
+  /* ── Overlays ── the only things that genuinely float, so the only things
+     that earn a shadow. */
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-5);
+    background: var(--scrim);
+    backdrop-filter: blur(3px);
+  }
+
+  .modal {
+    width: min(var(--modal-width), 100%);
+    padding: var(--space-5);
+    border: 1px solid var(--line-hairline);
+    border-radius: var(--radius-lg);
+    background: var(--surface-card);
+    box-shadow: var(--shadow-modal);
+  }
+
+  .modal__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .modal__title {
+    margin: 0;
+    font-size: var(--text-title-md);
+    font-weight: var(--weight-medium);
+    letter-spacing: var(--tracking-wordmark);
+    color: var(--fg-ink);
+  }
+
+  .modal__hint {
+    margin: var(--space-1) 0 var(--space-5);
+    font-size: var(--text-caption);
+    line-height: var(--leading-body);
+    color: var(--fg-muted);
+  }
+
+  /* Secondary first, primary last: that order also means a disabled primary,
+     which leaves the tab order, can't strand focus. */
+  .modal__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-top: var(--space-5);
+  }
+
+  .toast {
+    max-width: 320px;
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--line-hairline);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+    box-shadow: var(--shadow-modal);
+    font-size: var(--text-caption);
+    color: var(--fg-ink);
+  }
+
+  /* ══ Charts ══
+     Gridlines, ticks, borders and tracks are furniture: ink and grey. Only
+     the data mark may take colour — and a single-series bar field is neutral
+     ink, because bars cover far more area than a line. */
+  .chart__gridline {
+    stroke: var(--line-hairline);
+    stroke-width: 1;
+  }
+
+  /* Ticks are data, so they take --fg-body: --fg-muted fails AA and the
+     reference is wrong here. */
+  .chart__tick {
+    font-size: var(--text-overline);
+    fill: var(--fg-body);
+  }
+
+  /* Solid hairline = gridline; dashed status colour = threshold. Never dash a
+     gridline. */
+  .chart__threshold {
+    stroke: var(--status-error);
+    stroke-width: 2;
+    stroke-dasharray: 6 2;
+  }
+
+  .chart__threshold-label {
+    font-size: var(--text-overline);
+    fill: var(--status-error);
+  }
+
+  /* A tooltip genuinely floats, so it is one of the handful of things that
+     earns a shadow. The panel is neutral: only the swatch carries series
+     colour. */
+  .chart__tooltip {
+    position: absolute;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--line-hairline);
+    border-radius: var(--radius-sm);
+    background: var(--surface-card);
+    box-shadow: var(--shadow-soft);
+    font-size: var(--text-micro);
+    color: var(--fg-ink);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .chart__tooltip-title {
+    font-weight: var(--weight-medium);
+  }
+
+  /* The legend swatch is the one place a series colour appears outside the
+     plot. A 2px square, not a dot — a dot reads as a status indicator. The
+     hairline keeps the lightest rung of the ink ladder off the card. */
+  .chart__swatch {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    box-shadow: 0 0 0 1px var(--line-hairline);
+  }
+
+  .chart__legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1) var(--space-4);
+    margin-top: var(--space-3);
+    font-size: var(--text-micro);
+    color: var(--fg-body);
+  }
+}
+
+/* ─── Motion ─────────────────────────────────────────────────────────────── */
+@keyframes orbSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes orbPulse {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes dotPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes pillSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.status-pill__spinner {
+  animation: pillSpin 1s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

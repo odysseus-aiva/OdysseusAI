@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -18,7 +19,6 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
 import type { CallStatus } from '@/lib/types/call-log';
 import {
   firstArgValue,
@@ -68,15 +68,16 @@ function HighlightedText({
   ranges.forEach((r, i) => {
     if (r.start > cursor) parts.push(text.slice(cursor, r.start));
     parts.push(
+      /* The active hit inverts to ink the way a running pill does; the rest
+         take a neutral surface step. Highlighting is emphasis, not status. */
       <mark
         key={`${r.start}-${i}`}
-        className="rounded-[2px] px-0.5"
-          style={{
-            background: active
-              ? 'color-mix(in srgb, var(--color-accent) 22%, transparent)'
-              : 'color-mix(in srgb, var(--color-accent) 10%, transparent)',
-            color: 'inherit',
-          }}
+        className="rounded-xs px-0.5"
+        style={
+          active
+            ? { background: 'var(--fg-ink)', color: 'var(--fg-on-ink)' }
+            : { background: 'var(--surface-selected)', color: 'inherit' }
+        }
       >
         {text.slice(r.start, r.end)}
       </mark>,
@@ -184,163 +185,125 @@ export function CallTranscriptPanel({
     <div className="flex h-full min-h-0 flex-col">
       <div
         className="flex flex-none items-center gap-2 px-4 py-3"
-        style={{ borderBottom: '1px solid var(--color-border)' }}
+        style={{ borderBottom: '1px solid var(--line-hairline)' }}
       >
-        <h2
-          className="text-[13px] font-[600] tracking-[-0.015em]"
-          style={{ color: 'var(--color-text)' }}
-        >
-          Transcript
-        </h2>
-        {language && (
-          <span
-            className="ml-auto rounded-[6px] px-2 py-0.5 text-[11px] font-[450]"
-            style={{
-              background: 'var(--color-surface-elevated)',
-              color: 'var(--color-text-faint)',
-              border: '1px solid var(--color-border)',
-            }}
-          >
-            {language}
-          </span>
-        )}
+        <h2 className="section__title">Transcript</h2>
+        {language && <span className="badge ml-auto">{language}</span>}
       </div>
 
       {/* Toolbar — same control height/radius as Call History filters */}
       <div
-        className="flex flex-none flex-wrap items-center gap-2 px-3 py-2.5 lg:px-4"
-        style={{ borderBottom: '1px solid var(--color-border)' }}
+        className="flex flex-none flex-wrap items-center gap-2 px-3 py-3 lg:px-4"
+        style={{ borderBottom: '1px solid var(--line-hairline)' }}
       >
-            <label
-              className="relative flex min-w-0 flex-1 items-center"
-              style={{ minWidth: 140 }}
+        <label className="relative flex min-w-0 flex-1 items-center" style={{ minWidth: 140 }}>
+          <Search
+            size={16}
+            strokeWidth={2}
+            aria-hidden
+            className="pointer-events-none absolute left-3"
+            style={{ color: 'var(--fg-muted)' }}
+          />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onSearchKey}
+            placeholder="Search transcript…"
+            className="input pl-9 pr-9"
+            aria-label="Search transcript"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              aria-label="Clear search"
+              className="icon-btn focus-inset absolute right-1"
             >
-              <Search
-                size={13}
-                strokeWidth={2}
-                className="pointer-events-none absolute left-3"
-                style={{ color: 'var(--color-text-faint)' }}
-              />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={onSearchKey}
-                placeholder="Search transcript…"
-                className="w-full rounded-[9px] py-2 pl-9 pr-8 text-[13px] outline-none transition-colors duration-[140ms]"
-                style={{
-                  background: 'var(--color-void)',
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text)',
-                  height: 36,
-                }}
-                aria-label="Search transcript"
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--color-border-focus)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--color-border)';
-                }}
-              />
-              {query && (
-                <button
-                  type="button"
-                  onClick={() => setQuery('')}
-                  aria-label="Clear search"
-                  className="absolute right-2.5 flex h-5 w-5 items-center justify-center rounded-[5px]"
-                  style={{ color: 'var(--color-text-faint)' }}
-                >
-                  <X size={13} strokeWidth={2} />
-                </button>
-              )}
-            </label>
+              <X size={14} strokeWidth={2} />
+            </button>
+          )}
+        </label>
 
-            {matches.length > 0 && (
-              <div className="flex items-center gap-0.5">
-                <span className="px-1 text-[11px] tabular-nums" style={{ color: 'var(--color-text-faint)' }}>
-                  {matchIndex + 1}/{matches.length}
-                </span>
-                <button
-                  type="button"
-                  onClick={goPrev}
-                  aria-label="Previous match"
-                  className="rounded-[6px] p-1.5 hover:bg-[var(--color-glass-hover)]"
-                  style={{ color: 'var(--color-text-muted)' }}
-                >
-                  <ChevronUp size={14} strokeWidth={2} />
-                </button>
-                <button
-                  type="button"
-                  onClick={goNext}
-                  aria-label="Next match"
-                  className="rounded-[6px] p-1.5 hover:bg-[var(--color-glass-hover)]"
-                  style={{ color: 'var(--color-text-muted)' }}
-                >
-                  <ChevronDown size={14} strokeWidth={2} />
-                </button>
-              </div>
-            )}
-
-            <div
-              className="flex items-center gap-0.5 rounded-[9px] p-0.5"
-              style={{ background: 'var(--color-void)', border: '1px solid var(--color-border)' }}
-              role="group"
-              aria-label="Speaker filter"
+        {matches.length > 0 && (
+          <div className="flex items-center gap-1">
+            <span
+              className="num px-1 text-micro"
+              style={{ color: 'var(--fg-muted)' }}
+              aria-live="polite"
             >
-              {(
-                [
-                  { id: 'all' as const, label: 'All' },
-                  { id: 'caller' as const, label: 'Caller' },
-                  { id: 'agent' as const, label: 'Agent' },
-                ] as const
-              ).map((opt) => {
-                const on = speaker === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setSpeaker(opt.id)}
-                    className="rounded-[7px] px-2.5 py-1.5 text-[12px] font-[450]"
-                    style={{
-                      color: on ? 'var(--color-accent)' : 'var(--color-text-muted)',
-                      background: on ? 'var(--color-nav-active-bg)' : 'transparent',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
-
+              {matchIndex + 1}/{matches.length}
+            </span>
+            <button
+              type="button"
+              onClick={goPrev}
+              aria-label="Previous match"
+              className="icon-btn focus-inset"
+            >
+              <ChevronUp size={16} strokeWidth={2} />
+            </button>
+            <button
+              type="button"
+              onClick={goNext}
+              aria-label="Next match"
+              className="icon-btn focus-inset"
+            >
+              <ChevronDown size={16} strokeWidth={2} />
+            </button>
           </div>
+        )}
 
-          <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3 lg:px-4">
-            {filtered.length === 0 ? (
-              <EmptyTranscript status={status} hasMessages={messageCount > 0} />
-            ) : (
-              <ol className="flex flex-col gap-3">
-                {filtered.map((item) =>
-                  item.kind === 'message' ? (
-                    <MessageTurn
-                      key={item.id}
-                      item={item}
-                      agentName={agentName}
-                      callStartMs={callStartMs}
-                      query={query}
-                      isPlaying={activeMessageId === item.id}
-                      isSearchHit={activeMatch?.itemId === item.id}
-                      onSeek={onSeek}
-                      registerRef={(el) => {
-                        if (el) rowRefs.current.set(item.id, el);
-                        else rowRefs.current.delete(item.id);
-                      }}
-                    />
-                  ) : (
-                    <ToolTurn key={item.id} item={item} callStartMs={callStartMs} />
-                  ),
-                )}
-              </ol>
+        <div className="segmented" role="group" aria-label="Speaker filter">
+          {(
+            [
+              { id: 'all' as const, label: 'All' },
+              { id: 'caller' as const, label: 'Caller' },
+              { id: 'agent' as const, label: 'Agent' },
+            ] as const
+          ).map((opt) => {
+            const on = speaker === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setSpeaker(opt.id)}
+                className="segmented__item focus-inset"
+                data-active={on || undefined}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-3 lg:px-4">
+        {filtered.length === 0 ? (
+          <EmptyTranscript status={status} hasMessages={messageCount > 0} />
+        ) : (
+          <ol className="flex flex-col gap-3">
+            {filtered.map((item) =>
+              item.kind === 'message' ? (
+                <MessageTurn
+                  key={item.id}
+                  item={item}
+                  agentName={agentName}
+                  callStartMs={callStartMs}
+                  query={query}
+                  isPlaying={activeMessageId === item.id}
+                  isSearchHit={activeMatch?.itemId === item.id}
+                  onSeek={onSeek}
+                  registerRef={(el) => {
+                    if (el) rowRefs.current.set(item.id, el);
+                    else rowRefs.current.delete(item.id);
+                  }}
+                />
+              ) : (
+                <ToolTurn key={item.id} item={item} callStartMs={callStartMs} />
+              ),
             )}
-          </div>
+          </ol>
+        )}
+      </div>
     </div>
   );
 }
@@ -366,46 +329,49 @@ function MessageTurn({
 }) {
   const isAgent = item.role === 'assistant';
   const name = isAgent ? agentName : 'Caller';
-  const accent = isAgent ? 'var(--color-accent)' : 'var(--color-text-muted)';
+  /* Speaker is carried by the label, the icon and one surface step — never by
+     hue. Tinting the two speakers differently would be a two-colour categorical
+     system, which is the loudest colour-as-chrome violation available here. */
+  const speakerInk = isAgent ? 'var(--fg-ink)' : 'var(--fg-body)';
+  const offset = formatOffset(item.ts - callStartMs);
   const seekTo = offsetSeconds(item.ts, callStartMs);
 
   return (
     <li
       ref={registerRef}
-      className="rounded-[10px] px-2.5 py-2 transition-colors duration-[140ms]"
+      className="rounded-md px-3 py-2 transition-colors duration-[120ms]"
       style={{
         background: isPlaying
-          ? 'var(--color-accent-subtle)'
+          ? 'var(--surface-selected)'
           : isSearchHit
-            ? 'var(--color-glass)'
-            : 'transparent',
-        border: isPlaying
-          ? '1px solid var(--color-accent-hairline)'
-          : '1px solid transparent',
+            ? 'var(--surface-hover)'
+            : isAgent
+              ? 'var(--surface-recessed)'
+              : 'transparent',
       }}
     >
       <div className="mb-1 flex items-center gap-2">
         {isAgent ? (
-          <AudioLines size={12} strokeWidth={2} style={{ color: accent }} />
+          <AudioLines size={14} strokeWidth={2} aria-hidden="true" style={{ color: speakerInk }} />
         ) : (
-          <User size={12} strokeWidth={2} style={{ color: accent }} />
+          <User size={14} strokeWidth={2} aria-hidden="true" style={{ color: speakerInk }} />
         )}
-        <span className="text-[12px] font-[550] tracking-[-0.01em]" style={{ color: accent }}>
+        <span className="text-caption font-medium" style={{ color: speakerInk }}>
           {name}
         </span>
         <button
           type="button"
           onClick={() => onSeek(seekTo)}
-          className="font-mono text-[10.5px] tabular-nums transition-opacity hover:opacity-100"
-          style={{ color: 'var(--color-text-faint)' }}
+          className="num focus-inset rounded-xs font-mono text-micro text-[var(--fg-muted)] transition-colors duration-[120ms] hover:text-[var(--fg-ink)]"
+          aria-label={`Seek recording to ${offset}`}
           title="Seek recording to this moment"
         >
-          {formatOffset(item.ts - callStartMs)}
+          {offset}
         </button>
       </div>
       <p
-        className="whitespace-pre-wrap text-[13px] leading-[1.55]"
-        style={{ color: 'var(--color-text)' }}
+        className="whitespace-pre-wrap text-nav leading-body"
+        style={{ color: 'var(--fg-strong)' }}
       >
         <HighlightedText text={item.text} query={query} active={isSearchHit} />
       </p>
@@ -415,10 +381,9 @@ function MessageTurn({
 
 function ToolTurn({ item, callStartMs }: { item: TimelineTool; callStartMs: number }) {
   const [open, setOpen] = useState(false);
+  const panelId = useId();
   const failed = item.success === false || item.error != null;
-  const tone = failed
-    ? 'color-mix(in srgb, var(--color-state-error) 40%, var(--color-text-muted))'
-    : 'var(--color-text-faint)';
+  const tone = failed ? 'var(--status-error)' : 'var(--fg-muted)';
   const expandable = item.args !== undefined || item.output !== undefined || item.error != null;
   const caption = [
     firstArgValue(item.args),
@@ -431,76 +396,74 @@ function ToolTurn({ item, callStartMs }: { item: TimelineTool; callStartMs: numb
   return (
     <li className="pl-1">
       <div
-        className="overflow-hidden rounded-[8px]"
-        style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface-raised)' }}
+        className="overflow-hidden rounded-md"
+        style={{
+          border: '1px solid var(--line-hairline)',
+          background: 'var(--surface-recessed)',
+        }}
       >
         <button
           type="button"
           onClick={() => expandable && setOpen((v) => !v)}
-          className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[var(--color-glass)]"
+          className="focus-inset flex w-full items-center gap-2 px-3 py-2 text-left transition-colors duration-[120ms] hover:bg-[var(--surface-hover)]"
           style={{ cursor: expandable ? 'pointer' : 'default' }}
           aria-expanded={expandable ? open : undefined}
+          aria-controls={expandable ? panelId : undefined}
         >
-          <Wrench size={11} strokeWidth={2.2} style={{ color: tone }} />
-          <span
-            className="text-[10px] font-[600] uppercase tracking-[0.12em]"
-            style={{ color: 'var(--color-text-faint)' }}
-          >
+          <Wrench size={14} strokeWidth={2} aria-hidden="true" style={{ color: tone }} />
+          <span className="text-micro" style={{ color: 'var(--fg-muted)' }}>
             Tool
           </span>
-          <span className="font-mono text-[12px]" style={{ color: 'var(--color-text)' }}>
+          <span className="font-mono text-caption" style={{ color: 'var(--fg-ink)' }}>
             {item.toolName}
           </span>
           <span
-            className="min-w-0 flex-1 truncate text-[11.5px]"
-            style={{ color: failed ? tone : 'var(--color-text-muted)' }}
+            className="min-w-0 flex-1 truncate text-caption"
+            style={{ color: failed ? tone : 'var(--fg-body)' }}
           >
             {caption}
           </span>
-          <time className="shrink-0 font-mono text-[10.5px]" style={{ color: 'var(--color-text-faint)' }}>
+          <time className="num shrink-0 font-mono text-micro" style={{ color: 'var(--fg-muted)' }}>
             {formatOffset(item.ts - callStartMs)}
           </time>
           {expandable && (
             <ChevronDown
-              size={13}
+              size={14}
               strokeWidth={2}
-              className="shrink-0 transition-transform duration-200"
+              aria-hidden="true"
+              className="shrink-0 transition-transform duration-[120ms]"
               style={{
-                color: 'var(--color-text-faint)',
-                transform: open ? 'rotate(180deg)' : 'none',
+                color: 'var(--fg-muted)',
+                transform: open ? 'rotate(180deg)' : undefined,
               }}
             />
           )}
         </button>
-        <AnimatePresence initial={false}>
-          {open && expandable && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-              style={{ overflow: 'hidden' }}
-            >
-              <div
-                className="flex flex-col gap-2 border-t px-3 pb-3 pt-2.5"
-                style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
-              >
-                {item.args !== undefined && <JsonBlock label="Arguments" value={item.args} />}
-                {item.output !== undefined && (
-                  <JsonBlock
-                    label="Result"
-                    value={item.output as Parameters<typeof JsonBlock>[0]['value']}
-                  />
-                )}
-                {item.error != null && (
-                  <p className="text-[12px]" style={{ color: 'var(--color-state-error)' }}>
-                    Error: {String(item.error)}
-                  </p>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* The disclosure does not tween its height: nothing in this language
+            animates layout. */}
+        {open && expandable && (
+          <div
+            id={panelId}
+            className="flex flex-col gap-3 px-3 pb-3 pt-3"
+            style={{
+              borderTop: '1px solid var(--line-hairline)',
+              background: 'var(--surface-card)',
+            }}
+          >
+            {item.args !== undefined && <JsonBlock label="Arguments" value={item.args} />}
+            {item.output !== undefined && (
+              <JsonBlock
+                label="Result"
+                value={item.output as Parameters<typeof JsonBlock>[0]['value']}
+              />
+            )}
+            {item.error != null && (
+              <p className="text-caption" style={{ color: 'var(--status-error)' }}>
+                Error: {String(item.error)}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </li>
   );
@@ -515,18 +478,10 @@ function JsonBlock({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span
-        className="text-[10.5px] uppercase tracking-[0.07em]"
-        style={{ color: 'var(--color-text-faint)' }}
-      >
+      <span className="text-micro" style={{ color: 'var(--fg-muted)' }}>
         {label}
       </span>
-      <pre
-        className="overflow-x-auto rounded p-2 text-[11.5px]"
-        style={{ background: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}
-      >
-        {JSON.stringify(value, null, 2)}
-      </pre>
+      <pre className="code-block p-2">{JSON.stringify(value, null, 2)}</pre>
     </div>
   );
 }
@@ -547,14 +502,11 @@ function EmptyTranscript({
         : 'No conversation was captured for this call.';
 
   return (
-    <div
-      className="flex flex-col items-center gap-2 rounded-[10px] py-10 text-center"
-      style={{ border: '1px dashed var(--color-border)' }}
-    >
-      <MessageSquare size={18} strokeWidth={1.8} style={{ color: 'var(--color-text-faint)' }} />
-      <p className="max-w-[32ch] text-[12.5px] leading-[1.5]" style={{ color: 'var(--color-text-muted)' }}>
-        {message}
-      </p>
+    <div className="empty-state" aria-live="polite">
+      <span className="empty-state__tile" aria-hidden="true">
+        <MessageSquare size={20} strokeWidth={1.7} />
+      </span>
+      <p className="empty-state__body mb-0">{message}</p>
     </div>
   );
 }

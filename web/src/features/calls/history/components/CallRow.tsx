@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  ArrowDown,
   MoreHorizontal,
   Copy,
   ExternalLink,
@@ -35,11 +36,13 @@ function fmtTime(s: number): string {
   return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 }
 
+/* In-flight reads neutral, not warning: warning is reserved for a state the
+   user has to act on. */
 function statusVariant(
   status: CallStatus,
-): 'success' | 'accent' | 'error' {
+): 'success' | 'muted' | 'error' {
   if (status === 'completed') return 'success';
-  if (status === 'in_progress') return 'accent';
+  if (status === 'in_progress') return 'muted';
   return 'error';
 }
 
@@ -85,7 +88,7 @@ function InlineRecordingPlayer({ callId }: { callId: string }) {
 
   return (
     <div
-      className="inline-flex items-center gap-1.5"
+      className="inline-flex min-w-0 items-center gap-2"
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -129,50 +132,26 @@ function InlineRecordingPlayer({ callId }: { callId: string }) {
         onError={() => setError(true)}
       />
 
+      {/* Recording presence is data here, so the button stays visible instead of
+          revealing on row hover the way a voice-preview slot does. */}
       <button
         type="button"
         onClick={toggle}
         disabled={error}
         aria-label={playing ? 'Pause recording' : 'Play recording'}
-        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full transition-colors duration-[140ms] disabled:cursor-not-allowed disabled:opacity-40"
-        style={{
-          background: playing
-            ? 'var(--color-accent-soft)'
-            : 'var(--color-surface-elevated)',
-          border: `1px solid ${
-            playing ? 'var(--color-accent-hairline)' : 'var(--color-border)'
-          }`,
-          color: playing ? 'var(--color-accent)' : 'var(--color-text-muted)',
-        }}
-        onMouseEnter={(e) => {
-          if (error) return;
-          e.currentTarget.style.borderColor = 'var(--color-accent-hairline)';
-          e.currentTarget.style.color = 'var(--color-accent)';
-          e.currentTarget.style.background = 'var(--color-accent-soft)';
-        }}
-        onMouseLeave={(e) => {
-          if (error) return;
-          e.currentTarget.style.borderColor = playing
-            ? 'var(--color-accent-hairline)'
-            : 'var(--color-border)';
-          e.currentTarget.style.color = playing
-            ? 'var(--color-accent)'
-            : 'var(--color-text-muted)';
-          e.currentTarget.style.background = playing
-            ? 'var(--color-accent-soft)'
-            : 'var(--color-surface-elevated)';
-        }}
+        data-playing={playing || undefined}
+        className="play-btn play-btn--static focus-inset disabled:cursor-not-allowed disabled:opacity-40"
       >
         {playing ? (
-          <Pause size={11} strokeWidth={2.2} />
+          <Pause size={12} strokeWidth={2} />
         ) : (
-          <Play size={11} strokeWidth={2.2} style={{ marginLeft: 1 }} />
+          <Play size={12} strokeWidth={2} style={{ marginLeft: 1 }} />
         )}
       </button>
 
       <span
-        className="font-mono text-[11px] tabular-nums"
-        style={{ color: error ? 'var(--color-state-error)' : 'var(--color-text-faint)' }}
+        className="truncate font-mono text-micro tabular-nums"
+        style={{ color: error ? 'var(--status-error)' : 'var(--fg-muted)' }}
       >
         {error
           ? 'Unavailable'
@@ -236,42 +215,27 @@ function RowActions({ call }: { call: CallSummary }) {
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className="flex h-8 w-8 items-center justify-center rounded-[8px] transition-colors duration-[140ms]"
-        style={{ color: 'var(--color-text-faint)' }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'var(--color-surface-elevated)';
-          e.currentTarget.style.color = 'var(--color-text-muted)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'transparent';
-          e.currentTarget.style.color = 'var(--color-text-faint)';
-        }}
+        className="icon-btn focus-inset"
       >
         <MoreHorizontal size={16} strokeWidth={2} />
       </button>
       {open && (
+        /* A menu genuinely floats, so it is one of the few things that earns a
+           shadow. */
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-1 min-w-[160px] overflow-hidden rounded-[10px] py-1"
+          className="absolute right-0 z-20 mt-1 min-w-[168px] overflow-hidden rounded-md py-1"
           style={{
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-border-strong)',
-            boxShadow:
-              '0 4px 6px rgb(0 0 0 / 0.06), 0 10px 32px rgb(0 0 0 / 0.18)',
+            background: 'var(--surface-card)',
+            border: '1px solid var(--line-hairline)',
+            boxShadow: 'var(--shadow-soft)',
           }}
         >
           <Link
             href={`/calls/${encodeURIComponent(call.callId)}`}
             role="menuitem"
-            className="flex items-center gap-2 px-3 py-2 text-[13px] transition-colors"
-            style={{ color: 'var(--color-text-muted)' }}
+            className="flex items-center gap-2 px-3 py-2 text-caption text-[var(--fg-body)] transition-colors duration-[120ms] hover:bg-[var(--surface-hover)] hover:text-[var(--fg-ink)]"
             onClick={(e) => e.stopPropagation()}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--color-surface-raised)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
-            }}
           >
             <ExternalLink size={14} strokeWidth={2} />
             Open details
@@ -279,18 +243,11 @@ function RowActions({ call }: { call: CallSummary }) {
           <button
             type="button"
             role="menuitem"
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px]"
-            style={{ color: 'var(--color-text-muted)' }}
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption text-[var(--fg-body)] transition-colors duration-[120ms] hover:bg-[var(--surface-hover)] hover:text-[var(--fg-ink)]"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
               void copyId();
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--color-surface-raised)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
             }}
           >
             <Copy size={14} strokeWidth={2} />
@@ -302,40 +259,46 @@ function RowActions({ call }: { call: CallSummary }) {
   );
 }
 
+/**
+ * Screen-local grid geometry. Column tracks are the one thing a screen owns
+ * rather than inherits, so they ride on the page root as custom properties.
+ */
 export const CALL_TABLE_COLUMNS =
-  'minmax(180px, 1.5fr) 120px minmax(100px, 1fr) 120px 72px 110px minmax(110px, 0.9fr) 40px';
+  'minmax(180px, 1.6fr) 120px minmax(104px, 1fr) 116px 76px 120px 180px 28px';
+
+export const CALL_TABLE_MIN_WIDTH = '1060px';
 
 export function CallTableHeader() {
-  const headers = [
-    'Contact',
-    'Number',
-    'Agent',
-    'Date',
-    'Duration',
-    'Recording',
-    'Status',
-    '',
-  ];
   return (
-    <div
-      className="hidden items-center gap-3 px-4 py-2.5 md:grid"
-      style={{
-        gridTemplateColumns: CALL_TABLE_COLUMNS,
-        background: 'var(--color-surface)',
-        borderBottom: '1px solid var(--color-border)',
-      }}
-      role="row"
-    >
-      {headers.map((h, i) => (
-        <span
-          key={i}
-          className="text-[11px] font-[500] uppercase tracking-[0.08em]"
-          style={{ color: 'var(--color-text-faint)' }}
-          role="columnheader"
-        >
-          {h}
-        </span>
-      ))}
+    <div className="listing__head hidden md:grid" role="row">
+      <span role="columnheader">Contact</span>
+      <span role="columnheader">Number</span>
+      <span role="columnheader">Agent</span>
+      {/* The list is served sorted by createdAt desc; the caret reports the
+          active column rather than offering to change it. */}
+      <span
+        role="columnheader"
+        aria-sort="descending"
+        className="inline-flex items-center gap-1"
+        style={{ color: 'var(--fg-strong)' }}
+      >
+        Date
+        <ArrowDown
+          size={13}
+          strokeWidth={2}
+          aria-hidden
+          className="listing__caret"
+          data-direction="desc"
+        />
+      </span>
+      <span role="columnheader" className="listing__right">
+        Duration
+      </span>
+      <span role="columnheader">Recording</span>
+      <span role="columnheader">Status</span>
+      <span role="columnheader">
+        <span className="sr-only">Actions</span>
+      </span>
     </div>
   );
 }
@@ -363,6 +326,20 @@ export function CallRow({
     router.push(href);
   };
 
+  const initials = (
+    <span
+      className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-pill text-overline font-medium"
+      style={{
+        background: 'var(--surface-recessed)',
+        border: '1px solid var(--line-hairline)',
+        color: 'var(--fg-body)',
+      }}
+      aria-hidden
+    >
+      {initialsFromLabel(contact)}
+    </span>
+  );
+
   return (
     <div
       role="link"
@@ -374,143 +351,90 @@ export function CallRow({
           openDetail();
         }
       }}
-      className="group cursor-pointer border-b outline-none last:border-b-0 transition-colors duration-[140ms]"
-      style={{
-        borderColor: 'var(--color-border)',
-        background: selected
-          ? 'var(--color-accent-subtle)'
-          : 'var(--color-surface-raised)',
-      }}
-      onMouseEnter={(e) => {
-        if (!selected) {
-          e.currentTarget.style.background = 'var(--color-surface-elevated)';
-        }
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = selected
-          ? 'var(--color-accent-subtle)'
-          : 'var(--color-surface-raised)';
-      }}
+      className="focus-inset cursor-pointer"
       aria-current={selected ? 'true' : undefined}
     >
       <div
-        className="hidden items-center gap-3 px-4 py-3 md:grid"
-        style={{ gridTemplateColumns: CALL_TABLE_COLUMNS }}
+        className="listing__row hidden md:grid"
         role="row"
+        data-selected={selected || undefined}
       >
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-[600]"
-            style={{
-              background: selected
-                ? 'var(--color-accent-soft)'
-                : 'var(--color-surface-elevated)',
-              color: selected ? 'var(--color-accent)' : 'var(--color-text-muted)',
-              border: '1px solid var(--color-border)',
-            }}
-            aria-hidden
-          >
-            {initialsFromLabel(contact)}
-          </span>
-          <div className="min-w-0">
-            <p
-              className="truncate text-[13px] font-[500]"
-              style={{
-                color: selected ? 'var(--color-accent)' : 'var(--color-text)',
-              }}
-            >
+        <span className="flex min-w-0 items-center gap-2" role="cell">
+          {initials}
+          <span className="min-w-0">
+            <span className="listing__strong block truncate text-nav">
               {contact}
-            </p>
+            </span>
             {call.analysis?.summary ? (
-              <p
-                className="truncate text-[12px]"
-                style={{ color: 'var(--color-text-muted)' }}
-              >
+              <span className="listing__muted block truncate text-caption">
                 {call.analysis.summary}
-              </p>
+              </span>
             ) : null}
-          </div>
-        </div>
+          </span>
+        </span>
 
-        <span
-          className="truncate font-mono text-[12.5px]"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
+        <span className="truncate font-mono text-nav" role="cell">
           {formatPhone(phone)}
         </span>
 
-        <span
-          className="truncate text-[13px]"
-          style={{ color: 'var(--color-text-muted)' }}
-          title={agent}
-        >
+        <span className="truncate" role="cell" title={agent}>
           {agent}
         </span>
 
-        <div className="flex flex-col leading-tight">
-          <span className="text-[12.5px]" style={{ color: 'var(--color-text)' }}>
-            {date}
-          </span>
-          <span className="text-[12px]" style={{ color: 'var(--color-text-faint)' }}>
-            {time}
-          </span>
-        </div>
+        <span className="flex flex-col leading-tight" role="cell">
+          <span>{date}</span>
+          <span className="listing__muted text-caption">{time}</span>
+        </span>
 
-        <span
-          className="font-mono text-[12.5px] tabular-nums"
-          style={{ color: 'var(--color-text-muted)' }}
-        >
+        <span className="listing__right tabular-nums" role="cell">
           {formatDuration(call.durationMs)}
         </span>
 
-        <div className="flex items-center">
+        <span className="flex min-w-0 items-center" role="cell">
           {hasRecording ? (
             <InlineRecordingPlayer callId={call.callId} />
           ) : (
-            <span
-              className="text-[12.5px]"
-              style={{ color: 'var(--color-text-faint)' }}
-            >
-              —
-            </span>
+            <span className="listing__muted">—</span>
           )}
-        </div>
+        </span>
 
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <Badge variant={statusVariant(call.status)} dot>
+        <span className="flex min-w-0 items-center gap-2" role="cell">
+          <Badge variant={statusVariant(call.status)}>
             {statusLabel(call.status, call.endedBy)}
           </Badge>
           {sentiment ? <Badge variant="muted">{sentiment}</Badge> : null}
-        </div>
+        </span>
 
-        <RowActions call={call} />
+        <span role="cell">
+          <RowActions call={call} />
+        </span>
       </div>
 
-      <div className="flex flex-col gap-2 px-4 py-3 md:hidden">
+      <div
+        className="flex flex-col gap-2 rounded-sm px-3 py-3 transition-colors duration-[120ms] hover:bg-[var(--surface-hover)] md:hidden"
+        style={selected ? { background: 'var(--surface-selected)' } : undefined}
+      >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p
-              className="truncate text-[14px] font-[500]"
-              style={{ color: selected ? 'var(--color-accent)' : 'var(--color-text)' }}
-            >
+            <p className="truncate text-nav font-medium" style={{ color: 'var(--fg-ink)' }}>
               {contact}
             </p>
-            <p className="truncate text-[12px]" style={{ color: 'var(--color-text-muted)' }}>
+            <p className="truncate text-caption" style={{ color: 'var(--fg-muted)' }}>
               {formatPhone(phone)} · {agent}
             </p>
           </div>
-          <Badge variant={statusVariant(call.status)} dot>
+          <Badge variant={statusVariant(call.status)}>
             {statusLabel(call.status, call.endedBy)}
           </Badge>
         </div>
         <div
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[12px]"
-          style={{ color: 'var(--color-text-muted)' }}
+          className="flex flex-wrap items-center gap-x-4 gap-y-2 text-caption"
+          style={{ color: 'var(--fg-body)' }}
         >
           <span>
             {date} · {time}
           </span>
-          <span>{formatDuration(call.durationMs)}</span>
+          <span className="tabular-nums">{formatDuration(call.durationMs)}</span>
           {hasRecording ? <InlineRecordingPlayer callId={call.callId} /> : null}
         </div>
       </div>

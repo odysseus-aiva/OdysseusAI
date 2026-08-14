@@ -50,26 +50,15 @@ export function VariablesTab({ systemPrompt, greeting }: { systemPrompt: string;
                 return (
                   <li
                     key={name}
-                    className="flex items-center justify-between gap-4 px-3.5 py-2.5"
-                    style={{ borderTop: i === 0 ? undefined : '1px solid var(--color-border)' }}
+                    className="flex items-center justify-between gap-4 px-4 py-3"
+                    style={{ borderTop: i === 0 ? undefined : '1px solid var(--line-hairline)' }}
                   >
-                    <code
-                      className="font-mono text-[12px]"
-                      style={{ color: 'var(--color-accent)' }}
-                    >
+                    <code className="font-mono text-caption" style={{ color: 'var(--fg-ink)' }}>
                       {`{{${name}}}`}
                     </code>
-                    <span
-                      className="flex-shrink-0 rounded-[5px] px-1.5 py-0.5 text-[10.5px] font-[500]"
-                      style={{
-                        background: builtIn
-                          ? 'var(--color-surface-elevated)'
-                          : 'rgb(251 191 36 / 0.08)',
-                        color: builtIn
-                          ? 'var(--color-text-muted)'
-                          : 'var(--color-state-warning)',
-                      }}
-                    >
+                    {/* Both states are normal and expected, so neither is a status:
+                        the label text carries the whole distinction. */}
+                    <span className="badge flex-shrink-0">
                       {builtIn ? 'Provided automatically' : 'Must be supplied per call'}
                     </span>
                   </li>
@@ -93,26 +82,20 @@ export function VariablesTab({ systemPrompt, greeting }: { systemPrompt: string;
       {custom.length > 0 && (
         <Section title="How to supply these" description="Pass values when creating the session.">
           <Panel>
-            <div className="flex items-start gap-2.5">
+            <div className="flex items-start gap-3">
               <Info
-                size={13}
-                strokeWidth={1.9}
-                className="mt-0.5 flex-shrink-0"
-                style={{ color: 'var(--color-text-faint)' }}
+                size={16}
+                strokeWidth={1.8}
+                aria-hidden="true"
+                className="mt-px flex-shrink-0"
+                style={{ color: 'var(--fg-muted)' }}
               />
-              <div className="flex min-w-0 flex-col gap-2">
-                <p className="text-[12.5px] leading-[1.6]" style={{ color: 'var(--color-text-muted)' }}>
+              <div className="flex min-w-0 flex-col gap-3">
+                <p className="text-caption leading-body" style={{ color: 'var(--fg-body)' }}>
                   Include a <code className="font-mono">dynamicVariables</code> object in the
                   session-start request. Any key not supplied is left as literal text in the prompt.
                 </p>
-                <pre
-                  className="overflow-x-auto rounded-[8px] px-3 py-2.5 font-mono text-[11.5px] leading-[1.6]"
-                  style={{
-                    background: 'var(--color-abyss)',
-                    border: '1px solid var(--color-border)',
-                    color: 'var(--color-text-muted)',
-                  }}
-                >
+                <pre className="code-block">
 {`POST /session/start
 {
   "agentConfig": { "agentId": "…" },
@@ -128,37 +111,43 @@ ${custom.map((v) => `    "${v}": "…"`).join(',\n')}
       )}
 
       <Section title="Coming later" description="Variable sources beyond per-call values.">
-        <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(212px, 1fr))' }}>
-          <div
-            className="flex flex-col gap-2 rounded-[10px] px-3.5 py-3"
-            style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
-          >
-            <span className="flex items-center gap-2">
-              <Database size={13} strokeWidth={1.9} style={{ color: 'var(--color-text-faint)' }} />
-              <span className="text-[12.5px] font-[500]" style={{ color: 'var(--color-text)' }}>
-                CRM lookup
-              </span>
-            </span>
-            <p className="text-[11.5px] leading-[1.55]" style={{ color: 'var(--color-text-faint)' }}>
-              Resolve caller details from your CRM by phone number before the greeting plays.
-            </p>
-          </div>
-          <div
-            className="flex flex-col gap-2 rounded-[10px] px-3.5 py-3"
-            style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
-          >
-            <span className="flex items-center gap-2">
-              <Braces size={13} strokeWidth={1.9} style={{ color: 'var(--color-text-faint)' }} />
-              <span className="text-[12.5px] font-[500]" style={{ color: 'var(--color-text)' }}>
-                Default values
-              </span>
-            </span>
-            <p className="text-[11.5px] leading-[1.55]" style={{ color: 'var(--color-text-faint)' }}>
-              Per-variable fallbacks so a missing value never leaks raw syntax into speech.
-            </p>
-          </div>
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(212px, 1fr))' }}>
+          <PlannedCard
+            icon={Database}
+            title="CRM lookup"
+            body="Resolve caller details from your CRM by phone number before the greeting plays."
+          />
+          <PlannedCard
+            icon={Braces}
+            title="Default values"
+            body="Per-variable fallbacks so a missing value never leaks raw syntax into speech."
+          />
         </div>
       </Section>
+    </div>
+  );
+}
+
+function PlannedCard({
+  icon: Icon,
+  title,
+  body,
+}: {
+  icon: React.ElementType;
+  title: string;
+  body: string;
+}) {
+  return (
+    <div className="card flex flex-col gap-2">
+      <span className="flex items-center gap-2">
+        <Icon size={16} strokeWidth={1.8} aria-hidden="true" style={{ color: 'var(--fg-muted)' }} />
+        <span className="text-nav font-medium" style={{ color: 'var(--fg-ink)' }}>
+          {title}
+        </span>
+      </span>
+      <p className="text-caption leading-body" style={{ color: 'var(--fg-muted)' }}>
+        {body}
+      </p>
     </div>
   );
 }

@@ -67,7 +67,7 @@ export function OverviewTab({
       >
         {/* Engine first (it decides whether the pipeline row even applies), then
             the signal pipeline, then what shapes behavior. */}
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-3">
           <SummaryTile
             icon={draft.engine === 'omni' ? Cpu : Waypoints}
             label="Engine"
@@ -81,7 +81,7 @@ export function OverviewTab({
             onClick={() => onGoToTab('voice')}
           />
           {draft.engine === 'pipeline' && (
-            <div className="grid gap-2.5 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-3">
               <SummaryTile
                 icon={Ear}
                 label="Speech to text"
@@ -108,7 +108,7 @@ export function OverviewTab({
               />
             </div>
           )}
-          <div className="grid gap-2.5 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
             <SummaryTile
               icon={MessageSquare}
               label="System prompt"
@@ -140,25 +140,16 @@ export function OverviewTab({
 
       <Section title="Try it" description="Open a live voice session using the saved configuration.">
         <Panel>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-[12.5px] leading-[1.55]" style={{ color: 'var(--color-text-muted)' }}>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <p className="text-caption leading-body" style={{ color: 'var(--fg-muted)' }}>
               Unsaved edits are not used by the session. Save first, then start a call.
             </p>
             <Link
               href={`/?agentId=${encodeURIComponent(agent.agentId)}`}
-              className="group flex flex-shrink-0 items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12.5px] font-[500] transition-colors duration-[140ms]"
-              style={{
-                background: 'var(--color-accent-subtle)',
-                border: '1px solid var(--color-accent-border)',
-                color: 'var(--color-accent)',
-              }}
+              className="btn btn--secondary flex-shrink-0"
             >
               Start voice session
-              <ArrowRight
-                size={12}
-                strokeWidth={2.2}
-                className="transition-transform duration-[180ms] group-hover:translate-x-0.5"
-              />
+              <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
             </Link>
           </div>
         </Panel>
@@ -180,38 +171,24 @@ function PhoneNumberTile({
     <button
       type="button"
       onClick={onGoToAdvanced}
-      className="group flex cursor-pointer items-center gap-3 rounded-[10px] px-3.5 py-3 text-left transition-all duration-[160ms]"
-      style={{
-        background: 'var(--color-surface-raised)',
-        border: '1px solid var(--color-border)',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = 'var(--color-border-strong)';
-        e.currentTarget.style.background = 'var(--color-surface-elevated)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'var(--color-border)';
-        e.currentTarget.style.background = 'var(--color-surface-raised)';
-      }}
+      className="card flex cursor-pointer items-center gap-3 text-left transition-colors duration-[var(--duration-hover)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-hover)]"
     >
       <Phone
-        size={13}
+        size={16}
         strokeWidth={1.8}
-        style={{ color: hasNumber ? 'var(--color-accent)' : 'var(--color-text-faint)', flexShrink: 0 }}
+        aria-hidden="true"
+        style={{ color: hasNumber ? 'var(--fg-ink)' : 'var(--fg-muted)', flexShrink: 0 }}
       />
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <span
-          className="text-[10.5px] font-[600] uppercase tracking-[0.08em]"
-          style={{ color: 'var(--color-text-faint)' }}
-        >
+      <div className="flex min-w-0 flex-col gap-1">
+        <span className="text-caption" style={{ color: 'var(--fg-muted)' }}>
           Inbound number
         </span>
         {hasNumber ? (
-          <span className="font-mono text-[13px] font-[550]" style={{ color: 'var(--color-text)' }}>
+          <span className="font-mono text-nav font-medium" style={{ color: 'var(--fg-ink)' }}>
             {phoneNumber}
           </span>
         ) : (
-          <span className="text-[12.5px]" style={{ color: 'var(--color-text-faint)' }}>
+          <span className="text-caption" style={{ color: 'var(--fg-muted)' }}>
             No number assigned · click to configure
           </span>
         )}
@@ -238,55 +215,38 @@ function SummaryTile({
   /** True when the value comes from the server default rather than this agent. */
   inherited?: boolean;
   warn?: boolean;
-  /** Highlight the icon + value in accent — used for the engine tile. */
+  /** Emphasise the icon — used for the engine tile. Monochrome, never a hue. */
   accent?: boolean;
   onClick: () => void;
 }) {
-  const valueColor = warn
-    ? 'var(--color-state-warning)'
-    : accent
-      ? 'var(--color-accent)'
-      : 'var(--color-text)';
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group flex cursor-pointer flex-col items-start gap-2 rounded-[10px] px-3.5 py-3 text-left transition-all duration-[160ms]"
-      style={{
-        background: 'var(--color-surface-raised)',
-        border: '1px solid var(--color-border)',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = 'var(--color-border-strong)';
-        e.currentTarget.style.background = 'var(--color-surface-elevated)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'var(--color-border)';
-        e.currentTarget.style.background = 'var(--color-surface-raised)';
-      }}
+      className="card flex cursor-pointer flex-col items-start gap-2 text-left transition-colors duration-[var(--duration-hover)] hover:border-[var(--line-strong)] hover:bg-[var(--surface-hover)]"
     >
-      <span className="flex w-full items-center gap-1.5">
+      <span className="flex w-full items-center gap-2">
         <Icon
-          size={12}
+          size={16}
           strokeWidth={2}
-          style={{ color: accent ? 'var(--color-accent)' : 'var(--color-text-faint)' }}
+          aria-hidden="true"
+          style={{ color: accent ? 'var(--fg-ink)' : 'var(--fg-muted)' }}
         />
-        <span
-          className="text-[10.5px] font-[600] uppercase tracking-[0.08em]"
-          style={{ color: 'var(--color-text-faint)' }}
-        >
+        <span className="text-caption" style={{ color: 'var(--fg-muted)' }}>
           {label}
         </span>
       </span>
 
-      <span className="flex flex-col gap-0.5">
-        <span
-          className="text-[13.5px] font-[550] tracking-[-0.015em]"
-          style={{ color: valueColor }}
-        >
+      <span className="flex flex-col gap-1">
+        <span className="text-body font-medium" style={{ color: 'var(--fg-ink)' }}>
           {value}
         </span>
-        <span className="text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
+        {/* The value stays ink so the column scans; only the diagnosis below it
+            takes a status colour, and only when something is actually wrong. */}
+        <span
+          className="text-caption"
+          style={{ color: warn ? 'var(--status-warning)' : 'var(--fg-muted)' }}
+        >
           {detail ?? (inherited ? 'Server default' : 'Set for this agent')}
         </span>
       </span>

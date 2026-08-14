@@ -68,18 +68,20 @@ export function ToolConfigDrawer({
       title={tool.displayName}
       width={480}
       subtitle={
-        <span className="flex items-center gap-1.5">
-          <Icon size={11} strokeWidth={2} style={{ color: meta.color }} />
+        <span className="flex items-center gap-2">
+          <Icon size={14} strokeWidth={2} aria-hidden="true" style={{ color: meta.color }} />
           {meta.label}
-          <span style={{ color: 'var(--color-border-strong)' }}>·</span>
+          <span aria-hidden style={{ color: 'var(--fg-muted)' }}>
+            ·
+          </span>
           <span className="font-mono">{tool.name}</span>
         </span>
       }
       headerAction={
-        <div className="flex flex-shrink-0 items-center gap-2 pt-0.5">
+        <div className="flex flex-shrink-0 items-center gap-2">
           <span
-            className="text-[11px] font-[500]"
-            style={{ color: enabled ? 'var(--color-accent)' : 'var(--color-text-faint)' }}
+            className="text-caption"
+            style={{ color: enabled ? 'var(--fg-ink)' : 'var(--fg-muted)' }}
           >
             {enabled ? 'Enabled' : 'Disabled'}
           </span>
@@ -99,17 +101,17 @@ export function ToolConfigDrawer({
             onClick={() => onTest(TEST_ARGS[tool.name] ?? {})}
             loading={testing}
           >
-            {!testing && <Play size={11} strokeWidth={2.5} />}
+            {!testing && <Play size={16} strokeWidth={2} aria-hidden="true" />}
             Run test
           </Button>
           {configKeys.length > 0 && (
             <Button variant="ghost" size="sm" onClick={onReset}>
-              <RotateCcw size={11} strokeWidth={2.2} />
+              <RotateCcw size={16} strokeWidth={2} aria-hidden="true" />
               Reset defaults
             </Button>
           )}
           <span className="flex-1" />
-          <Button variant="secondary" size="sm" onClick={onClose}>
+          <Button variant="primary" size="sm" onClick={onClose}>
             Done
           </Button>
         </>
@@ -117,38 +119,37 @@ export function ToolConfigDrawer({
     >
       <div className="flex flex-col gap-5">
         {/* What it does */}
-        <p className="text-[12.5px] leading-[1.65]" style={{ color: 'var(--color-text-muted)' }}>
+        <p className="text-caption leading-body" style={{ color: 'var(--fg-body)' }}>
           {tool.description}
         </p>
 
-        {/* Required environment */}
+        {/* A missing key is a prerequisite the operator has to satisfy, not a
+            state of this call — so the callout is chrome, and chrome is grey. */}
         {missingEnv && (
           <div
-            className="flex items-start gap-2.5 rounded-[9px] px-3 py-2.5"
+            className="flex items-start gap-3 rounded-md p-3"
             style={{
-              background: 'rgb(251 191 36 / 0.06)',
-              border: '1px solid rgb(251 191 36 / 0.18)',
+              background: 'var(--surface-recessed)',
+              border: '1px solid var(--line-hairline)',
             }}
           >
             <TriangleAlert
-              size={13}
+              size={16}
               strokeWidth={2}
+              aria-hidden="true"
               className="mt-px flex-shrink-0"
-              style={{ color: 'var(--color-state-warning)' }}
+              style={{ color: 'var(--fg-muted)' }}
             />
-            <div className="flex flex-col gap-1">
-              <p
-                className="text-[12px] font-[500]"
-                style={{ color: 'var(--color-state-warning)' }}
-              >
+            <div className="flex min-w-0 flex-col gap-1">
+              <p className="text-caption font-medium" style={{ color: 'var(--fg-ink)' }}>
                 Requires server configuration
               </p>
-              <p className="text-[11.5px] leading-[1.55]" style={{ color: 'var(--color-text-muted)' }}>
+              <p className="text-caption leading-body" style={{ color: 'var(--fg-body)' }}>
                 Set{' '}
                 {tool.requiredEnv.map((env, i) => (
                   <span key={env}>
                     {i > 0 && ', '}
-                    <code className="font-mono" style={{ color: 'var(--color-text)' }}>
+                    <code className="font-mono" style={{ color: 'var(--fg-ink)' }}>
                       {env}
                     </code>
                   </span>
@@ -162,12 +163,7 @@ export function ToolConfigDrawer({
         {/* Schema-driven configuration */}
         {configKeys.length > 0 ? (
           <div className="flex flex-col gap-4">
-            <h3
-              className="text-[11px] font-[600] uppercase tracking-[0.09em]"
-              style={{ color: 'var(--color-text-faint)' }}
-            >
-              Configuration
-            </h3>
+            <h3 className="section__title">Configuration</h3>
             {configKeys.map((key) => (
               <ConfigControl
                 key={key}
@@ -179,32 +175,16 @@ export function ToolConfigDrawer({
             ))}
           </div>
         ) : (
-          <p className="text-[12px]" style={{ color: 'var(--color-text-faint)' }}>
+          <p className="text-caption" style={{ color: 'var(--fg-muted)' }}>
             This tool has no configurable options.
           </p>
         )}
 
         {/* Test output */}
         {testResult && (
-          <div className="flex flex-col gap-2">
-            <h3
-              className="text-[11px] font-[600] uppercase tracking-[0.09em]"
-              style={{ color: 'var(--color-text-faint)' }}
-            >
-              Test result
-            </h3>
-            <pre
-              className="max-h-[280px] overflow-auto rounded-[9px] px-3 py-2.5 font-mono text-[11.5px] leading-[1.6]"
-              style={{
-                background: 'var(--color-abyss)',
-                border: '1px solid var(--color-border)',
-                color: 'var(--color-text-muted)',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-              }}
-            >
-              {testResult}
-            </pre>
+          <div className="flex flex-col gap-2" aria-live="polite">
+            <h3 className="section__title">Test result</h3>
+            <pre className="code-block max-h-[280px] whitespace-pre-wrap">{testResult}</pre>
           </div>
         )}
       </div>
@@ -230,14 +210,11 @@ function ConfigControl({
     return (
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-[12.5px] font-[500]" style={{ color: 'var(--color-text)' }}>
+          <span className="text-nav font-medium" style={{ color: 'var(--fg-ink)' }}>
             {label}
           </span>
           {schema.description && (
-            <span
-              className="text-[11.5px] leading-[1.5]"
-              style={{ color: 'var(--color-text-faint)' }}
-            >
+            <span className="text-caption leading-body" style={{ color: 'var(--fg-muted)' }}>
               {schema.description}
             </span>
           )}
@@ -252,7 +229,11 @@ function ConfigControl({
   if (schema.enum) {
     return (
       <Field label={label} hint={schema.description}>
-        <Select value={String(value ?? '')} onChange={(e) => onChange(e.target.value)}>
+        <Select
+          aria-label={label}
+          value={String(value ?? '')}
+          onChange={(e) => onChange(e.target.value)}
+        >
           {schema.enum.map((opt) => (
             <option key={opt} value={opt}>
               {opt}
@@ -267,6 +248,7 @@ function ConfigControl({
     return (
       <Field label={label} hint={schema.description ?? 'Comma-separated values'}>
         <Input
+          aria-label={label}
           value={Array.isArray(value) ? value.join(', ') : ''}
           onChange={(e) =>
             onChange(
@@ -286,7 +268,9 @@ function ConfigControl({
   return (
     <Field label={label} hint={schema.description}>
       <Input
+        aria-label={label}
         type={numeric ? 'number' : 'text'}
+        inputMode={numeric ? 'numeric' : undefined}
         value={value == null ? '' : String(value)}
         onChange={(e) => {
           const raw = e.target.value;

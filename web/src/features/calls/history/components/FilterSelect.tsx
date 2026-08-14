@@ -13,7 +13,13 @@ export function FilterSelect({
     <Select
       className={className}
       // width: auto overrides the w-full baked into CONTROL_BASE so it stays inline in the flex filter row.
-      style={{ height: 36, minWidth: 120, width: 'auto', ...style }}
+      style={{
+        height: 'var(--input-height)',
+        minWidth: 120,
+        width: 'auto',
+        borderRadius: 'var(--radius-md)',
+        ...style,
+      }}
       {...props}
     />
   );

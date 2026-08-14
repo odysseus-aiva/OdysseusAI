@@ -17,7 +17,7 @@ export function CallHistoryFiltersBar({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2.5">
+      <div className="flex flex-wrap items-center gap-2">
         <SearchInput
           value={filters.query}
           onChange={(query) => onChange({ query })}
@@ -56,20 +56,8 @@ export function CallHistoryFiltersBar({
           onChange={(e) => onChange({ numberQuery: e.target.value })}
           placeholder="Number"
           aria-label="Filter by phone number"
-          className="rounded-[9px] px-3 py-2 text-[13px] outline-none transition-colors duration-[140ms]"
-          style={{
-            border: '1px solid var(--color-border)',
-            background: 'var(--color-surface)',
-            color: 'var(--color-text)',
-            height: 36,
-            width: 140,
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = 'var(--color-border-focus)';
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = 'var(--color-border)';
-          }}
+          className="input"
+          style={{ width: 140 }}
         />
 
         <FilterSelect
@@ -89,39 +77,29 @@ export function CallHistoryFiltersBar({
       {filters.datePreset === 'custom' && (
         <div className="flex flex-wrap items-center gap-2">
           <label
-            className="flex items-center gap-2 text-[12px]"
-            style={{ color: 'var(--color-text-muted)' }}
+            className="flex items-center gap-2 text-caption"
+            style={{ color: 'var(--fg-muted)' }}
           >
             From
             <input
               type="date"
               value={filters.customFrom ?? ''}
               onChange={(e) => onChange({ customFrom: e.target.value })}
-              className="rounded-[9px] px-2 py-1.5 text-[13px] outline-none"
-              style={{
-                border: '1px solid var(--color-border)',
-                background: 'var(--color-surface)',
-                color: 'var(--color-text)',
-                height: 36,
-              }}
+              className="input"
+              style={{ width: 'auto' }}
             />
           </label>
           <label
-            className="flex items-center gap-2 text-[12px]"
-            style={{ color: 'var(--color-text-muted)' }}
+            className="flex items-center gap-2 text-caption"
+            style={{ color: 'var(--fg-muted)' }}
           >
             To
             <input
               type="date"
               value={filters.customTo ?? ''}
               onChange={(e) => onChange({ customTo: e.target.value })}
-              className="rounded-[9px] px-2 py-1.5 text-[13px] outline-none"
-              style={{
-                border: '1px solid var(--color-border)',
-                background: 'var(--color-surface)',
-                color: 'var(--color-text)',
-                height: 36,
-              }}
+              className="input"
+              style={{ width: 'auto' }}
             />
           </label>
         </div>

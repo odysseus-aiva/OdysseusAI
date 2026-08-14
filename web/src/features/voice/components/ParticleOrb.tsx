@@ -7,14 +7,46 @@ import type { AudioFrame } from '../hooks/useAudioLevel';
 import {
   ORB_NUMERIC_KEYS,
   DEFAULT_ENTER_RATE,
+  resolveOrbRamp,
   resolveOrbState,
   type OrbNumericKey,
+  type OrbRampKey,
 } from '../orb-states';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const POINT_SIZE    = 13;
 const LOOP_DURATION = 14;
 const SPHERE_RADIUS = 2;
+
+/**
+ * How much room the camera leaves around the shell (see syncCamera). The
+ * particle sphere therefore spans 1/SPHERE_FRAME of the shorter box edge, and
+ * the DOM layers that have to sit *on* the shell inset by the remainder. Change
+ * the framing and both follow.
+ */
+const SPHERE_FRAME = 1.75;
+
+/** Inset that lands a DOM layer on the shell, plus an optional nudge inward. */
+const shellInset = (extraPercent = 0) =>
+  `${(((1 - 1 / SPHERE_FRAME) / 2) * 100 + extraPercent).toFixed(2)}%`;
+
+const SHELL_INSET = shellInset();
+
+/* Fractal noise. On the orb this is the reference's tactile grain; it is
+   deliberately not mounted over the UI, where it reads as film stock. */
+const NOISE_TEXTURE =
+  `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`;
+
+/* Annulus mask — the sweep is only visible in the band just inside the shell,
+   which is what keeps it reading as a rotation of the surface rather than a
+   pinwheel laid over the middle. The stops are mask alpha, not paint. */
+const SWEEP_MASK =
+  'radial-gradient(circle, transparent 50%, black 62%, black 88%, transparent 100%)';
+
+const SWEEP_GRADIENT =
+  'conic-gradient(from 0deg, transparent 0deg, var(--accent-veil) 78deg, var(--accent-veil-soft) 150deg, transparent 236deg)';
+
+const SWEEP_ANIMATION = 'orbSpin 26s linear infinite';
 
 // ─── Vertex Shader ───────────────────────────────────────────────────────────
 const VERT = /* glsl */ `
@@ -169,6 +201,38 @@ function buildGeometry(n: number) {
   return { pos, aTint, aSize, aLayer };
 }
 
+/**
+ * A resolved `color-mix()` serialises as `color(srgb r g b)`, which THREE's
+ * parser does not accept — it warns once and leaves the colour at white. Most of
+ * the ramp is a mix, so without this branch the whole orb renders white.
+ */
+const SRGB_TUPLE = /^color\(srgb\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)/;
+
+function toThreeColor(value: string): THREE.Color {
+  const srgb = SRGB_TUPLE.exec(value);
+  if (!srgb) return new THREE.Color(value);
+  return new THREE.Color().setRGB(
+    Number(srgb[1]),
+    Number(srgb[2]),
+    Number(srgb[3]),
+    THREE.SRGBColorSpace,
+  );
+}
+
+/**
+ * The accent ramp as THREE colours, keyed by ramp slot, so the render loop reads
+ * a lookup rather than the DOM on every frame. Rebuilt on a theme flip, which is
+ * the only thing that moves the ramp underneath us.
+ */
+function buildRampColors(): Record<OrbRampKey, THREE.Color> {
+  const resolved = resolveOrbRamp();
+  const out = {} as Record<OrbRampKey, THREE.Color>;
+  for (const key of Object.keys(resolved) as OrbRampKey[]) {
+    out[key] = toThreeColor(resolved[key]);
+  }
+  return out;
+}
+
 // ─── Public handle ───────────────────────────────────────────────────────────
 export interface ParticleOrbHandle {
   /** Drive the visual state imperatively (bypasses React re-render). */
@@ -200,6 +264,7 @@ export const ParticleOrb = forwardRef<ParticleOrbHandle, ParticleOrbProps>(
 function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, className = '' }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const ringRef      = useRef<HTMLDivElement>(null);
+  const sweepRef     = useRef<HTMLDivElement>(null);
   const stateRef     = useRef<VoiceState>(state);
   const audioRef     = useRef(audioLevel);
   const audioDataRef = useRef<React.RefObject<AudioFrame | null> | undefined>(audioData);
@@ -214,7 +279,20 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
 
   useEffect(() => {
     const root = document.documentElement;
-    const obs = new MutationObserver(() => setThemeTick((n) => n + 1));
+    const obs = new MutationObserver(() => {
+      // Chrome will not repaint a *composited animated* element when only a
+      // custom property feeding its gradient changes, and the sweep spins — so
+      // a new --product-accent lands in the used value but never reaches the
+      // screen. Restarting the animation forces the repaint. Flat colours are
+      // unaffected, which is why nothing else here needs nudging.
+      const sweep = sweepRef.current;
+      if (sweep) {
+        sweep.style.animationName = 'none';
+        void sweep.offsetWidth;
+        sweep.style.animationName = 'orbSpin';
+      }
+      setThemeTick((n) => n + 1);
+    });
     obs.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
     return () => obs.disconnect();
   }, []);
@@ -260,7 +338,7 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
       camera.aspect = w / h;
       const fovV = (35 * Math.PI) / 180;
       const fovH = 2 * Math.atan(Math.tan(fovV / 2) * camera.aspect);
-      camZ = (SPHERE_RADIUS * 1.75) / Math.tan(Math.min(fovV, fovH) / 2);
+      camZ = (SPHERE_RADIUS * SPHERE_FRAME) / Math.tan(Math.min(fovV, fovH) / 2);
       camera.near = Math.max(0.1, camZ - SPHERE_RADIUS * 3);
       camera.far  = camZ + SPHERE_RADIUS * 3;
       camera.updateProjectionMatrix();
@@ -277,6 +355,9 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
     geo.setAttribute('aSize',    new THREE.BufferAttribute(aSize,  1));
 
     // ── Uniforms ──────────────────────────────────────────────────────────
+    // The palette is read out of the accent ramp, not written here, so the whole
+    // particle field follows --product-accent and the theme it resolves under.
+    let ramp = buildRampColors();
     const initial = resolveOrbState(stateRef.current, theme);
     const uniforms = {
       uTime:         { value: 0 },
@@ -295,8 +376,8 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
       uBass:         { value: 0 },
       uMid:          { value: 0 },
       uTreble:       { value: 0 },
-      uColorBase:    { value: new THREE.Color(initial.colorBase) },
-      uColorAccent:  { value: new THREE.Color(initial.colorAccent) },
+      uColorBase:    { value: ramp[initial.colorBase].clone() },
+      uColorAccent:  { value: ramp[initial.colorAccent].clone() },
       uOpacity:      { value: 0 },  // fades in from 0
       uNear:         { value: 0.1 },
       uFar:          { value: 100 },
@@ -346,11 +427,12 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
       ring:          initial.ring,
     };
 
-    // Snap to resolved colors immediately (no lerp from cyan leftovers).
-    const colBase   = new THREE.Color(initial.colorBase);
-    const colAccent = new THREE.Color(initial.colorAccent);
-    const tgtBase   = new THREE.Color(initial.colorBase);
-    const tgtAccent = new THREE.Color(initial.colorAccent);
+    // Snap to the resolved ramp immediately, so the first frame is already the
+    // right colour rather than lerping in from whatever the last state left.
+    const colBase   = ramp[initial.colorBase].clone();
+    const colAccent = ramp[initial.colorAccent].clone();
+    const tgtBase   = ramp[initial.colorBase].clone();
+    const tgtAccent = ramp[initial.colorAccent].clone();
 
     let smoothedAudio = 0;
     let sBass = 0, sMid = 0, sTreble = 0;
@@ -382,6 +464,7 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
         activeTheme = nextTheme;
         mat.blending = nextTheme === 'light' ? THREE.NormalBlending : THREE.AdditiveBlending;
         mat.needsUpdate = true;
+        ramp = buildRampColors();
       }
 
       const target = resolveOrbState(stateRef.current, activeTheme);
@@ -391,8 +474,8 @@ function ParticleOrb({ size = 320, state = 'idle', audioLevel = 0, audioData, cl
         current[key] += (target[key] - current[key]) * rate;
       }
 
-      tgtBase.set(target.colorBase);
-      tgtAccent.set(target.colorAccent);
+      tgtBase.copy(ramp[target.colorBase]);
+      tgtAccent.copy(ramp[target.colorAccent]);
       colBase.lerp(tgtBase, rate);
       colAccent.lerp(tgtAccent, rate);
 
@@ -457,13 +540,6 @@ uniforms.uAudio.value       = compress(smoothedAudio) * react;
     };
   }, [size, themeTick]);
 
-  const activeColor = resolveOrbState(
-    state,
-    typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'light'
-      ? 'light'
-      : 'dark',
-  ).colorBase;
-
   return (
     <div
       className={`relative ${className}`}
@@ -473,39 +549,108 @@ uniforms.uAudio.value       = compress(smoothedAudio) * react;
         // WebGL viewport in sync with the real box.
         width: `clamp(150px, 100%, ${size}px)`,
         aspectRatio: '1 / 1',
+        // The grain layer blends, and without a stacking context of its own it
+        // would read the page as its backdrop instead of the orb's layers.
+        isolation: 'isolate',
       }}
     >
-      {/* Outer energy ring — opacity/transform driven by the render loop */}
+      {/* Stage wash. Belongs to the orb, not the page: the canvas stays flat and
+          this travels with the visual wherever it is mounted. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute"
+        style={{
+          inset: '-16%',
+          borderRadius: 'var(--radius-pill)',
+          background:
+            'radial-gradient(circle, var(--accent-wash) 0%, var(--accent-wash-soft) 44%, transparent 68%)',
+        }}
+      />
+
+      {/* Halo — opacity/transform driven by the render loop, so it breathes with
+          live audio rather than on a timer. */}
       <div
         ref={ringRef}
         aria-hidden
-        className="pointer-events-none absolute rounded-full"
+        className="pointer-events-none absolute"
         style={{
           inset: '-6%',
+          borderRadius: 'var(--radius-pill)',
           opacity: 0,
-          background: `radial-gradient(circle, transparent 58%, ${activeColor}22 74%, transparent 82%)`,
-          transition: 'background 700ms var(--ease-fluid)',
+          background:
+            'radial-gradient(circle, transparent 58%, var(--accent-veil) 74%, var(--accent-veil-soft) 81%, transparent 87%)',
           willChange: 'opacity, transform',
         }}
       />
-      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+
+      {/* The bloom and the shadowed lower hemisphere. The orb and the composer
+          are the only two things in this language that cast anything. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute"
+        style={{
+          inset: SHELL_INSET,
+          borderRadius: 'var(--radius-pill)',
+          boxShadow: 'var(--shadow-orb)',
+        }}
+      />
+
+      <div
+        ref={sweepRef}
+        aria-hidden
+        className="pointer-events-none absolute"
+        style={{
+          inset: SHELL_INSET,
+          borderRadius: 'var(--radius-pill)',
+          backgroundImage: SWEEP_GRADIENT,
+          maskImage: SWEEP_MASK,
+          WebkitMaskImage: SWEEP_MASK,
+          animation: SWEEP_ANIMATION,
+        }}
+      />
+
+      {/* Off-centre highlight. A light source up and to the left is the whole
+          reason a flat disc reads as a sphere. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute"
+        style={{
+          inset: SHELL_INSET,
+          borderRadius: 'var(--radius-pill)',
+          background:
+            'radial-gradient(circle at 36% 28%, var(--accent-tint-1) 0%, transparent 44%)',
+          opacity: 0.2,
+        }}
+      />
+
+      <div ref={containerRef} className="relative" style={{ width: '100%', height: '100%' }} />
+
+      {/* Hairline inner ring, drawn over the field so it reads as the shell's own
+          edge rather than a plate behind it. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute"
+        style={{
+          inset: shellInset(3),
+          borderRadius: 'var(--radius-pill)',
+          border: '1px solid var(--orb-ring)',
+        }}
+      />
+
+      <div
+        aria-hidden
+        className="pointer-events-none absolute"
+        style={{
+          inset: SHELL_INSET,
+          borderRadius: 'var(--radius-pill)',
+          opacity: 0.09,
+          mixBlendMode: 'overlay',
+          backgroundImage: NOISE_TEXTURE,
+          backgroundRepeat: 'repeat',
+        }}
+      />
     </div>
   );
 });
 
 ParticleOrb.displayName = 'ParticleOrb';
-
-// ─── Film Grain ──────────────────────────────────────────────────────────────
-export function FilmGrain() {
-  return (
-    <div
-      aria-hidden
-      style={{
-        position: 'fixed', inset: 0, zIndex: 9999,
-        pointerEvents: 'none', opacity: 0.045, mixBlendMode: 'overlay',
-        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-        backgroundRepeat: 'repeat',
-      }}
-    />
-  );
-}

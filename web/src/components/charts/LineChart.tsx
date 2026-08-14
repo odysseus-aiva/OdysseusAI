@@ -67,35 +67,31 @@ export function LineChart({
         {[0.25, 0.5, 0.75, 1].map((frac) => (
           <line
             key={frac}
+            className="chart__gridline"
             x1={0}
             y1={padTop + chartH * (1 - frac)}
             x2={vw}
             y2={padTop + chartH * (1 - frac)}
-            stroke="rgba(255,255,255,0.04)"
-            strokeWidth={1}
           />
         ))}
 
+        {/* Solid hairline means gridline; a dashed status colour means a budget
+            the reader is expected to stay under. Keeping those two visually
+            distinct is what makes the threshold readable at a glance. */}
         {threshold && threshold.value <= max && (
           <>
             <line
+              className="chart__threshold"
               x1={0}
               y1={yFor(threshold.value)}
               x2={vw}
               y2={yFor(threshold.value)}
-              stroke="var(--color-state-speaking)"
-              strokeWidth={1}
-              strokeDasharray="4 4"
-              opacity={0.5}
             />
             <text
+              className="chart__threshold-label"
               x={vw - 4}
-              y={yFor(threshold.value) - 5}
+              y={yFor(threshold.value) - 6}
               textAnchor="end"
-              fontSize={9}
-              fill="var(--color-state-speaking)"
-              opacity={0.75}
-              fontFamily="var(--font-mono-var, monospace)"
             >
               {threshold.label}
             </text>
@@ -119,7 +115,6 @@ export function LineChart({
                   strokeLinejoin="round"
                   strokeLinecap="round"
                   vectorEffect="non-scaling-stroke"
-                  opacity={0.9}
                 />
               )}
               {segment.map((d) => (
@@ -129,7 +124,7 @@ export function LineChart({
                   cy={yFor(d.v)}
                   r={hovered === d.i ? 4 : 2.5}
                   fill={s.color}
-                  style={{ transition: 'r 90ms' }}
+                  style={{ transition: 'r var(--duration-instant) ease' }}
                 />
               ))}
             </g>
@@ -153,14 +148,7 @@ export function LineChart({
               onMouseLeave={() => setHovered(null)}
             />
             {i % labelEvery === 0 && (
-              <text
-                x={xFor(i)}
-                y={height - 3}
-                textAnchor="middle"
-                fontSize={9}
-                fill="rgba(255,255,255,0.26)"
-                fontFamily="var(--font-mono-var, monospace)"
-              >
+              <text className="chart__tick" x={xFor(i)} y={height - 3} textAnchor="middle">
                 {formatShortDate(point.date)}
               </text>
             )}
@@ -170,34 +158,28 @@ export function LineChart({
 
       {hovered !== null && (
         <div
-          className="pointer-events-none absolute z-10 flex flex-col gap-1 whitespace-nowrap rounded-[6px] px-2.5 py-2 text-[11.5px]"
-          style={{
-            left: tooltipX,
-            top: -12 - series.length * 16,
-            transform: 'translateX(-50%)',
-            background: 'var(--color-surface-elevated)',
-            border: '1px solid var(--color-border-strong)',
-            color: 'var(--color-text)',
-          }}
+          className="chart__tooltip"
+          role="status"
+          style={{ left: tooltipX, top: -12 - series.length * 16, transform: 'translateX(-50%)' }}
         >
-          <span className="font-[600]">{formatShortDate(points[hovered].date)}</span>
+          <span className="chart__tooltip-title">{formatShortDate(points[hovered].date)}</span>
           {series.map((s) => (
-            <span key={s.key} className="flex items-center gap-1.5">
-              <span className="rounded-full" style={{ width: 6, height: 6, background: s.color }} />
-              <span style={{ color: 'var(--color-text-muted)' }}>{s.label}</span>
-              <span className="ml-auto pl-3 font-mono font-[600]">{format(points[hovered].values[s.key])}</span>
+            <span key={s.key} className="flex items-center gap-2">
+              <span className="chart__swatch" style={{ background: s.color }} />
+              <span style={{ color: 'var(--fg-body)' }}>{s.label}</span>
+              <span className="num ml-auto pl-3" style={{ color: 'var(--fg-ink)' }}>
+                {format(points[hovered].values[s.key])}
+              </span>
             </span>
           ))}
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+      <div className="chart__legend">
         {series.map((s) => (
-          <span key={s.key} className="flex items-center gap-1.5">
-            <span className="rounded-full" style={{ width: 7, height: 7, background: s.color }} />
-            <span className="text-[11.5px]" style={{ color: 'var(--color-text-muted)' }}>
-              {s.label}
-            </span>
+          <span key={s.key} className="flex items-center gap-2">
+            <span className="chart__swatch" style={{ background: s.color }} />
+            <span>{s.label}</span>
           </span>
         ))}
       </div>

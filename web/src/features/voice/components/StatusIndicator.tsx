@@ -11,7 +11,7 @@ import { VOICE_STATE_META } from '../types';
 export interface StatusDetail {
   label: string;
   value: string;
-  /** Renders the value in the state accent color instead of muted ink. */
+  /** Renders the value in ink instead of body grey. */
   emphasis?: boolean;
 }
 
@@ -21,7 +21,7 @@ interface StatusIndicatorProps {
   label?: string;
   /** Developer-mode diagnostics rail. Hidden entirely when empty. */
   details?: StatusDetail[];
-  /** `inline` for the hero; `panel` for in-call, which adds a glass surface. */
+  /** `inline` for the hero; `panel` for in-call, which adds a surface. */
   variant?: 'inline' | 'panel';
   className?: string;
 }
@@ -30,6 +30,11 @@ interface StatusIndicatorProps {
  * Minimal, extensible readout of system readiness. Communicates state through
  * text + a motion signature (never color alone), and carries an optional
  * diagnostics rail for developer mode.
+ *
+ * Built on `.chip`, the same object as the app's `● Active calls: 0` pill, which
+ * is one of the three shapes allowed to be a full pill. Most of the lifecycle
+ * reads neutral: hue arrives only when the state is genuinely a status, so
+ * "listening" is grey and "connection error" is not.
  *
  * Adding a state requires only a VOICE_STATE_META entry; the dot motion falls
  * back to a steady pulse for anything not in MOTION.
@@ -48,15 +53,14 @@ export function StatusIndicator({
 
   return (
     <div
-      className={`flex flex-col items-center gap-2.5 ${
-        variant === 'panel' ? 'rounded-[12px] px-4 py-3' : ''
-      } ${className}`}
+      className={`flex flex-col items-center gap-2 ${className}`}
       style={
         variant === 'panel'
           ? {
-              background: 'var(--color-glass)',
-              border: '1px solid var(--color-glass-border)',
-              backdropFilter: 'blur(12px)',
+              padding: 'var(--space-3) var(--space-4)',
+              border: '1px solid var(--line-hairline)',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--surface-card)',
             }
           : undefined
       }
@@ -64,49 +68,53 @@ export function StatusIndicator({
       aria-live="polite"
     >
       {/* Primary line — dot + label */}
-      <div className="flex items-center gap-2">
-        <StateDot state={state} color={color} />
+      <span className="chip">
+        <StateDot state={state} />
         <AnimatePresence mode="wait">
           <motion.span
             key={text}
-            initial={{ opacity: 0, y: 3, filter: 'blur(3px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -3, filter: 'blur(3px)' }}
-            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-            className="text-[12px] font-[500] tracking-[0.02em] tabular-nums"
+            initial={{ opacity: 0, y: 3 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -3 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             style={{ color }}
           >
             {text}
           </motion.span>
         </AnimatePresence>
-      </div>
+      </span>
 
       {/* Developer diagnostics rail */}
       {hasDetails && (
         <motion.div
-          className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1"
+          className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.32, ease: 'easeOut' }}
+          transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
         >
           {details!.map((detail, i) => (
-            <span key={detail.label} className="flex items-center gap-1.5">
+            <span key={detail.label} className="flex items-center gap-1">
               {i > 0 && (
-                <span
-                  aria-hidden
-                  className="inline-block rounded-full"
-                  style={{ width: 2, height: 2, background: 'var(--color-text-faint)' }}
-                />
+                <span aria-hidden style={{ color: 'var(--fg-muted)' }}>
+                  ·
+                </span>
               )}
               <span
-                className="text-[10px] font-[500] uppercase tracking-[0.11em]"
-                style={{ color: 'var(--color-text-faint)' }}
+                style={{
+                  fontSize: 'var(--text-overline)',
+                  fontWeight: 'var(--weight-medium)',
+                  letterSpacing: 'var(--tracking-overline)',
+                  color: 'var(--fg-muted)',
+                }}
               >
                 {detail.label}
               </span>
               <span
-                className="text-[10.5px] font-mono tabular-nums"
-                style={{ color: detail.emphasis ? color : 'var(--color-text-muted)' }}
+                className="num"
+                style={{
+                  fontSize: 'var(--text-micro)',
+                  color: detail.emphasis ? 'var(--fg-ink)' : 'var(--fg-body)',
+                }}
               >
                 {detail.value}
               </span>
@@ -120,7 +128,8 @@ export function StatusIndicator({
 
 /**
  * Per-state dot motion. Each state gets a distinct rhythm so the indicator is
- * legible without relying on hue — required for colorblind readers.
+ * legible without relying on hue — required for colorblind readers, and load
+ * bearing now that most of the states resolve to the same grey.
  */
 const MOTION: Partial<
   Record<VoiceState, { animate: Record<string, number[]>; duration: number }>
@@ -135,27 +144,15 @@ const MOTION: Partial<
   disconnected: { animate: { opacity: [0.45, 0.45, 0.45], scale: [1, 1, 1] }, duration: 4 },
 };
 
-function StateDot({ state, color }: { state: VoiceState; color: string }) {
+function StateDot({ state }: { state: VoiceState }) {
   const motionSpec = MOTION[state] ?? MOTION.idle!;
 
   return (
-    <span className="relative flex items-center justify-center" style={{ width: 7, height: 7 }}>
-      {/* Expanding halo — only for states with outward energy */}
-      {(state === 'speaking' || state === 'connecting') && (
-        <motion.span
-          aria-hidden
-          className="absolute rounded-full"
-          style={{ width: 7, height: 7, border: `1px solid ${color}` }}
-          animate={{ scale: [1, 2.4], opacity: [0.6, 0] }}
-          transition={{ duration: motionSpec.duration * 1.6, repeat: Infinity, ease: 'easeOut' }}
-        />
-      )}
-      <motion.span
-        className="rounded-full"
-        style={{ width: 6, height: 6, background: color, boxShadow: `0 0 8px ${color}` }}
-        animate={motionSpec.animate}
-        transition={{ duration: motionSpec.duration, repeat: Infinity, ease: 'easeInOut' }}
-      />
-    </span>
+    <motion.span
+      aria-hidden
+      className={`chip__dot chip__dot--${VOICE_STATE_META[state].dotTone}`}
+      animate={motionSpec.animate}
+      transition={{ duration: motionSpec.duration, repeat: Infinity, ease: 'easeInOut' }}
+    />
   );
 }

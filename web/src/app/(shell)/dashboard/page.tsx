@@ -13,8 +13,9 @@ import {
   RefreshCw,
   Wrench,
 } from 'lucide-react';
-import { PageHeader } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
+import { SegmentedControl } from '@/components/ui/Field';
+import { EmptyState } from '@/components/ui/Section';
 import { AreaChart } from '@/components/charts/AreaChart';
 import { ChartCard, EmptyChart, SampleBadge } from '@/components/charts/ChartCard';
 import { CompositionBar, HBarList } from '@/components/charts/HBarList';
@@ -23,7 +24,6 @@ import {
   formatMs,
   formatPct,
   formatUsd,
-  latencyColor,
   OUTCOME_COLORS,
   STAGE_COLORS,
 } from '@/components/charts/format';
@@ -36,11 +36,13 @@ import {
   type ToolAnalytics,
 } from '@/lib/api/calls';
 
-const PERIODS = [
-  { label: '7d', value: 7 },
-  { label: '30d', value: 30 },
-  { label: '90d', value: 90 },
-] as const;
+type PeriodKey = '7' | '30' | '90';
+
+const PERIOD_OPTIONS: { value: PeriodKey; label: string }[] = [
+  { value: '7', label: '7d' },
+  { value: '30', label: '30d' },
+  { value: '90', label: '90d' },
+];
 
 interface DashboardData {
   stats: CallStats;
@@ -76,23 +78,34 @@ export default function DashboardPage() {
   }, [load, period]);
 
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader
-        title="Dashboard"
-        description="Platform health at a glance."
-        actions={
-          <div className="flex items-center gap-2">
-            <PeriodSelector value={period} onChange={setPeriod} />
-            <Button variant="ghost" size="sm" onClick={() => void load(period)} disabled={loading}>
-              <RefreshCw size={13} strokeWidth={2} className={loading ? 'animate-spin' : ''} />
-              Refresh
-            </Button>
-          </div>
-        }
-      />
+    <div>
+      {/* No divider under the header: the title runs straight into the content. */}
+      <header className="page__header">
+        <div className="min-w-0">
+          <h1 className="page__title">Dashboard</h1>
+          <p className="page__meta mt-1">Platform health at a glance.</p>
+        </div>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          <SegmentedControl
+            value={String(period) as PeriodKey}
+            options={PERIOD_OPTIONS}
+            onChange={(next) => setPeriod(Number(next) as 7 | 30 | 90)}
+            label="Time period"
+          />
+          <Button variant="ghost" size="sm" onClick={() => void load(period)} disabled={loading}>
+            <RefreshCw
+              size={16}
+              strokeWidth={2}
+              aria-hidden="true"
+              className={loading ? 'animate-spin' : ''}
+            />
+            Refresh
+          </Button>
+        </div>
+      </header>
 
-      <div className="flex-1 overflow-y-auto px-8 py-6">
-        <div className="flex max-w-5xl flex-col gap-5">
+      <div className="page__body">
+        <div className="flex max-w-5xl flex-col gap-6" aria-live="polite" aria-busy={loading}>
           {loading ? (
             <DashboardSkeleton />
           ) : error ? (
@@ -118,62 +131,53 @@ function DashboardContent({ data, period }: { data: DashboardData; period: numbe
 
   return (
     <motion.div
-      className="flex flex-col gap-5"
+      className="flex flex-col gap-6"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
     >
-      {/* Row 1: KPI strip */}
-      <div
-        className="flex overflow-hidden rounded-[10px]"
-        style={{ border: '1px solid var(--color-border)', background: 'var(--color-surface-raised)' }}
-      >
+      {/* Row 1: KPI tiles */}
+      <div className="stat-row">
         <HeroKPI
-          bare
           label="Total calls"
           value={stats.totalCalls}
           icon={Phone}
-          iconColor="var(--color-accent)"
+          iconColor="var(--fg-muted)"
           delta={stats.deltas.totalCalls}
           formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${d}`}
         />
         <HeroKPI
-          bare
           label="Engaged"
           value={formatPct(stats.engagementRate)}
           sub={`${engaged} conversed`}
           icon={MessageSquare}
-          iconColor="var(--color-state-speaking)"
+          iconColor="var(--fg-muted)"
           delta={stats.deltas.engagementRate}
           formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${(d * 100).toFixed(1)}pp`}
         />
         <HeroKPI
-          bare
           label="No interaction"
           value={noInteraction}
           sub="connected, never spoke"
           icon={AlertCircle}
-          iconColor={noInteraction > 0 ? 'var(--color-state-warning)' : 'var(--color-text-faint)'}
+          iconColor="var(--fg-muted)"
         />
         <HeroKPI
-          bare
           label="p50 latency"
           value={formatMs(stats.p50LatencyMs)}
-          valueColor={latencyColor(stats.p50LatencyMs)}
           sub={stats.p95LatencyMs != null ? `p95 ${formatMs(stats.p95LatencyMs)}` : undefined}
           icon={Clock}
-          iconColor={latencyColor(stats.p50LatencyMs)}
+          iconColor="var(--fg-muted)"
           delta={stats.deltas.p50LatencyMs}
           lowerIsBetter
           formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${Math.round(d)}ms`}
         />
         <HeroKPI
-          bare
           label="Cost / call"
           value={formatUsd(stats.avgCostUsd)}
           sub={`${formatUsd(stats.totalCostUsd)} total`}
           icon={DollarSign}
-          iconColor="var(--color-state-speaking)"
+          iconColor="var(--fg-muted)"
           delta={stats.deltas.avgCostUsd}
           lowerIsBetter
           formatDeltaFn={(d) => `${d > 0 ? '+' : ''}${(d * 1000).toFixed(2)}m$`}
@@ -185,14 +189,9 @@ function DashboardContent({ data, period }: { data: DashboardData; period: numbe
         title="Call volume by outcome"
         sub={`Calls per ${stats.series.bucket} — last ${period} days`}
         trailing={
-          <Link href="/analytics" className="group flex items-center gap-1">
-            <span
-              className="text-[12px] font-[450] transition-opacity group-hover:opacity-80"
-              style={{ color: 'var(--color-accent)' }}
-            >
-              Full analytics
-            </span>
-            <ArrowRight size={11} strokeWidth={2} style={{ color: 'var(--color-accent)' }} />
+          <Link href="/analytics" className="btn btn--ghost btn--sm">
+            Full analytics
+            <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
           </Link>
         }
         footnote="Engaged means the call produced at least one agent response turn."
@@ -257,7 +256,9 @@ function DashboardContent({ data, period }: { data: DashboardData; period: numbe
               ? `${tools.totals.invocations} invocations · ${formatPct(tools.totals.successRate)} success`
               : 'Executions, not enabled configuration'
           }
-          trailing={<Wrench size={13} strokeWidth={1.75} style={{ color: 'var(--color-text-faint)' }} />}
+          trailing={
+            <Wrench size={16} strokeWidth={1.75} aria-hidden="true" style={{ color: 'var(--fg-muted)' }} />
+          }
           footnote="Sourced from tool_call and tool_result events."
         >
           <HBarList
@@ -276,73 +277,49 @@ function DashboardContent({ data, period }: { data: DashboardData; period: numbe
   );
 }
 
-function PeriodSelector({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (p: 7 | 30 | 90) => void;
-}) {
-  return (
-    <div
-      className="flex items-center gap-0.5 rounded-[8px] p-0.5"
-      style={{ background: 'var(--color-surface-raised)', border: '1px solid var(--color-border)' }}
-    >
-      {PERIODS.map(({ label, value: v }) => (
-        <button
-          key={v}
-          onClick={() => onChange(v)}
-          className="rounded-[6px] px-3 py-1.5 text-[12px] font-[500] transition-all duration-[140ms]"
-          style={{
-            background: value === v ? 'var(--color-surface-elevated)' : 'transparent',
-            color: value === v ? 'var(--color-text)' : 'var(--color-text-faint)',
-            border: value === v ? '1px solid var(--color-border-strong)' : '1px solid transparent',
-          }}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div
-      className="flex flex-col items-center gap-3 rounded-[12px] py-12 text-center"
-      style={{ border: '1px dashed var(--color-border)' }}
-    >
-      <p className="text-[13px] font-[500]" style={{ color: 'var(--color-state-error)' }}>
-        {message}
-      </p>
-      <Button variant="ghost" size="sm" onClick={onRetry}>
-        Try again
-      </Button>
+    <EmptyState
+      icon={AlertCircle}
+      title="Could not load the dashboard"
+      description={message}
+      action={
+        <Button variant="secondary" size="sm" onClick={onRetry}>
+          Try again
+        </Button>
+      }
+    />
+  );
+}
+
+/* Reserves each band's height with a flat fill. No shimmer: a moving highlight
+   would be the only animated gradient anywhere outside the orb. */
+function DashboardSkeleton() {
+  return (
+    <div className="flex flex-col gap-6" aria-hidden="true">
+      <div className="stat-row">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="stat" style={{ height: 108 }} />
+        ))}
+      </div>
+      <SkeletonCard height={240} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <SkeletonCard height={200} />
+        <SkeletonCard height={200} />
+      </div>
     </div>
   );
 }
 
-function DashboardSkeleton() {
+function SkeletonCard({ height }: { height: number }) {
   return (
-    <div className="flex flex-col gap-5">
-      <div
-        className="h-[96px] animate-pulse rounded-[10px]"
-        style={{ background: 'var(--color-surface-raised)' }}
-      />
-      <div
-        className="h-[220px] animate-pulse rounded-[12px]"
-        style={{ background: 'var(--color-surface-raised)' }}
-      />
-      <div className="grid grid-cols-2 gap-4">
-        <div
-          className="h-[180px] animate-pulse rounded-[12px]"
-          style={{ background: 'var(--color-surface-raised)' }}
-        />
-        <div
-          className="h-[180px] animate-pulse rounded-[12px]"
-          style={{ background: 'var(--color-surface-raised)' }}
-        />
-      </div>
-    </div>
+    <div
+      style={{
+        height,
+        background: 'var(--surface-card)',
+        border: '1px solid var(--line-hairline)',
+        borderRadius: 'var(--radius-md)',
+      }}
+    />
   );
 }

@@ -14,11 +14,15 @@ export interface LlmTokenUsage {
 }
 
 export interface CallCost {
-  /** llmUsd + ttsUsd + sttUsd, rounded to 6 dp. */
+  /** llmUsd + ttsUsd + sttUsd for pipeline; omniUsd for omni. Rounded to 6 dp. */
   totalUsd: number;
   llmUsd: number;
   ttsUsd: number;
   sttUsd: number;
+  /** Flat-rate Omni billing cost. Set only when pricingModel = 'omni'. */
+  omniUsd?: number;
+  /** Which pricing model produced this cost. Absent means 'pipeline' (back-compat). */
+  pricingModel?: 'pipeline' | 'omni';
   breakdown: {
     llm: {
       model?: string;

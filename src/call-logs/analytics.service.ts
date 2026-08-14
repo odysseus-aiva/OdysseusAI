@@ -133,6 +133,7 @@ export class AnalyticsService {
 
       costBreakdown: current.cost.breakdown,
       unitEconomics: current.cost.unitEconomics,
+      costByEngine: current.costByEngine,
 
       topAgents: current.agents,
 
@@ -468,6 +469,12 @@ function summarize(calls: CallSummary[], turns: LatencyTurn[]) {
   const sttUsd = costed.reduce((sum, c) => sum + (c.cost!.sttUsd || 0), 0);
   const estimated = costed.filter((c) => c.cost!.estimated).length;
   const billedMinutes = durations.reduce((sum, d) => sum + d, 0) / 60000;
+  const omniCosted = costed.filter((c) => c.cost!.pricingModel === 'omni');
+  const pipelineCosted = costed.filter((c) => c.cost!.pricingModel !== 'omni');
+  const totalOmniUsd = omniCosted.reduce((s, c) => s + c.cost!.totalUsd, 0);
+  const totalOmniMin = omniCosted.reduce((s, c) => s + (c.durationMs ?? 0), 0) / 60000;
+  const totalPipelineUsd = pipelineCosted.reduce((s, c) => s + c.cost!.totalUsd, 0);
+  const totalPipelineMin = pipelineCosted.reduce((s, c) => s + (c.durationMs ?? 0), 0) / 60000;
   const totalTurns = turnCounts.reduce((sum, t) => sum + t, 0);
 
   const endedBy = new Map<string, number>();
@@ -555,6 +562,18 @@ function summarize(calls: CallSummary[], turns: LatencyTurn[]) {
         perTurnUsd: totalTurns > 0 ? round6(totalUsd / totalTurns) : null,
       },
     },
+    costByEngine: {
+      omni: {
+        calls: omniCosted.length,
+        totalUsd: round6(totalOmniUsd),
+        totalMinutes: round6(totalOmniMin),
+      },
+      pipeline: {
+        calls: pipelineCosted.length,
+        totalUsd: round6(totalPipelineUsd),
+        totalMinutes: round6(totalPipelineMin),
+      },
+    },
     agents,
   };
 }
@@ -590,6 +609,8 @@ function buildSeries(
       noInteraction: number;
       failed: number;
       costUsd: number;
+      omniCostUsd: number;
+      totalMinutes: number;
     }
   >();
 
@@ -602,6 +623,8 @@ function buildSeries(
       noInteraction: 0,
       failed: 0,
       costUsd: 0,
+      omniCostUsd: 0,
+      totalMinutes: 0,
     });
   }
 
@@ -614,6 +637,8 @@ function buildSeries(
       noInteraction: 0,
       failed: 0,
       costUsd: 0,
+      omniCostUsd: 0,
+      totalMinutes: 0,
     };
     point.total += 1;
     const outcome = classifyOutcome(call);
@@ -621,11 +646,15 @@ function buildSeries(
     else if (outcome === 'no_interaction') point.noInteraction += 1;
     else if (outcome === 'failed') point.failed += 1;
     point.costUsd += call.cost?.totalUsd ?? 0;
+    if (call.cost?.pricingModel === 'omni') {
+      point.omniCostUsd += call.cost.totalUsd;
+      point.totalMinutes += (call.durationMs ?? 0) / 60000;
+    }
     points.set(key, point);
   }
 
   return [...points.values()]
-    .map((p) => ({ ...p, costUsd: round6(p.costUsd) }))
+    .map((p) => ({ ...p, costUsd: round6(p.costUsd), omniCostUsd: round6(p.omniCostUsd), totalMinutes: round6(p.totalMinutes) }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 

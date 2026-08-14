@@ -29,6 +29,7 @@ interface CostAccumulator {
 export class CostService {
   private readonly logger = new Logger(CostService.name);
   private readonly records = new Map<string, CostAccumulator>();
+  private static readonly OMNI_RATE_PER_SECOND = 0.05 / 60;
 
   private getOrCreate(callId: string): CostAccumulator {
     let rec = this.records.get(callId);
@@ -120,6 +121,32 @@ export class CostService {
       `[${callId}] cost total=$${cost.totalUsd} (llm=$${cost.llmUsd} tts=$${cost.ttsUsd} stt=$${cost.sttUsd})`,
     );
     return cost;
+  }
+
+  /**
+   * Price an Omni call using the flat duration-based rate ($0.05/min, per-second).
+   * Never calls addLlmUsage / addTtsUsage — no component breakdown applies.
+   */
+  finalizeOmni(callId: string, durationSeconds: number): CallCost {
+    const omniUsd = round6(Math.max(0, durationSeconds) * CostService.OMNI_RATE_PER_SECOND);
+    this.logger.log(
+      `[${callId}] omni cost total=$${omniUsd} (${durationSeconds.toFixed(1)}s × $0.05/min)`,
+    );
+    return {
+      totalUsd: omniUsd,
+      llmUsd: 0,
+      ttsUsd: 0,
+      sttUsd: 0,
+      omniUsd,
+      pricingModel: 'omni',
+      breakdown: {
+        llm: { promptTokens: 0, completionTokens: 0, usd: 0 },
+        tts: { characters: 0, usd: 0 },
+        stt: { seconds: Math.round(Math.max(0, durationSeconds)), usd: 0 },
+      },
+      estimated: false,
+      computedAt: Date.now(),
+    };
   }
 
   clearRecord(callId: string): void {

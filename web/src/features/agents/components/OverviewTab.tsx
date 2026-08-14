@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { Ear, BrainCircuit, AudioLines, Wrench, MessageSquare, ArrowRight, Cpu, Waypoints, Phone } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Ear, BrainCircuit, AudioLines, Wrench, MessageSquare, ArrowRight, Cpu, Waypoints, Phone, Lightbulb, Check, X } from 'lucide-react';
 import { Field, Input, Textarea } from '@/components/ui/Field';
 import { Section, Panel } from '@/components/ui/Section';
 import type { Agent } from '@/lib/api/agents';
@@ -14,6 +15,11 @@ import {
   providerLabel,
   languageLabel,
 } from '../providers';
+import {
+  fetchSuggestions,
+  synthesizeGreeting,
+  markGreetingSuggestionsApplied,
+} from '@/lib/api/suggestions';
 
 /**
  * Identity plus an at-a-glance summary of the whole configuration, so the first
@@ -33,6 +39,46 @@ export function OverviewTab({
   onGoToTab: (tab: 'prompt' | 'voice' | 'tools' | 'advanced') => void;
 }) {
   const hasPrompt = draft.systemPrompt.trim().length > 0;
+  const [synthesized, setSynthesized] = useState<{
+    greeting: string;
+    sourceCount: number;
+  } | null>(null);
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const pending = await fetchSuggestions(agent.agentId, 'pending').catch(() => []);
+      const greetingPending = pending.filter((s) => s.targetType === 'greeting');
+      if (cancelled || greetingPending.length === 0) return;
+      setSuggestionLoading(true);
+      try {
+        const result = await synthesizeGreeting(agent.agentId, draft.greeting ?? '');
+        if (!cancelled) setSynthesized({ greeting: result.synthesizedGreeting, sourceCount: result.sourceCount });
+      } catch {
+        if (!cancelled && greetingPending[0]) {
+          setSynthesized({ greeting: greetingPending[0].suggestedText, sourceCount: greetingPending.length });
+        }
+      } finally {
+        if (!cancelled) setSuggestionLoading(false);
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agent.agentId]);
+
+  const dismissSynthesized = async () => {
+    setSynthesized(null);
+    await markGreetingSuggestionsApplied(agent.agentId).catch(() => {});
+  };
+
+  const applySynthesized = async () => {
+    if (!synthesized) return;
+    setField('greeting', synthesized.greeting);
+    setSynthesized(null);
+    await markGreetingSuggestionsApplied(agent.agentId).catch(() => {});
+  };
 
   return (
     <div className="flex flex-col gap-8">
@@ -56,6 +102,15 @@ export function OverviewTab({
                 rows={2}
                 placeholder="Hi, thanks for calling. How can I help?"
               />
+              {(synthesized || suggestionLoading) && (
+                <SynthesizedSuggestionCard
+                  greeting={synthesized?.greeting ?? null}
+                  sourceCount={synthesized?.sourceCount ?? 0}
+                  loading={suggestionLoading}
+                  onApply={() => void applySynthesized()}
+                  onDismiss={() => void dismissSynthesized()}
+                />
+              )}
             </Field>
           </div>
         </Panel>
@@ -251,5 +306,93 @@ function SummaryTile({
         </span>
       </span>
     </button>
+  );
+}
+
+function SynthesizedSuggestionCard({
+  greeting,
+  sourceCount,
+  loading,
+  onApply,
+  onDismiss,
+}: {
+  greeting: string | null;
+  sourceCount: number;
+  loading: boolean;
+  onApply: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div
+      className="flex flex-col gap-3 rounded-[10px] p-3"
+      style={{
+        background: 'color-mix(in srgb, var(--color-state-warning) 5%, var(--color-surface-raised))',
+        border: '1px solid color-mix(in srgb, var(--color-state-warning) 24%, var(--color-border))',
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-start gap-2">
+        <Lightbulb
+          size={13}
+          strokeWidth={1.9}
+          className="mt-0.5 flex-shrink-0"
+          style={{ color: 'var(--color-state-warning)' }}
+        />
+        <p
+          className="min-w-0 flex-1 text-[12px] leading-[1.5]"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
+          Based on call history transcription we would suggest you choose this one.
+        </p>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss suggestion"
+          className="flex-shrink-0 rounded-[5px] p-1 hover:bg-[var(--color-glass-hover)]"
+          style={{ color: 'var(--color-text-faint)' }}
+        >
+          <X size={11} strokeWidth={2} />
+        </button>
+      </div>
+
+      {/* Synthesized greeting */}
+      {loading ? (
+        <div
+          className="h-10 animate-pulse rounded-[8px]"
+          style={{ background: 'var(--color-surface-elevated)' }}
+        />
+      ) : (
+        <div
+          className="rounded-[8px] p-2.5"
+          style={{ background: 'var(--color-void)', border: '1px solid var(--color-border)' }}
+        >
+          <p className="text-[13px] leading-[1.55]" style={{ color: 'var(--color-text)' }}>
+            {greeting}
+          </p>
+        </div>
+      )}
+
+      {/* Source count + actions */}
+      {!loading && (
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={onApply}
+            className="flex items-center gap-1.5 rounded-[7px] px-2.5 py-1.5 text-[12px] font-[500] transition-colors duration-[140ms]"
+            style={{
+              background: 'var(--color-accent-subtle)',
+              border: '1px solid var(--color-accent-border)',
+              color: 'var(--color-accent)',
+            }}
+          >
+            <Check size={11} strokeWidth={2.2} />
+            Apply to greeting
+          </button>
+          <span className="text-[11px]" style={{ color: 'var(--color-text-faint)' }}>
+            AI synthesis of {sourceCount} {sourceCount === 1 ? 'suggestion' : 'suggestions'} · doesn&apos;t save automatically
+          </span>
+        </div>
+      )}
+    </div>
   );
 }

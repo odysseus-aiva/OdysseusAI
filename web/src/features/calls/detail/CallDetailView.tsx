@@ -57,6 +57,8 @@ export function CallDetailView({ callId }: { callId: string }) {
       language={call.agentSnapshot?.language}
       currentTimeSec={currentTime}
       onSeek={onSeek}
+      callId={callId}
+      agentId={call.agentId}
     />
   );
 

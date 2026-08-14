@@ -14,12 +14,15 @@ import {
   ChevronDown,
   ChevronUp,
   MessageSquare,
+  MessageSquarePlus,
   Search,
   User,
   Wrench,
   X,
 } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { CallStatus } from '@/lib/types/call-log';
+import { createSuggestion } from '@/lib/api/suggestions';
 import {
   firstArgValue,
   formatOffset,
@@ -96,6 +99,8 @@ export function CallTranscriptPanel({
   language,
   currentTimeSec,
   onSeek,
+  callId,
+  agentId,
 }: {
   timeline: TimelineItem[];
   agentName: string;
@@ -104,6 +109,8 @@ export function CallTranscriptPanel({
   language?: string;
   currentTimeSec: number;
   onSeek: (seconds: number) => void;
+  callId?: string;
+  agentId?: string;
 }) {
   const [query, setQuery] = useState('');
   const [speaker, setSpeaker] = useState<SpeakerFilter>('all');
@@ -180,6 +187,11 @@ export function CallTranscriptPanel({
   };
 
   const messageCount = timeline.filter((i) => i.kind === 'message').length;
+
+  const greetingMessageId = useMemo(() => {
+    const first = timeline.find((i): i is TimelineMessage => i.kind === 'message' && i.role === 'assistant');
+    return first?.id ?? null;
+  }, [timeline]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -296,6 +308,9 @@ export function CallTranscriptPanel({
                     if (el) rowRefs.current.set(item.id, el);
                     else rowRefs.current.delete(item.id);
                   }}
+                  isGreeting={item.id === greetingMessageId}
+                  callId={callId}
+                  agentId={agentId}
                 />
               ) : (
                 <ToolTurn key={item.id} item={item} callStartMs={callStartMs} />
@@ -317,6 +332,9 @@ function MessageTurn({
   isSearchHit,
   onSeek,
   registerRef,
+  isGreeting,
+  callId,
+  agentId,
 }: {
   item: TimelineMessage;
   agentName: string;
@@ -326,6 +344,9 @@ function MessageTurn({
   isSearchHit: boolean;
   onSeek: (seconds: number) => void;
   registerRef: (el: HTMLElement | null) => void;
+  isGreeting?: boolean;
+  callId?: string;
+  agentId?: string;
 }) {
   const isAgent = item.role === 'assistant';
   const name = isAgent ? agentName : 'Caller';
@@ -335,11 +356,13 @@ function MessageTurn({
   const speakerInk = isAgent ? 'var(--fg-ink)' : 'var(--fg-body)';
   const offset = formatOffset(item.ts - callStartMs);
   const seekTo = offsetSeconds(item.ts, callStartMs);
+  const [showSuggest, setShowSuggest] = useState(false);
+  const canSuggest = isGreeting && Boolean(callId) && Boolean(agentId);
 
   return (
     <li
       ref={registerRef}
-      className="rounded-md px-3 py-2 transition-colors duration-[120ms]"
+      className="group rounded-md px-3 py-2 transition-colors duration-[120ms]"
       style={{
         background: isPlaying
           ? 'var(--surface-selected)'
@@ -368,6 +391,23 @@ function MessageTurn({
         >
           {offset}
         </button>
+        {canSuggest && (
+          <button
+            type="button"
+            onClick={() => setShowSuggest((v) => !v)}
+            title="Suggest an improvement to this greeting"
+            aria-label="Suggest greeting improvement"
+            className="ml-auto flex items-center gap-1 rounded-[6px] px-1.5 py-0.5 text-[10.5px] font-[450] opacity-0 transition-opacity duration-[140ms] group-hover:opacity-100"
+            style={{
+              color: showSuggest ? 'var(--color-accent)' : 'var(--color-text-faint)',
+              background: showSuggest ? 'var(--color-accent-subtle)' : 'transparent',
+              border: `1px solid ${showSuggest ? 'var(--color-accent-hairline)' : 'transparent'}`,
+            }}
+          >
+            <MessageSquarePlus size={11} strokeWidth={2} />
+            Suggest
+          </button>
+        )}
       </div>
       <p
         className="whitespace-pre-wrap text-nav leading-body"
@@ -375,7 +415,143 @@ function MessageTurn({
       >
         <HighlightedText text={item.text} query={query} active={isSearchHit} />
       </p>
+      <AnimatePresence>
+        {showSuggest && canSuggest && (
+          <GreetingSuggestionPanel
+            callId={callId!}
+            agentId={agentId!}
+            originalText={item.text}
+            onClose={() => setShowSuggest(false)}
+          />
+        )}
+      </AnimatePresence>
     </li>
+  );
+}
+
+function GreetingSuggestionPanel({
+  callId,
+  agentId,
+  originalText,
+  onClose,
+}: {
+  callId: string;
+  agentId: string;
+  originalText: string;
+  onClose: () => void;
+}) {
+  const [text, setText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (!text.trim()) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      await createSuggestion({ callId, agentId, originalText, suggestedText: text.trim() });
+      setSaved(true);
+      setTimeout(onClose, 1200);
+    } catch {
+      setErr('Failed to save. Try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+      style={{ overflow: 'hidden' }}
+    >
+      <div
+        className="mt-2.5 flex flex-col gap-2.5 rounded-[10px] p-3"
+        style={{
+          background: 'var(--color-surface-raised)',
+          border: '1px solid var(--color-border)',
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <span
+            className="text-[10.5px] font-[600] uppercase tracking-[0.08em]"
+            style={{ color: 'var(--color-text-faint)' }}
+          >
+            Suggest greeting improvement
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-[5px] p-0.5 hover:bg-[var(--color-glass-hover)]"
+            style={{ color: 'var(--color-text-faint)' }}
+          >
+            <X size={12} strokeWidth={2} />
+          </button>
+        </div>
+
+        {saved ? (
+          <p className="py-1 text-[12.5px]" style={{ color: 'var(--color-state-speaking)' }}>
+            Suggestion saved. Open the agent to review it.
+          </p>
+        ) : (
+          <>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Write a suggested improvement for this greeting…"
+              rows={3}
+              className="w-full resize-none rounded-[8px] p-2.5 text-[12.5px] leading-[1.5] outline-none"
+              style={{
+                background: 'var(--color-void)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = 'var(--color-border-focus)';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = 'var(--color-border)';
+              }}
+              disabled={saving}
+              autoFocus
+            />
+            {err && (
+              <p className="text-[11.5px]" style={{ color: 'var(--color-state-error)' }}>
+                {err}
+              </p>
+            )}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-[7px] px-3 py-1.5 text-[12px] font-[450] transition-colors duration-[140ms] hover:bg-[var(--color-glass-hover)]"
+                style={{ color: 'var(--color-text-muted)' }}
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submit()}
+                disabled={!text.trim() || saving}
+                className="rounded-[7px] px-3 py-1.5 text-[12px] font-[500] transition-all duration-[140ms]"
+                style={{
+                  background: text.trim() && !saving ? 'var(--color-accent)' : 'var(--color-surface-elevated)',
+                  color: '#000',
+                  cursor: text.trim() && !saving ? 'pointer' : 'not-allowed',
+                }}
+              >
+                {saving ? 'Saving…' : 'Add suggestion'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </motion.div>
   );
 }
 

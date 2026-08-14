@@ -10,7 +10,8 @@ import {
   type CallHistoryFilters,
 } from './utils';
 
-const PAGE_SIZE = 50;
+export type PageSizeOption = 10 | 25 | 50 | 100;
+const DEFAULT_PAGE_SIZE: PageSizeOption = 10;
 
 export function useCallHistory() {
   const [calls, setCalls] = useState<CallSummary[]>([]);
@@ -21,18 +22,22 @@ export function useCallHistory() {
   const [filters, setFilters] = useState<CallHistoryFilters>(DEFAULT_FILTERS);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pageSize, setPageSize] = useState<PageSizeOption>(DEFAULT_PAGE_SIZE);
 
   const loadAgents = useCallback(async () => {
     try {
       setAgents(await fetchAgents());
     } catch {
-      // Agent filter degrades to empty options; list still works.
       setAgents([]);
     }
   }, []);
 
   const load = useCallback(
-    async (off = 0, nextFilters: CallHistoryFilters = filters) => {
+    async (
+      off = 0,
+      nextFilters: CallHistoryFilters = filters,
+      nextPageSize: number = pageSize,
+    ) => {
       setLoading(true);
       setError(null);
       try {
@@ -42,7 +47,7 @@ export function useCallHistory() {
           nextFilters.customTo,
         );
         const res = await fetchCalls({
-          limit: PAGE_SIZE,
+          limit: nextPageSize,
           offset: off,
           agentId: nextFilters.agentId || undefined,
           status: nextFilters.status || undefined,
@@ -60,13 +65,12 @@ export function useCallHistory() {
         setLoading(false);
       }
     },
-    [filters],
+    [filters, pageSize],
   );
 
   useEffect(() => {
     void loadAgents();
     void load(0);
-    // Initial load only — subsequent loads go through explicit handlers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -74,7 +78,6 @@ export function useCallHistory() {
     (patch: Partial<CallHistoryFilters>) => {
       setFilters((prev) => {
         const next = { ...prev, ...patch };
-        // Server-backed filters refetch from page 0.
         const serverKeys: (keyof CallHistoryFilters)[] = [
           'datePreset',
           'customFrom',
@@ -82,14 +85,24 @@ export function useCallHistory() {
           'agentId',
           'status',
         ];
-        const needsRefetch = serverKeys.some((k) => patch[k] !== undefined && patch[k] !== prev[k]);
+        const needsRefetch = serverKeys.some(
+          (k) => patch[k] !== undefined && patch[k] !== prev[k],
+        );
         if (needsRefetch) {
-          void load(0, next);
+          void load(0, next, pageSize);
         }
         return next;
       });
     },
-    [load],
+    [load, pageSize],
+  );
+
+  const updatePageSize = useCallback(
+    (size: PageSizeOption) => {
+      setPageSize(size);
+      void load(0, filters, size);
+    },
+    [load, filters],
   );
 
   const visibleCalls = useMemo(
@@ -97,8 +110,8 @@ export function useCallHistory() {
     [calls, filters],
   );
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const page = Math.floor(offset / PAGE_SIZE) + 1;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.floor(offset / pageSize) + 1;
 
   return {
     calls: visibleCalls,
@@ -110,18 +123,19 @@ export function useCallHistory() {
     offset,
     page,
     totalPages,
-    pageSize: PAGE_SIZE,
+    pageSize,
+    updatePageSize,
     filters,
     updateFilters,
     setFilters,
     agents,
     selectedId,
     setSelectedId,
-    refresh: () => void load(offset, filters),
-    goPrev: () => void load(Math.max(0, offset - PAGE_SIZE), filters),
+    refresh: () => void load(offset, filters, pageSize),
+    goPrev: () => void load(Math.max(0, offset - pageSize), filters, pageSize),
     goNext: () => {
-      if (offset + PAGE_SIZE < total) void load(offset + PAGE_SIZE, filters);
+      if (offset + pageSize < total) void load(offset + pageSize, filters, pageSize);
     },
-    retry: () => void load(offset, filters),
+    retry: () => void load(offset, filters, pageSize),
   };
 }

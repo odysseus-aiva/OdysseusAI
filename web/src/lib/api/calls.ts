@@ -12,6 +12,8 @@ export interface CallCost {
   llmUsd: number;
   ttsUsd: number;
   sttUsd: number;
+  omniUsd?: number;
+  pricingModel?: 'pipeline' | 'omni';
   breakdown: {
     llm: { model?: string; promptTokens: number; completionTokens: number; usd: number };
     tts: { provider?: string; characters: number; usd: number };
@@ -228,6 +230,10 @@ export interface CallStats {
     perMinuteUsd: number | null;
     perTurnUsd: number | null;
   };
+  costByEngine: {
+    omni: { calls: number; totalUsd: number; totalMinutes: number };
+    pipeline: { calls: number; totalUsd: number; totalMinutes: number };
+  };
 
   topAgents: {
     agentId: string;
@@ -266,6 +272,8 @@ export interface CallStats {
       noInteraction: number;
       failed: number;
       costUsd: number;
+      omniCostUsd: number;
+      totalMinutes: number;
     }[];
   };
 }

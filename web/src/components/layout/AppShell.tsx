@@ -14,6 +14,7 @@ import {
   Sun,
   Moon,
   Phone,
+  PiggyBank,
 } from 'lucide-react';
 import { useTheme } from '@/components/ThemeProvider';
 import { useVoiceStore } from '@/features/voice/state/voice.store';
@@ -25,6 +26,7 @@ const NAV_SECTIONS = [
   { href: '/phone-numbers', icon: Phone, label: 'Phone Numbers' },
   { href: '/calls', icon: PhoneCall, label: 'Call History' },
   { href: '/analytics', icon: BarChart3, label: 'Analytics' },
+  { href: '/savings', icon: PiggyBank, label: 'Cost & Savings' },
   { href: '/settings', icon: Settings, label: 'Settings' },
 ] as const;
 

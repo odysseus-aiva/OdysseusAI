@@ -114,10 +114,6 @@ export class VoiceAgentService {
       ...resolved,
     };
 
-    // Register the STT provider so streaming audio can be priced at finalize
-    // (Deepgram reports no per-request usage — we bill the call duration).
-    this.costService.setSttProvider(callId, config.sttProvider);
-
     const now = Date.now();
     const session: VoiceAgentSession = {
       roomName,
@@ -200,6 +196,9 @@ export class VoiceAgentService {
         await this.connectAgentToRoom(roomName, callId, config);
       }
     } else {
+      // Register the STT provider for pipeline cost accounting — streaming STT
+      // reports no per-request usage so we bill the call duration at finalize.
+      this.costService.setSttProvider(callId, config.sttProvider);
       await this.connectAgentToRoom(roomName, callId, config);
     }
 
@@ -301,12 +300,13 @@ export class VoiceAgentService {
     const finalLatencyMetrics = this.performanceService.getFinalMetrics(session.callId);
     this.performanceService.clearRecord(session.callId);
 
-    // Price accumulated usage. Streaming STT has no per-request usage, so bill
-    // the full call wall-clock as audio seconds.
     const callSeconds = session.startedAt
       ? Math.max(0, (Date.now() - session.startedAt) / 1000)
       : 0;
-    const finalCost = this.costService.finalize(session.callId, callSeconds);
+    const callEngine = session.agentConfig?.engine ?? DEFAULT_AGENT_ENGINE;
+    const finalCost = callEngine === 'omni'
+      ? this.costService.finalizeOmni(session.callId, callSeconds)
+      : this.costService.finalize(session.callId, callSeconds);
     this.costService.clearRecord(session.callId);
 
     this.sessions.delete(roomName);

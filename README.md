@@ -39,7 +39,7 @@ Fill in these five values — everything else has a working default:
 | `PYAI_API_KEY` | Required for the Omni engine — instant sandbox key, no signup: `curl -X POST https://api.pyai.com/v1/sandbox/keys` |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | LiveKit Cloud → Project Settings → Keys (Optional for fallback) |
 | `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com/api-keys) — used for LLM and TTS (Optional for fallback)|
-| `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com/) — |
+| `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com/) — (Optional for fallback)|
 
 Then switch persistence on in the same `.env`, so calls survive a restart and the sample
 data has somewhere to live:
@@ -264,3 +264,6 @@ docs/                    architecture and runtime flow notes
   Use `mongodb` for anything you want to look at twice.
 - Recordings are written to local disk (`recordings/`), not object storage.
 - There is no auth in front of the API yet; run it on localhost or behind your own gateway.
+
+## LICENSE
+[MIT](https://github.com/odysseus-aiva/OdysseusAI/blob/main/LICENSE)

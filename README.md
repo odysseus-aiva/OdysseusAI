@@ -36,9 +36,10 @@ Fill in these five values — everything else has a working default:
 
 | Variable | Where to get it |
 |----------|-----------------|
-| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | LiveKit Cloud → Project Settings → Keys |
-| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com/api-keys) — used for LLM and TTS |
-| `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com/) — $200 free credit |
+| `PYAI_API_KEY` | Required for the Omni engine — instant sandbox key, no signup: `curl -X POST https://api.pyai.com/v1/sandbox/keys` |
+| `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | LiveKit Cloud → Project Settings → Keys (Optional for fallback) |
+| `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com/api-keys) — used for LLM and TTS (Optional for fallback)|
+| `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com/) — |
 
 Then switch persistence on in the same `.env`, so calls survive a restart and the sample
 data has somewhere to live:

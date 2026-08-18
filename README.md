@@ -18,6 +18,10 @@ Sample data is included, so you get a populated dashboard without placing a call
 **Prerequisites:** Node 18+, MongoDB running locally (`brew install mongodb-community`
 or Docker), and a free [LiveKit Cloud](https://cloud.livekit.io/) project.
 
+**Web calls only?** LiveKit + PyAI + MongoDB are enough. Skip the
+[optional phone-number section](#optional-phone-numbers-twilio--livekit-sip) — you do not
+need Twilio or LiveKit SIP to use the **Voice Console** in the browser.
+
 ### 1. Install both apps (~90s)
 
 ```bash
@@ -46,12 +50,21 @@ voice call. Everything else has a working default or is optional.
 LiveKit is the real-time media layer every call travels through. Without it nothing connects.
 
 
-| Variable             | How to get it                                                                                                                                 |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `LIVEKIT_URL`        | [cloud.livekit.io](https://cloud.livekit.io) → **Settings → API Keys** → Create Key -> Websocket URL(e.g. `wss://your-project.livekit.cloud`) |
-| `LIVEKIT_API_KEY`    | Same page → API Key                                                                                                                           |
-| `LIVEKIT_API_SECRET` | Same page → API Secret                                                                                                                        |
+| Variable                     | How to get it                                                                                                                                 |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LIVEKIT_URL`                | [cloud.livekit.io](https://cloud.livekit.io) → **Settings → API Keys** → Create Key -> Websocket URL(e.g. `wss://your-project.livekit.cloud`) |
+| `LIVEKIT_API_KEY`            | Same page → API Key                                                                                                                           |
+| `LIVEKIT_API_SECRET`         | Same page → API Secret                                                                                                                        |
+| `LIVEKIT_PROJECT_SUBDOMAIN`  | SIP subdomain for Twilio origination. **Not** the `LIVEKIT_URL` host. See steps below.                                                        |
 ---
+
+To find `LIVEKIT_PROJECT_SUBDOMAIN`:
+
+1. Open [cloud.livekit.io](https://cloud.livekit.io) → your project → **Settings → Project**.
+2. Copy the **SIP URI** (e.g. `sip:vjnxecm0tjk.sip.livekit.cloud`).
+3. Use the host prefix only: `vjnxecm0tjk`.
+
+Or from the [LiveKit CLI](https://docs.livekit.io/home/cli/): `lk project list --json` → take `ProjectId` (e.g. `p_vjnxecm0tjk`) and drop the `p_` prefix.
 
 
 
@@ -180,10 +193,13 @@ your Elastic SIP Trunk automatically and routed to whichever agent owns the dial
 | -------------------- | ----------------------------------------------------------------------------- |
 | `TWILIO_ACCOUNT_SID` | [console.twilio.com](https://console.twilio.com) → Account Info → Account SID |
 | `TWILIO_AUTH_TOKEN`  | Same page → Auth Token                                                        |
-| `TWILIO_TRUNK_SID`   | Twilio → Elastic SIP Trunking → create a trunk → copy SID (starts with `TK`)  |
 
 
-Full SIP wiring checklist is in `[.env.example](.env.example)`.
+Then run:
+
+```bash
+npm run setup:telephony -- --livekit-number=+15551234567
+```
 
 ### 3. Configure the web app (~15s)
 
@@ -352,11 +368,14 @@ curl  http://localhost:3000/agents
 
 ## Phone numbers
 
-Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_TRUNK_SID`, then buy a number
-from the **Phone Numbers** page. It is attached to your Elastic SIP Trunk automatically.
-Point the trunk at LiveKit SIP, set `LIVEKIT_SIP_ENABLED=true` with the trunk and
-dispatch rule IDs, and inbound calls route to the agent that owns the dialled number —
-the full setup checklist is in `[.env.example](.env.example)`.
+Set `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN`, then run:
+
+```bash
+npm run setup:telephony -- --livekit-number=+15551234567
+```
+
+Then buy a number from the **Phone Numbers** page. It is attached to your Elastic SIP Trunk
+automatically and routed to the agent that owns the dialled number.
 
 ## Project structure
 
@@ -390,6 +409,7 @@ docs/                    architecture and runtime flow notes
 | `npm run start:dev`  | Backend with hot reload          |
 | `npm run seed`       | Load `sample-data/` into MongoDB |
 | `npm run seed:clean` | Remove the sample data           |
+| `npm run setup:telephony -- --livekit-number=+15551234567` | Twilio + LiveKit SIP setup |
 | `npm run build`      | Compile TypeScript               |
 | `npm run lint`       | ESLint                           |
 

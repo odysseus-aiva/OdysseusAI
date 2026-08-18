@@ -42,6 +42,7 @@ export class PyAiHearProvider implements SttProvider {
     const wsUrl = `${baseUrl.replace(/^http/, 'ws')}/audio/transcriptions/stream`;
 
     let callback: ((event: SttEvent) => void) | null = null;
+    let fatalErrorCallback: ((err: Error) => void) | null = null;
     let ws: WebSocket | null = null;
     let closedByUs = false;
     let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
@@ -149,6 +150,12 @@ export class PyAiHearProvider implements SttProvider {
         this.logger.error(
           `[${options.callId}] PyAI Hear WebSocket error: ${error.message}`,
         );
+        if (/\b400\b/.test(error.message)) {
+          closedByUs = true;
+          clearKeepAlive();
+          clearReconnect();
+          fatalErrorCallback?.(error);
+        }
       });
 
       ws.on('close', (code, reason) => {
@@ -180,6 +187,9 @@ export class PyAiHearProvider implements SttProvider {
       onEvent: (cb) => {
         callback = cb;
         if (!ws) connect();
+      },
+      onFatalError: (cb) => {
+        fatalErrorCallback = cb;
       },
       writeAudio: (chunk: Buffer) => {
         if (ws?.readyState === WebSocket.OPEN) {

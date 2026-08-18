@@ -1,0 +1,388 @@
+[
+  {
+    "callId": "demo-call-01",
+    "agentId": "assistant",
+    "daysAgo": 0,
+    "atHour": 10,
+    "atMinute": 14,
+    "durationSec": 68,
+    "status": "completed",
+    "endedBy": "agent",
+    "sentiment": "positive",
+    "summary": "Caller asked for the Bengaluru forecast and the local time, then ended the call. Both tool calls succeeded.",
+    "metadata": { "source": "web", "plan": "pro" },
+    "turns": [
+      {
+        "user": "Hey, what's the weather like in Bengaluru right now?",
+        "agent": "It's 29 degrees and partly cloudy in Bengaluru right now.",
+        "latencyMs": { "stt": 180, "llm": 410, "tts": 240, "total": 950 },
+        "tools": [
+          {
+            "name": "get_weather",
+            "input": { "location": "Bengaluru" },
+            "output": { "tempC": 29, "condition": "Partly cloudy", "humidity": 61 },
+            "latencyMs": 310
+          }
+        ]
+      },
+      {
+        "user": "Will I need an umbrella this evening?",
+        "agent": "There's a light shower expected around seven, so I'd take one just in case.",
+        "latencyMs": { "stt": 165, "llm": 520, "tts": 265, "total": 1080 },
+        "tools": [
+          {
+            "name": "get_weather",
+            "input": { "location": "Bengaluru", "when": "evening" },
+            "output": { "tempC": 26, "condition": "Light rain", "precipChance": 0.55 },
+            "latencyMs": 295
+          }
+        ]
+      },
+      {
+        "user": "And what time is it there?",
+        "agent": "It's 10:15 in the morning, India Standard Time.",
+        "latencyMs": { "stt": 150, "llm": 330, "tts": 190, "total": 760 },
+        "tools": [
+          {
+            "name": "get_current_datetime",
+            "input": { "timezone": "Asia/Kolkata" },
+            "output": { "iso": "2026-08-13T10:15:04+05:30" },
+            "latencyMs": 40
+          }
+        ]
+      },
+      {
+        "user": "Perfect, that's all. Thanks!",
+        "agent": "Happy to help — have a good one!",
+        "latencyMs": { "stt": 145, "llm": 300, "tts": 175, "total": 700 },
+        "tools": [
+          {
+            "name": "end_call",
+            "input": { "reason": "caller said goodbye" },
+            "output": { "ended": true },
+            "latencyMs": 15
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "callId": "demo-call-02",
+    "agentId": "support-tier1",
+    "daysAgo": 0,
+    "atHour": 15,
+    "atMinute": 41,
+    "durationSec": 142,
+    "status": "completed",
+    "endedBy": "participant",
+    "sentiment": "positive",
+    "summary": "Caller checked the status of order AC-88431 after a delivery delay. Agent confirmed the new delivery window and offered shipping notifications.",
+    "metadata": { "source": "phone", "plan": "standard" },
+    "turns": [
+      {
+        "user": "Hi, I'm calling about an order that hasn't shown up yet.",
+        "agent": "I can help with that — what's the email on the order?",
+        "latencyMs": { "stt": 190, "llm": 360, "tts": 300, "total": 990 },
+        "tools": []
+      },
+      {
+        "user": "It's priya dot nair at example dot com.",
+        "agent": "Thanks Priya, I've got your account. I see one open order, AC-88431 — is that the one?",
+        "latencyMs": { "stt": 210, "llm": 480, "tts": 420, "total": 1310 },
+        "tools": [
+          {
+            "name": "get_user_details",
+            "input": { "email": "priya.nair@example.com" },
+            "output": { "name": "Priya Nair", "tier": "standard", "openOrders": 1 },
+            "latencyMs": 380
+          }
+        ]
+      },
+      {
+        "user": "Yes, that's it. It was supposed to arrive on Tuesday.",
+        "agent": "It cleared the Chennai hub late, and it's now scheduled for Friday between two and six.",
+        "latencyMs": { "stt": 175, "llm": 610, "tts": 380, "total": 1320 },
+        "tools": []
+      },
+      {
+        "user": "Can you text me when it's out for delivery?",
+        "agent": "Done — you'll get an SMS to the number ending in 4417 when the courier picks it up.",
+        "latencyMs": { "stt": 200, "llm": 540, "tts": 355, "total": 1240 },
+        "tools": []
+      },
+      {
+        "user": "Great, thank you.",
+        "agent": "Anytime. Thanks for your patience with the delay.",
+        "latencyMs": { "stt": 160, "llm": 320, "tts": 210, "total": 810 },
+        "tools": []
+      }
+    ]
+  },
+  {
+    "callId": "demo-call-03",
+    "agentId": "omni-concierge",
+    "daysAgo": 1,
+    "atHour": 9,
+    "atMinute": 6,
+    "durationSec": 96,
+    "status": "completed",
+    "endedBy": "agent",
+    "sentiment": "positive",
+    "summary": "Guest booked a table for four on Saturday at 8pm and asked about parking. Handled end-to-end on the Omni speech-to-speech engine.",
+    "metadata": { "source": "web", "engine": "omni" },
+    "turns": [
+      {
+        "user": "I'd like to book a table for Saturday evening.",
+        "agent": "Of course — how many people, and what time works for you?",
+        "latencyMs": { "stt": 90, "llm": 210, "tts": 120, "total": 480 },
+        "tools": []
+      },
+      {
+        "user": "Four of us, around eight if you have it.",
+        "agent": "Eight o'clock for four on Saturday is available. Shall I hold it under your name?",
+        "latencyMs": { "stt": 85, "llm": 230, "tts": 130, "total": 505 },
+        "tools": []
+      },
+      {
+        "user": "Yes please, under Kapoor. Is there parking on site?",
+        "agent": "Booked under Kapoor. There's valet at the main entrance, complimentary for diners.",
+        "latencyMs": { "stt": 95, "llm": 250, "tts": 140, "total": 540 },
+        "tools": []
+      },
+      {
+        "user": "Lovely, see you Saturday.",
+        "agent": "We look forward to it. Have a wonderful day.",
+        "latencyMs": { "stt": 80, "llm": 190, "tts": 110, "total": 440 },
+        "tools": [
+          {
+            "name": "end_call",
+            "input": { "reason": "booking confirmed" },
+            "output": { "ended": true },
+            "latencyMs": 12
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "callId": "demo-call-04",
+    "agentId": "assistant",
+    "daysAgo": 2,
+    "atHour": 12,
+    "atMinute": 30,
+    "durationSec": 74,
+    "status": "completed",
+    "endedBy": "participant",
+    "sentiment": "neutral",
+    "summary": "Caller asked the agent to look up train options between two cities. Web search returned results; caller left without confirming a booking.",
+    "metadata": { "source": "web" },
+    "turns": [
+      {
+        "user": "Can you look up how long the train from Pune to Mumbai takes?",
+        "agent": "The Deccan Express runs it in about three hours and twenty minutes.",
+        "latencyMs": { "stt": 205, "llm": 720, "tts": 260, "total": 1490 },
+        "tools": [
+          {
+            "name": "web_search",
+            "input": { "query": "Pune to Mumbai train duration Deccan Express" },
+            "output": { "results": 5, "topSource": "indianrail.gov.in" },
+            "latencyMs": 640
+          }
+        ]
+      },
+      {
+        "user": "What about the first one in the morning?",
+        "agent": "The earliest departure is 5:10 AM, arriving just before half past eight.",
+        "latencyMs": { "stt": 185, "llm": 660, "tts": 240, "total": 1380 },
+        "tools": [
+          {
+            "name": "web_search",
+            "input": { "query": "earliest morning train Pune to Mumbai timetable" },
+            "output": { "results": 4, "topSource": "irctc.co.in" },
+            "latencyMs": 580
+          }
+        ]
+      },
+      {
+        "user": "Okay, let me think about it.",
+        "agent": "Sure — I'll be here if you want me to check seat availability.",
+        "latencyMs": { "stt": 170, "llm": 340, "tts": 205, "total": 830 },
+        "tools": []
+      }
+    ]
+  },
+  {
+    "callId": "demo-call-05",
+    "agentId": "support-tier1",
+    "daysAgo": 3,
+    "atHour": 17,
+    "atMinute": 22,
+    "durationSec": 118,
+    "status": "completed",
+    "endedBy": "agent",
+    "sentiment": "negative",
+    "summary": "Caller was frustrated about a second failed replacement and asked for a refund. Agent verified the account and escalated to a human rather than promising a refund.",
+    "metadata": { "source": "phone", "plan": "standard", "escalated": true },
+    "turns": [
+      {
+        "user": "This is the second time you've sent me a broken screen. I want my money back.",
+        "agent": "I'm sorry — that's a poor experience. Can I confirm the email on the account?",
+        "latencyMs": { "stt": 230, "llm": 520, "tts": 400, "total": 1390 },
+        "tools": []
+      },
+      {
+        "user": "d dot mehta at example dot com.",
+        "agent": "Thank you. I can see two replacements on order AC-77120 in the last month.",
+        "latencyMs": { "stt": 215, "llm": 495, "tts": 365, "total": 1300 },
+        "tools": [
+          {
+            "name": "get_user_details",
+            "input": { "email": "d.mehta@example.com" },
+            "output": { "name": "Dev Mehta", "tier": "standard", "replacements": 2 },
+            "latencyMs": 410
+          }
+        ]
+      },
+      {
+        "user": "So can you refund it or not?",
+        "agent": "A refund on a replaced item needs a human to approve it, so I'm connecting you now.",
+        "latencyMs": { "stt": 195, "llm": 580, "tts": 390, "total": 1420 },
+        "tools": []
+      },
+      {
+        "user": "Fine, put them on.",
+        "agent": "Transferring you to a specialist — please hold for just a moment.",
+        "latencyMs": { "stt": 180, "llm": 430, "tts": 320, "total": 1150 },
+        "tools": [
+          {
+            "name": "end_call",
+            "input": { "reason": "transferred to human specialist" },
+            "output": { "ended": true, "transferred": true },
+            "latencyMs": 18
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "callId": "demo-call-06",
+    "agentId": "assistant",
+    "daysAgo": 4,
+    "atHour": 8,
+    "atMinute": 50,
+    "durationSec": 31,
+    "status": "completed",
+    "endedBy": "participant",
+    "sentiment": "neutral",
+    "summary": "Short call — caller asked for the current time in New York and hung up.",
+    "metadata": { "source": "web" },
+    "turns": [
+      {
+        "user": "What time is it in New York?",
+        "agent": "It's 11:20 last night in New York — 11:20 PM Eastern.",
+        "latencyMs": { "stt": 155, "llm": 350, "tts": 215, "total": 840 },
+        "tools": [
+          {
+            "name": "get_current_datetime",
+            "input": { "timezone": "America/New_York" },
+            "output": { "iso": "2026-08-09T23:20:11-04:00" },
+            "latencyMs": 35
+          }
+        ]
+      },
+      {
+        "user": "Got it.",
+        "agent": "Anything else I can check for you?",
+        "latencyMs": { "stt": 140, "llm": 280, "tts": 165, "total": 680 },
+        "tools": []
+      }
+    ]
+  },
+  {
+    "callId": "demo-call-07",
+    "agentId": "support-tier1",
+    "daysAgo": 5,
+    "atHour": 14,
+    "atMinute": 3,
+    "durationSec": 44,
+    "status": "error",
+    "endedBy": "error",
+    "sentiment": "negative",
+    "summary": "Call failed mid-turn when the lookup tool timed out and the TTS request returned a 502. Included so error handling and the failed-call view are visible in the demo.",
+    "metadata": { "source": "phone" },
+    "errors": [
+      "get_user_details timed out after 5000ms",
+      "TTS synthesis failed: elevenlabs responded 502"
+    ],
+    "turns": [
+      {
+        "user": "Hi, I need to check on a warranty claim.",
+        "agent": "Happy to look into it — what's the email on the account?",
+        "latencyMs": { "stt": 200, "llm": 380, "tts": 310, "total": 1050 },
+        "tools": []
+      },
+      {
+        "user": "It's s dot iyer at example dot com.",
+        "agent": "",
+        "latencyMs": { "stt": 215, "llm": 5100 },
+        "error": "TTS synthesis failed: elevenlabs responded 502",
+        "tools": [
+          {
+            "name": "get_user_details",
+            "input": { "email": "s.iyer@example.com" },
+            "error": "timed out after 5000ms",
+            "success": false,
+            "latencyMs": 5000
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "callId": "demo-call-08",
+    "agentId": "omni-concierge",
+    "daysAgo": 6,
+    "atHour": 19,
+    "atMinute": 11,
+    "durationSec": 82,
+    "status": "completed",
+    "endedBy": "participant",
+    "sentiment": "positive",
+    "summary": "Guest asked about late checkout and the spa's opening hours. Answered directly on the Omni engine with no tool calls.",
+    "metadata": { "source": "web", "engine": "omni" },
+    "turns": [
+      {
+        "user": "Is late checkout possible on Sunday?",
+        "agent": "We can hold your room until two at no charge — after that it's half a night's rate.",
+        "latencyMs": { "stt": 88, "llm": 240, "tts": 125, "total": 510 },
+        "tools": []
+      },
+      {
+        "user": "That works. And when does the spa open?",
+        "agent": "The spa opens at seven in the morning and takes its last booking at eight in the evening.",
+        "latencyMs": { "stt": 92, "llm": 225, "tts": 135, "total": 525 },
+        "tools": []
+      },
+      {
+        "user": "Great, thanks very much.",
+        "agent": "My pleasure — enjoy the rest of your stay.",
+        "latencyMs": { "stt": 84, "llm": 200, "tts": 115, "total": 460 },
+        "tools": []
+      }
+    ]
+  },
+  {
+    "callId": "demo-call-09",
+    "agentId": "assistant",
+    "daysAgo": 6,
+    "atHour": 21,
+    "atMinute": 47,
+    "durationSec": 9,
+    "status": "completed",
+    "endedBy": "participant",
+    "sentiment": "neutral",
+    "summary": "Caller connected, heard the greeting and disconnected without speaking. Classified as no_interaction rather than a failure.",
+    "metadata": { "source": "web" },
+    "turns": []
+  }
+]

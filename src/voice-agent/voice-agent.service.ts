@@ -440,20 +440,19 @@ export class VoiceAgentService {
     const pendingToolNames: string[] = [];
 
     // Omni never streams the agent's transcript, so transcribe the agent's OWN
-    // outgoing audio with our STT (Deepgram). This is the single source for
-    // agent turns — live captions + persisted history — including the greeting.
-    const agentStt = this.sttService.transcribeStream(
-      {
-        callId,
-        roomName,
-        participantId: 'agent',
-        language: config.language,
-        sampleRate: OMNI_OUTPUT_RATE,
-      },
-      'deepgram',
-    );
+    // outgoing audio with our STT (PyAI, Deepgram fallback). This is the single
+    // source for agent turns — live captions + persisted history — including the greeting.
+    const agentSttOptions = {
+      callId,
+      roomName,
+      participantId: 'agent',
+      language: config.language,
+      sampleRate: OMNI_OUTPUT_RATE,
+    };
+    const agentStt = this.sttService.transcribeStream(agentSttOptions, 'pyai');
     context.agentSttStream = agentStt;
-    agentStt.onEvent((event) => {
+
+    const onAgentSttEvent = (event: SttEvent) => {
       const text = (event.transcript ?? '').trim();
       if (!text) return;
       void this.livekitRtcService.publishLiveTranscript(roomName, {
@@ -482,6 +481,17 @@ export class VoiceAgentService {
           this.logger.error(`[${callId}] Agent STT persist failed: ${(err as Error).message}`);
         }
       })();
+    };
+
+    agentStt.onEvent(onAgentSttEvent);
+    agentStt.onFatalError?.((err) => {
+      this.logger.warn(
+        `[${callId}] PyAI agent STT failed (${err.message}) — falling back to Deepgram`,
+      );
+      agentStt.end().catch(() => undefined);
+      const fallback = this.sttService.transcribeStream(agentSttOptions, 'deepgram');
+      fallback.onEvent(onAgentSttEvent);
+      context.agentSttStream = fallback;
     });
 
     let handle: OmniHandle;

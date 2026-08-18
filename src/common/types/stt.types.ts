@@ -22,4 +22,5 @@ export interface SttStreamHandle {
   writeAudio(chunk: Buffer): void;
   end(): Promise<void>;
   onEvent(callback: (event: SttEvent) => void): void;
+  onFatalError?(callback: (err: Error) => void): void;
 }
